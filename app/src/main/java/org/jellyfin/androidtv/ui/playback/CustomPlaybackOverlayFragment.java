@@ -620,6 +620,8 @@ public class CustomPlaybackOverlayFragment extends Fragment implements LiveTvGui
                                 && playbackControllerContainer.getValue().getPlaybackController().canSeek()) {
                             // if the player is playing and the overlay is hidden, this will pause
                             // if the player is paused and then 'back' is pressed to hide the overlay, this will play
+                            // Seliku: OK hält nur das Bild an bzw. lässt es weiterlaufen, ohne die Bedienleiste einzublenden
+                            leanbackOverlayFragment.setShouldShowOverlay(false);
                             playbackControllerContainer.getValue().getPlaybackController().playPause();
                             return true;
                         }
