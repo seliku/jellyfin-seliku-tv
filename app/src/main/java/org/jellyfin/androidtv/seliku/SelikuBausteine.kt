@@ -422,3 +422,39 @@ fun NichtMehrDa(vm: SelikuViewModel) {
 	Hinweis("Dieser Titel ist nicht mehr vorhanden.")
 	LaunchedEffect(Unit) { kotlinx.coroutines.delay(2000); vm.zurueck() }
 }
+
+/** Sender-Kachel: Bild der laufenden Sendung, Senderlogo klein unten links, Fortschritt der Sendung unten. */
+@Composable
+fun SenderKachel(
+	sender: BaseItemDto,
+	onClick: () -> Unit,
+	breite: Dp = 250.dp,
+	merken: Pair<SelikuViewModel, Pair<String, String>>? = null,
+	onFokus: () -> Unit = {},
+) {
+	val bilder = koinInject<Bilder>()
+	val sendungsBild = bilder.sendung(sender)
+	val p = sender.currentProgram
+	Column(Modifier.width(breite)) {
+		Waehlbar(onClick = onClick, merken = merken, onFokus = onFokus) {
+			Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(Farben.Flaeche)) {
+				if (sendungsBild != null) {
+					Bild(sendungsBild, Modifier.fillMaxSize())
+					Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xCC000000)), startY = 120f)))
+					Bild(bilder.eigenesBild(sender, 200), Modifier.align(Alignment.BottomStart).padding(8.dp).width(64.dp).aspectRatio(16f / 9f),
+						ContentScale.Fit, grund = Color.Transparent)
+				} else {
+					Bild(bilder.eigenesBild(sender, 400), Modifier.fillMaxSize().padding(28.dp), ContentScale.Fit, grund = Color.Transparent)
+				}
+				if (p?.startDate != null && p.endDate != null) {
+					val gesamt = java.time.Duration.between(p.startDate, p.endDate).seconds.coerceAtLeast(1)
+					val vorbei = java.time.Duration.between(p.startDate, java.time.LocalDateTime.now()).seconds
+					Fortschritt(vorbei.toFloat() / gesamt, Modifier.align(Alignment.BottomStart))
+				}
+			}
+		}
+		Spacer(Modifier.height(6.dp))
+		Text(p?.name ?: sender.name.orEmpty(), style = Schrift.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
+		Text(sender.name.orEmpty(), style = Schrift.Klein, maxLines = 1, overflow = TextOverflow.Ellipsis)
+	}
+}

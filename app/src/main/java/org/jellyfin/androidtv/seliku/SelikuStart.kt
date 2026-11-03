@@ -70,7 +70,7 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 	}
 
 	Box(Modifier.fillMaxSize()) {
-		Kulisse(bilder.hintergrund(hero?.let { if (it.type == BaseItemKind.EPISODE) it else it }))
+		Kulisse(hero?.let { if (it.type == BaseItemKind.TV_CHANNEL) bilder.sendung(it, 1280) else bilder.hintergrund(it) })
 		val r = reihen
 		if (r == null) { Hinweis("Wird geladen …"); return@Box }
 		if (r.isEmpty()) { Hinweis("Noch nichts da."); return@Box }
@@ -113,7 +113,7 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 						kachel = if (reihe.titel == "Weiterschauen") { item, klick, merken, fokus ->
 							QuerKachel(item, klick, merken = merken, onFokus = fokus, breite = 280.dp)
 						} else if (reihe.titel == "Jetzt im TV") { item, klick, merken, fokus ->
-							QuerKachel(item, klick, merken = merken, onFokus = fokus, zeilen = item.name.orEmpty() to item.currentProgram?.name.orEmpty())
+							SenderKachel(item, klick, merken = merken, onFokus = fokus)
 						} else if (reihe.titel.startsWith("Neu in") && reihe.items.none { it.type == BaseItemKind.MUSIC_ALBUM || it.type == BaseItemKind.AUDIO }) { item, klick, merken, fokus ->
 							PosterKachel(item, klick, merken = merken, onFokus = fokus)
 						} else null,

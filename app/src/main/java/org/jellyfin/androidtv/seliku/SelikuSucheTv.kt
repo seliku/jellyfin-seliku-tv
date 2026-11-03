@@ -28,6 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -165,7 +166,8 @@ fun LiveTvSeite(vm: SelikuViewModel) {
 						verticalAlignment = Alignment.CenterVertically,
 						horizontalArrangement = Arrangement.spacedBy(18.dp),
 					) {
-						Bild(bilder.eigenesBild(k, 200), Modifier.width(96.dp).aspectRatio(16f / 9f), ContentScale.Fit)
+						Bild(bilder.eigenesBild(k, 200), Modifier.width(96.dp).aspectRatio(16f / 9f), ContentScale.Fit, grund = androidx.compose.ui.graphics.Color.Transparent)
+						Bild(bilder.sendung(k, 300), Modifier.width(120.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(6.dp)))
 						Column(Modifier.width(200.dp)) {
 							Text(k.name.orEmpty(), style = Schrift.Normal.copy(fontWeight = FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
 							k.channelNumber?.let { Text("Kanal $it", style = Schrift.Klein) }

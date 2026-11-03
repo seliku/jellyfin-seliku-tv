@@ -106,6 +106,11 @@ class Bilder(private val api: ApiClient) {
 
 	fun eigenesBild(item: BaseItemDto, breite: Int = 300): String? = url(item.itemImages[ImageType.PRIMARY], breite)
 
+	/** Bild der gerade laufenden Sendung eines Senders (aus dem Fernsehprogramm), falls vorhanden. */
+	fun sendung(sender: BaseItemDto, breite: Int = 480): String? = sender.currentProgram?.let {
+		url(it.itemImages[ImageType.THUMB] ?: it.itemImages[ImageType.PRIMARY] ?: it.itemBackdropImages.firstOrNull(), breite)
+	}
+
 	/** Querformat: Folgenbild, sonst Thumb oder Hintergrund der Serie/des Films. */
 	fun quer(item: BaseItemDto, breite: Int = 480): String? = url(
 		when (item.type) {
