@@ -64,6 +64,8 @@ class ServerAddFragment : Fragment() {
 			binding.address.isEnabled = false
 			submitAddress()
 		} else {
+			// Seliku: eigener Server vorausgefüllt
+			if (binding.address.text.isNullOrBlank()) binding.address.setText("https://jellyfin.example.org")
 			binding.address.requestFocus()
 		}
 

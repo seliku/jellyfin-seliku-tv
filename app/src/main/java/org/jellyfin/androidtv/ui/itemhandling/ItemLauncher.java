@@ -9,6 +9,7 @@ import org.jellyfin.androidtv.constant.QueryType;
 import org.jellyfin.androidtv.data.model.ChapterItemInfo;
 import org.jellyfin.androidtv.preference.LibraryPreferences;
 import org.jellyfin.androidtv.preference.PreferencesRepository;
+import org.jellyfin.androidtv.preference.UserPreferences;
 import org.jellyfin.androidtv.ui.navigation.Destination;
 import org.jellyfin.androidtv.ui.navigation.Destinations;
 import org.jellyfin.androidtv.ui.navigation.NavigationRepository;
@@ -148,6 +149,26 @@ public class ItemLauncher {
                     }
 
                     navigationRepository.getValue().navigate(Destinations.INSTANCE.libraryBrowser(baseItem));
+                } else if (baseItem.getType() == BaseItemKind.EPISODE || JavaCompat.getCanResume(baseItem)) {
+                    // Seliku: Folgen und angefangene Titel starten direkt (dort weiter, wo man aufgehört hat), ohne Umweg über die Detailseite
+                    long startMs = 0;
+                    if (JavaCompat.getCanResume(baseItem)) {
+                        long preroll = 0;
+                        try {
+                            preroll = Long.parseLong(KoinJavaComponent.<UserPreferences>get(UserPreferences.class).get(UserPreferences.Companion.getResumeSubtractDuration())) * 1000;
+                        } catch (Exception e) {
+                            Timber.e(e, "Unable to parse resume preroll");
+                        }
+                        startMs = Math.max(0, baseItem.getUserData().getPlaybackPositionTicks() / 10000 - preroll);
+                    }
+                    final int start = (int) startMs;
+                    playbackHelper.getValue().getItemsToPlay(context, baseItem, false, false, new Response<List<BaseItemDto>>() {
+                        @Override
+                        public void onResponse(List<BaseItemDto> response) {
+                            if (!isActive()) return;
+                            playbackLauncher.getValue().launch(context, response, start);
+                        }
+                    });
                 } else {
                     switch (rowItem.getSelectAction()) {
 
