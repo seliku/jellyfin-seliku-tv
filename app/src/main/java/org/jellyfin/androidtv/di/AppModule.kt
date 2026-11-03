@@ -157,5 +157,10 @@ val appModule = module {
 	single { ReportingHelper(get(), get()) }
 	single<PlaybackHelper> { SdkPlaybackHelper(get(), get(), get(), get()) }
 
+	// Seliku-Oberfläche
+	factory { org.jellyfin.androidtv.seliku.SelikuDaten(get()) }
+	factory { org.jellyfin.androidtv.seliku.Bilder(get()) }
+	single { org.jellyfin.androidtv.seliku.Abspielen(get(), get(), get(), get()) }
+
 	factory { (context: Context) -> SearchFragmentDelegate(context, get(), get()) }
 }

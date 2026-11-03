@@ -1,0 +1,191 @@
+package org.jellyfin.androidtv.seliku
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
+import org.jellyfin.androidtv.ui.base.Text
+import org.jellyfin.sdk.model.api.BaseItemDto
+import org.jellyfin.sdk.model.api.BaseItemKind
+import org.koin.compose.koinInject
+import timber.log.Timber
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+
+/** Suche: Eingabefeld oben, Treffer nach Art in Reihen. */
+@Composable
+fun SuchSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
+	val daten = koinInject<SelikuDaten>()
+	val abspielen = koinInject<Abspielen>()
+	val context = LocalContext.current
+	val seite = Seite.Suche
+	var text by remember { mutableStateOf(vm.wahl["suche|text"] as? String ?: "") }
+	@Suppress("UNCHECKED_CAST")
+	var treffer by remember { mutableStateOf(vm.wahl["suche|treffer"] as? List<BaseItemDto> ?: emptyList()) }
+	var sucht by remember { mutableStateOf(false) }
+	var feldFokus by remember { mutableStateOf(false) }
+	val feld = remember { FocusRequester() }
+
+	LaunchedEffect(Unit) { if (text.isEmpty()) runCatching { feld.requestFocus() } }
+	LaunchedEffect(text) {
+		vm.wahl["suche|text"] = text
+		if (text.trim().length < 2) { treffer = emptyList(); return@LaunchedEffect }
+		delay(450)
+		sucht = true
+		treffer = runCatching { daten.suche(text.trim()) }.onFailure { Timber.w(it, "Suche") }.getOrDefault(emptyList())
+		vm.wahl["suche|treffer"] = treffer
+		sucht = false
+	}
+
+	val gruppen = listOf(
+		"Filme" to setOf(BaseItemKind.MOVIE),
+		"Serien" to setOf(BaseItemKind.SERIES),
+		"Folgen" to setOf(BaseItemKind.EPISODE),
+		"Sender" to setOf(BaseItemKind.TV_CHANNEL),
+		"Interpreten" to setOf(BaseItemKind.MUSIC_ARTIST),
+		"Alben" to setOf(BaseItemKind.MUSIC_ALBUM),
+		"Titel" to setOf(BaseItemKind.AUDIO),
+	)
+
+	LazyColumn(state = vm.liste(seite), contentPadding = PaddingValues(bottom = 40.dp), modifier = Modifier.fillMaxSize().background(Farben.Hintergrund)) {
+		item {
+			Column(Modifier.padding(start = 48.dp, top = 32.dp, end = 48.dp, bottom = 20.dp)) {
+				Text("Suche", style = Schrift.Titel)
+				Spacer(Modifier.height(14.dp))
+				Box(
+					Modifier.width(620.dp)
+						.border(2.dp, if (feldFokus) Farben.Akzent else Farben.FlaecheHell, RoundedCornerShape(10.dp))
+						.background(Farben.Flaeche, RoundedCornerShape(10.dp))
+						.padding(horizontal = 18.dp, vertical = 14.dp)
+				) {
+					if (text.isEmpty()) Text("Filme, Serien, Musik, Sender …", style = Schrift.Leise)
+					BasicTextField(
+						value = text,
+						onValueChange = { text = it },
+						singleLine = true,
+						textStyle = Schrift.Normal,
+						cursorBrush = SolidColor(Farben.Akzent),
+						keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+						keyboardActions = KeyboardActions(onSearch = { }),
+						modifier = Modifier.fillMaxWidth().focusRequester(feld).onFocusChanged { feldFokus = it.isFocused },
+					)
+				}
+				if (sucht) { Spacer(Modifier.height(8.dp)); Text("Suche läuft …", style = Schrift.Leise) }
+				else if (text.trim().length >= 2 && treffer.isEmpty()) { Spacer(Modifier.height(8.dp)); Text("Nichts gefunden.", style = Schrift.Leise) }
+			}
+		}
+		gruppen.forEach { (titel, typen) ->
+			val liste = treffer.filter { it.type in typen }
+			if (liste.isNotEmpty()) item(key = titel) {
+				Reihe(titel, liste, vm, seite, onClick = { item ->
+					when (item.type) {
+						BaseItemKind.EPISODE -> abspielen.video(context, item)
+						BaseItemKind.TV_CHANNEL -> abspielen.sender(context, item)
+						BaseItemKind.AUDIO -> abspielen.musik(context, listOf(item))
+						else -> oeffnen(item)
+					}
+				})
+			}
+		}
+	}
+}
+
+private val UHR = DateTimeFormatter.ofPattern("HH:mm")
+
+/** Live-TV: Senderliste mit laufender Sendung und Fortschritt; Klick schaltet um. Oben der Weg zum Programmführer. */
+@Composable
+fun LiveTvSeite(vm: SelikuViewModel) {
+	val daten = koinInject<SelikuDaten>()
+	val bilder = koinInject<Bilder>()
+	val abspielen = koinInject<Abspielen>()
+	val context = LocalContext.current
+	val seite = Seite.LiveTv
+	@Suppress("UNCHECKED_CAST")
+	var sender by remember { mutableStateOf(vm.wahl["livetv|sender"] as? List<BaseItemDto>) }
+	val start = remember { FocusRequester() }
+
+	LaunchedEffect(Unit) {
+		while (true) {
+			runCatching { daten.sender() }.onSuccess { sender = it; vm.wahl["livetv|sender"] = it }.onFailure { Timber.w(it, "Sender laden") }
+			delay(60_000)
+		}
+	}
+
+	Column(Modifier.fillMaxSize().background(Farben.Hintergrund)) {
+		Row(Modifier.padding(start = 48.dp, top = 28.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+			Text("Live-TV", style = Schrift.Titel)
+			Spacer(Modifier.width(12.dp))
+			Knopf("Programmführer", symbol = "▦", onClick = { abspielen.programmfuehrer() })
+			Knopf("Aufnahmen", symbol = "●", onClick = { abspielen.aufnahmen() })
+		}
+		val s = sender
+		if (s == null) { Hinweis("Wird geladen …"); return@Column }
+		LazyColumn(state = vm.liste(seite), contentPadding = PaddingValues(start = 40.dp, end = 48.dp, bottom = 40.dp), modifier = Modifier.fillMaxSize()) {
+			items(s, key = { it.id }) { k ->
+				val p = k.currentProgram
+				Waehlbar(onClick = { abspielen.sender(context, k) }, vergroessern = false, merken = vm to (seite.schluessel to k.id.toString()),
+					modifier = Modifier.padding(vertical = 3.dp)) { fokussiert ->
+					Row(
+						Modifier.fillMaxWidth().background(if (fokussiert) Farben.FlaecheHell else Farben.Flaeche).padding(horizontal = 16.dp, vertical = 10.dp),
+						verticalAlignment = Alignment.CenterVertically,
+						horizontalArrangement = Arrangement.spacedBy(18.dp),
+					) {
+						Bild(bilder.eigenesBild(k, 200), Modifier.width(96.dp).aspectRatio(16f / 9f), ContentScale.Fit)
+						Column(Modifier.width(200.dp)) {
+							Text(k.name.orEmpty(), style = Schrift.Normal.copy(fontWeight = FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
+							k.channelNumber?.let { Text("Kanal $it", style = Schrift.Klein) }
+						}
+						Column(Modifier.weight(1f)) {
+							Text(p?.name ?: "Kein Programm", style = Schrift.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
+							if (p?.startDate != null && p.endDate != null) {
+								val jetzt = LocalDateTime.now()
+								val gesamt = java.time.Duration.between(p.startDate, p.endDate).seconds.coerceAtLeast(1)
+								val vorbei = java.time.Duration.between(p.startDate, jetzt).seconds
+								Spacer(Modifier.height(4.dp))
+								Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+									Text("${p.startDate!!.format(UHR)}–${p.endDate!!.format(UHR)}", style = Schrift.Klein)
+									Fortschritt(vorbei.toFloat() / gesamt, Modifier.width(240.dp))
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}

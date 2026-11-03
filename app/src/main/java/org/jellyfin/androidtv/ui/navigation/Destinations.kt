@@ -32,7 +32,9 @@ import java.util.UUID
 @Suppress("TooManyFunctions")
 object Destinations {
 	// General
-	val home = fragmentDestination<HomeFragment>()
+	// Seliku: eigene Oberfläche als Startbildschirm
+	val home = fragmentDestination<org.jellyfin.androidtv.seliku.SelikuFragment>()
+	val homeOriginal = fragmentDestination<HomeFragment>()
 	fun search(query: String? = null) = fragmentDestination<SearchFragment>(
 		SearchFragment.EXTRA_QUERY to query,
 	)
