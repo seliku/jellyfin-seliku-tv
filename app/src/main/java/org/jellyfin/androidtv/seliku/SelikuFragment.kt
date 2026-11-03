@@ -7,6 +7,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -212,8 +213,10 @@ private fun Seitenleiste(
 			.background(if (offen) Farben.Flaeche else Farben.Hintergrund)
 			.focusRestorer(aktivAnfrage)
 			.focusGroup()
-			.padding(vertical = 28.dp, horizontal = 12.dp),
-		verticalArrangement = Arrangement.spacedBy(6.dp),
+			// Viele Bibliotheken passen nicht auf den Bildschirm: die Leiste rollt mit dem Fokus mit
+			.verticalScroll(androidx.compose.foundation.rememberScrollState())
+			.padding(vertical = 24.dp, horizontal = 12.dp),
+		verticalArrangement = Arrangement.spacedBy(4.dp),
 	) {
 		// Benutzer oben: wechselt das Profil
 		Waehlbar(onClick = {
@@ -232,7 +235,7 @@ private fun Seitenleiste(
 				}
 			}
 		}
-		Spacer(Modifier.height(18.dp))
+		Spacer(Modifier.height(12.dp))
 		eintraege.forEach { e ->
 			val istAktiv = e.seite != null && e.seite.schluessel == aktiv.schluessel
 			Waehlbar(onClick = { waehlen(e) }, vergroessern = false, shape = RoundedCornerShape(10.dp),
@@ -240,7 +243,7 @@ private fun Seitenleiste(
 				Row(
 					Modifier.fillMaxWidth()
 						.background(when { fokussiert -> Farben.Text; istAktiv -> Farben.FlaecheHell; else -> Color.Transparent })
-						.padding(horizontal = 14.dp, vertical = 11.dp),
+						.padding(horizontal = 14.dp, vertical = 8.dp),
 					verticalAlignment = Alignment.CenterVertically,
 				) {
 					val farbe = when { fokussiert -> Color.Black; istAktiv || e.hervor -> Farben.Akzent; else -> Farben.TextLeise }
