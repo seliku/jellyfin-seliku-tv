@@ -47,6 +47,7 @@ import androidx.fragment.app.viewModels
 import androidx.fragment.compose.content
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
+import androidx.lifecycle.repeatOnLifecycle
 import org.jellyfin.androidtv.auth.repository.SessionRepository
 import org.jellyfin.androidtv.auth.repository.UserRepository
 import org.jellyfin.androidtv.ui.base.JellyfinTheme
@@ -95,10 +96,14 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 	val scope = androidx.compose.runtime.rememberCoroutineScope()
 	var update by remember { mutableStateOf<SelikuUpdate.Version?>(null) }
 	var updateText by remember { mutableStateOf<String?>(null) }
-	LaunchedEffect(Unit) {
-		while (true) {
-			update = SelikuUpdate.pruefen()
-			kotlinx.coroutines.delay(6 * 60 * 60 * 1000L)
+	// Android TV lässt die App im Hintergrund weiterlaufen: deshalb bei jedem Zurückkommen in die App nachsehen, nicht nur beim Start
+	val lebenszyklus = androidx.lifecycle.compose.LocalLifecycleOwner.current
+	LaunchedEffect(lebenszyklus) {
+		lebenszyklus.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
+			while (true) {
+				SelikuUpdate.pruefen()?.let { update = it }
+				kotlinx.coroutines.delay(6 * 60 * 60 * 1000L)
+			}
 		}
 	}
 
