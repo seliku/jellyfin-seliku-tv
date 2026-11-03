@@ -79,6 +79,11 @@ fun BibliothekSeite(vm: SelikuViewModel, seite: Seite.Bibliothek, oeffnen: (Base
 	}
 
 	val raster = vm.raster(seite)
+	// Beim ersten Öffnen steht der Fokus auf dem ersten Titel, nicht auf der Sortierung
+	val erstes = remember { androidx.compose.ui.focus.FocusRequester() }
+	LaunchedEffect(items.isNotEmpty()) {
+		if (items.isNotEmpty() && vm.fokus[seite.schluessel] == null) { kotlinx.coroutines.delay(100); runCatching { erstes.requestFocus() } }
+	}
 	LaunchedEffect(sortierung, ungesehen) { if (items.isEmpty()) nachladen() }
 	LaunchedEffect(raster, sortierung, ungesehen) {
 		snapshotFlow { raster.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }
@@ -119,16 +124,17 @@ fun BibliothekSeite(vm: SelikuViewModel, seite: Seite.Bibliothek, oeffnen: (Base
 			if (items.isEmpty()) Hinweis(if (laedt || gesamt == null) "Wird geladen …" else "Keine Titel.")
 			LazyVerticalGrid(
 				state = raster,
-				columns = GridCells.Adaptive(150.dp),
+				columns = GridCells.Adaptive(118.dp),
 				contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 12.dp, bottom = 40.dp),
 				horizontalArrangement = Arrangement.spacedBy(20.dp),
 				verticalArrangement = Arrangement.spacedBy(22.dp),
 				modifier = Modifier.fillMaxSize(),
 			) {
-				itemsIndexed(items, key = { _, it -> it.id }) { _, item ->
+				itemsIndexed(items, key = { _, it -> it.id }) { index, item ->
 					PosterKachel(
 						item = item,
-						breite = 150.dp,
+						breite = 118.dp,
+						erster = if (index == 0) erstes else null,
 						onClick = { oeffnen(item) },
 						merken = vm to (seite.schluessel to item.id.toString()),
 					)

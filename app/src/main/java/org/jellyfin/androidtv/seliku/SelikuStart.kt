@@ -80,14 +80,14 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 			Column(Modifier.fillMaxWidth().heightIn(min = 190.dp).padding(start = 48.dp, top = 36.dp, end = 360.dp)) {
 				val h = hero
 				val logo = bilder.logo(h)
-				if (logo != null) Bild(logo, Modifier.height(70.dp).width(300.dp), ContentScale.Fit)
+				if (logo != null) Bild(logo, Modifier.height(70.dp).width(300.dp), ContentScale.Fit, grund = androidx.compose.ui.graphics.Color.Transparent)
 				else Text(h?.hauptzeile().orEmpty(), style = Schrift.Riesig, maxLines = 1, overflow = TextOverflow.Ellipsis)
 				Spacer(Modifier.height(8.dp))
 				if (h != null) {
 					val zeile = if (h.type == BaseItemKind.EPISODE) h.unterzeile() else h.metazeile()
 					Text(zeile, style = Schrift.Leise, maxLines = 1)
 					Spacer(Modifier.height(8.dp))
-					Text((h.currentProgram?.overview ?: h.overview).orEmpty(), style = Schrift.Normal, maxLines = 3, overflow = TextOverflow.Ellipsis)
+					Text((h.currentProgram?.overview ?: h.overview).orEmpty().takeUnless { it.trimStart().startsWith("http") }.orEmpty(), style = Schrift.Normal, maxLines = 3, overflow = TextOverflow.Ellipsis)
 				}
 			}
 			SenkrechtRollen { LazyColumn(

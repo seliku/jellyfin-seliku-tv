@@ -92,7 +92,9 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 	val eintraege = buildList {
 		add(Eintrag("⌂", "Startseite", Seite.Start))
 		add(Eintrag("⌕", "Suche", Seite.Suche))
-		bibliotheken.forEach { bib ->
+		// Feste Reihenfolge wie gewohnt: Filme, Serien, Live-TV, Musik, dann alles andere
+		val rang = { b: BaseItemDto -> when (b.collectionType?.serialName) { "movies" -> 0; "tvshows" -> 1; "livetv" -> 2; "music" -> 3; else -> 4 } }
+		bibliotheken.sortedBy(rang).forEach { bib ->
 			when {
 				bib.istLiveTv() -> add(Eintrag("◉", bib.name ?: "Live-TV", Seite.LiveTv))
 				bib.istMusik() -> add(Eintrag("♪", bib.name ?: "Musik", Seite.Musik(bib)))
@@ -171,6 +173,8 @@ private fun Seitenleiste(
 	val mediaManager = koinInject<MediaManager>()
 	val context = LocalContext.current
 	val benutzer by remember { userRepository.currentUser.filterNotNull() }.collectAsState(null)
+	// Beim Betreten der Seitenleiste steht der Fokus auf der aktiven Seite, nicht oben beim Profil
+	val aktivAnfrage = remember { FocusRequester() }
 
 	Column(
 		modifier
@@ -178,7 +182,7 @@ private fun Seitenleiste(
 			.width(if (offen) 250.dp else 76.dp)
 			.animateContentSize()
 			.background(if (offen) Farben.Flaeche else Farben.Hintergrund)
-			.focusRestorer()
+			.focusRestorer(aktivAnfrage)
 			.focusGroup()
 			.padding(vertical = 28.dp, horizontal = 12.dp),
 		verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -203,7 +207,8 @@ private fun Seitenleiste(
 		Spacer(Modifier.height(18.dp))
 		eintraege.forEach { e ->
 			val istAktiv = e.seite != null && e.seite.schluessel == aktiv.schluessel
-			Waehlbar(onClick = { waehlen(e) }, vergroessern = false, shape = RoundedCornerShape(10.dp)) { fokussiert ->
+			Waehlbar(onClick = { waehlen(e) }, vergroessern = false, shape = RoundedCornerShape(10.dp),
+				modifier = if (istAktiv) Modifier.focusRequester(aktivAnfrage) else Modifier) { fokussiert ->
 				Row(
 					Modifier.fillMaxWidth()
 						.background(when { fokussiert -> Farben.Text; istAktiv -> Farben.FlaecheHell; else -> Color.Transparent })

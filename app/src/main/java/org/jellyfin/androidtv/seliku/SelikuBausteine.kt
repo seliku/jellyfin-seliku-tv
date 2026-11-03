@@ -117,8 +117,8 @@ fun Waehlbar(
 }
 
 @Composable
-fun Bild(url: String?, modifier: Modifier = Modifier, scale: ContentScale = ContentScale.Crop, ersatz: String? = null) {
-	Box(modifier.background(Farben.FlaecheHell), contentAlignment = Alignment.Center) {
+fun Bild(url: String?, modifier: Modifier = Modifier, scale: ContentScale = ContentScale.Crop, ersatz: String? = null, grund: Color = Farben.FlaecheHell) {
+	Box(modifier.background(grund), contentAlignment = Alignment.Center) {
 		if (url == null && ersatz != null) Text(ersatz, style = Schrift.Riesig.copy(color = Farben.TextLeise, fontWeight = FontWeight.Normal))
 		if (url != null) AsyncImage(model = url, contentDescription = null, imageLoader = koinInject<ImageLoader>(), contentScale = scale, modifier = Modifier.fillMaxSize())
 	}
@@ -174,13 +174,14 @@ fun PosterKachel(
 	item: BaseItemDto,
 	onClick: () -> Unit,
 	breite: Dp = 140.dp,
+	erster: FocusRequester? = null,
 	merken: Pair<SelikuViewModel, Pair<String, String>>? = null,
 	onFokus: () -> Unit = {},
 	onMenue: (() -> Unit)? = null,
 ) {
 	val bilder = koinInject<Bilder>()
 	Column(Modifier.width(breite)) {
-		Waehlbar(onClick = onClick, merken = merken, onFokus = onFokus, onMenue = onMenue) {
+		Waehlbar(onClick = onClick, merken = merken, onFokus = onFokus, onMenue = onMenue, modifier = if (erster != null) Modifier.focusRequester(erster) else Modifier) {
 			Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f)) {
 				Bild(bilder.poster(item, 300), Modifier.fillMaxSize(), ersatz = "▶")
 				Abzeichen(item, Modifier.align(Alignment.TopEnd))

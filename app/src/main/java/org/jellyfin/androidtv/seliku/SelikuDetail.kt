@@ -52,14 +52,14 @@ private fun Kopf(
 		if (poster) Bild(bilder.eigenesBild(item, 400), Modifier.width(190.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(8.dp)))
 		Column(Modifier.weight(1f)) {
 			val logo = bilder.logo(item)
-			if (logo != null) Bild(logo, Modifier.height(80.dp).width(340.dp), ContentScale.Fit)
+			if (logo != null) Bild(logo, Modifier.height(80.dp).width(340.dp), ContentScale.Fit, grund = androidx.compose.ui.graphics.Color.Transparent)
 			else Text(item.name.orEmpty(), style = Schrift.Riesig, maxLines = 2, overflow = TextOverflow.Ellipsis)
 			Spacer(Modifier.height(10.dp))
 			Text(item.metazeile(), style = Schrift.Leise, maxLines = 1)
 			if (zusatz != null) { Spacer(Modifier.height(4.dp)); Text(zusatz, style = Schrift.Leise, maxLines = 1) }
 			item.taglines?.firstOrNull()?.let { Spacer(Modifier.height(10.dp)); Text(it, style = Schrift.Normal.copy(color = Farben.Akzent), maxLines = 1) }
 			Spacer(Modifier.height(10.dp))
-			Text(item.overview.orEmpty(), style = Schrift.Normal, maxLines = 4, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(end = 160.dp))
+			Text(item.overview.orEmpty().takeUnless { it.trimStart().startsWith("http") }.orEmpty(), style = Schrift.Normal, maxLines = 4, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(end = 160.dp))
 			Spacer(Modifier.height(20.dp))
 			Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { knoepfe() }
 		}
