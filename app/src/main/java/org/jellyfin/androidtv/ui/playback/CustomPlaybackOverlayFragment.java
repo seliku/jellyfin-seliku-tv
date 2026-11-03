@@ -587,6 +587,22 @@ public class CustomPlaybackOverlayFragment extends Fragment implements LiveTvGui
                         }
                     }
 
+                    // Seliku: Links/Rechts springt sofort zurück bzw. vor und spielt danach von selbst weiter.
+                    // Vorher hielt das Ziehen der Zeitleiste die Wiedergabe an, bis man erneut «Play» drückte.
+                    if ((keyCode == KeyEvent.KEYCODE_DPAD_RIGHT || keyCode == KeyEvent.KEYCODE_DPAD_LEFT)
+                            && !playbackControllerContainer.getValue().getPlaybackController().isLiveTv()) {
+                        View fokus = requireActivity().getCurrentFocus();
+                        boolean aufLeiste = fokus != null && fokus.getId() == androidx.leanback.R.id.playback_progress;
+                        if (!mIsVisible || aufLeiste) {
+                            PlaybackController pc = playbackControllerContainer.getValue().getPlaybackController();
+                            if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) pc.fastForward();
+                            else pc.rewind();
+                            leanbackOverlayFragment.updateCurrentPosition();
+                            setFadingEnabled(true);
+                            return true;
+                        }
+                    }
+
                     if (!mIsVisible) {
                         if (!playbackControllerContainer.getValue().getPlaybackController().isLiveTv()) {
                             if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
