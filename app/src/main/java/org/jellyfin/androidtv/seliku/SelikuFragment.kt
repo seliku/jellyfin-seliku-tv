@@ -45,6 +45,7 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.fragment.compose.content
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.launch
 import org.jellyfin.androidtv.auth.repository.SessionRepository
 import org.jellyfin.androidtv.auth.repository.UserRepository
 import org.jellyfin.androidtv.ui.base.JellyfinTheme
@@ -74,7 +75,7 @@ class SelikuFragment : Fragment() {
 	}
 }
 
-private data class Eintrag(val symbol: String, val titel: String, val seite: Seite?, val aktion: (() -> Unit)? = null)
+private data class Eintrag(val symbol: String, val titel: String, val seite: Seite?, val hervor: Boolean = false, val aktion: (() -> Unit)? = null)
 
 @Composable
 private fun Oberflaeche(vm: SelikuViewModel) {
@@ -89,6 +90,17 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 		bibliotheken = runCatching { daten.bibliotheken() }.onFailure { Timber.w(it, "Bibliotheken") }.getOrDefault(emptyList())
 	}
 
+	// Selbst-Update: beim Start und danach alle 6 Stunden nachsehen, ob es eine neuere Version gibt
+	val scope = androidx.compose.runtime.rememberCoroutineScope()
+	var update by remember { mutableStateOf<SelikuUpdate.Version?>(null) }
+	var updateText by remember { mutableStateOf<String?>(null) }
+	LaunchedEffect(Unit) {
+		while (true) {
+			update = SelikuUpdate.pruefen()
+			kotlinx.coroutines.delay(6 * 60 * 60 * 1000L)
+		}
+	}
+
 	val eintraege = buildList {
 		add(Eintrag("⌂", "Startseite", Seite.Start))
 		add(Eintrag("⌕", "Suche", Seite.Suche))
@@ -100,6 +112,22 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 				bib.istMusik() -> add(Eintrag("♪", bib.name ?: "Musik", Seite.Musik(bib)))
 				else -> add(Eintrag(if (bib.collectionType?.serialName == "tvshows") "▤" else "▶", bib.name.orEmpty(), Seite.Bibliothek(bib)))
 			}
+		}
+		update?.let { v ->
+			add(Eintrag("⬇", updateText ?: "Update ${v.name}", null, hervor = true) {
+				when {
+					updateText != null && updateText!!.startsWith("Lädt") -> Unit
+					!SelikuUpdate.darfInstallieren(context) -> {
+						updateText = "Erlauben, dann nochmals"
+						SelikuUpdate.erlaubnisOeffnen(context)
+					}
+					else -> scope.launch {
+						updateText = "Lädt …"
+						val r = SelikuUpdate.installieren(context, v) { anteil -> updateText = "Lädt … ${(anteil * 100).toInt()} %" }
+						updateText = if (r.isSuccess) "Installieren bestätigen" else "Update fehlgeschlagen"
+					}
+				}
+			})
 		}
 		add(Eintrag("⚙", "Einstellungen", null) {
 			context.startActivity(ActivityDestinations.userPreferences(context))
@@ -215,11 +243,11 @@ private fun Seitenleiste(
 						.padding(horizontal = 14.dp, vertical = 11.dp),
 					verticalAlignment = Alignment.CenterVertically,
 				) {
-					val farbe = when { fokussiert -> Color.Black; istAktiv -> Farben.Akzent; else -> Farben.TextLeise }
+					val farbe = when { fokussiert -> Color.Black; istAktiv || e.hervor -> Farben.Akzent; else -> Farben.TextLeise }
 					Text(e.symbol, style = Schrift.Titel.copy(color = farbe, fontWeight = FontWeight.Normal), modifier = Modifier.width(26.dp))
 					if (offen) {
 						Spacer(Modifier.width(14.dp))
-						Text(e.titel, style = Schrift.Normal.copy(color = if (fokussiert) Color.Black else Farben.Text, fontWeight = if (istAktiv) FontWeight.Bold else FontWeight.Normal),
+						Text(e.titel, style = Schrift.Normal.copy(color = if (fokussiert) Color.Black else if (e.hervor) Farben.Akzent else Farben.Text, fontWeight = if (istAktiv) FontWeight.Bold else FontWeight.Normal),
 							maxLines = 1, overflow = TextOverflow.Ellipsis)
 					}
 				}

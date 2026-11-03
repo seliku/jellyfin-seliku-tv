@@ -412,3 +412,13 @@ fun staffelName(s: BaseItemDto?): String {
 
 fun initialen(name: String?): String = name.orEmpty().split(" ").filter { it.firstOrNull()?.isLetterOrDigit() == true }
 	.take(2).joinToString("") { it.first().uppercase() }.ifEmpty { "♫" }
+
+/** Der Titel wurde auf dem Server entfernt oder neu eingelesen (HTTP 404). */
+fun istWeg(e: Throwable): Boolean = (e as? org.jellyfin.sdk.api.client.exception.InvalidStatusException)?.status == 404
+
+/** Kurz «Nicht mehr vorhanden» zeigen und eine Seite zurück, statt hängen zu bleiben. */
+@Composable
+fun NichtMehrDa(vm: SelikuViewModel) {
+	Hinweis("Dieser Titel ist nicht mehr vorhanden.")
+	LaunchedEffect(Unit) { kotlinx.coroutines.delay(2000); vm.zurueck() }
+}

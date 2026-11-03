@@ -97,6 +97,7 @@ fun InterpretSeite(vm: SelikuViewModel, seite: Seite.Interpret, oeffnen: (BaseIt
 	var interpret by remember { mutableStateOf<BaseItemDto?>(null) }
 	var beliebt by remember { mutableStateOf<List<BaseItemDto>>(emptyList()) }
 	var alben by remember { mutableStateOf<List<BaseItemDto>>(emptyList()) }
+	var fehltInterpret by remember { mutableStateOf(false) }
 	val start = remember { FocusRequester() }
 
 	LaunchedEffect(seite.id) {
@@ -105,12 +106,13 @@ fun InterpretSeite(vm: SelikuViewModel, seite: Seite.Interpret, oeffnen: (BaseIt
 			if (vm.fokus[seite.schluessel] == null) runCatching { start.requestFocus() }
 			alben = daten.alben(null, seite.id)
 			beliebt = daten.titelVon(seite.id, beliebteste = true)
-		}.onFailure { Timber.w(it, "Interpret laden") }
+		}.onFailure { Timber.w(it, "Interpret laden"); if (istWeg(it)) fehltInterpret = true }
 	}
 
 	val i = interpret
 	Box(Modifier.fillMaxSize()) {
 		Kulisse(bilder.hintergrund(i))
+		if (fehltInterpret) { NichtMehrDa(vm); return@Box }
 		if (i == null) { Hinweis("Wird geladen …"); return@Box }
 		SenkrechtRollen { LazyColumn(state = vm.liste(seite), contentPadding = PaddingValues(bottom = 48.dp), modifier = Modifier.fillMaxSize()) {
 			item {
@@ -156,6 +158,7 @@ fun AlbumSeite(vm: SelikuViewModel, seite: Seite.Album, oeffnen: (BaseItemDto) -
 	val context = LocalContext.current
 	var album by remember { mutableStateOf<BaseItemDto?>(null) }
 	var titel by remember { mutableStateOf<List<BaseItemDto>>(emptyList()) }
+	var fehltAlbum by remember { mutableStateOf(false) }
 	val start = remember { FocusRequester() }
 
 	LaunchedEffect(seite.id) {
@@ -163,11 +166,12 @@ fun AlbumSeite(vm: SelikuViewModel, seite: Seite.Album, oeffnen: (BaseItemDto) -
 			album = daten.item(seite.id)
 			titel = daten.titel(seite.id)
 			if (vm.fokus[seite.schluessel] == null) runCatching { start.requestFocus() }
-		}.onFailure { Timber.w(it, "Album laden") }
+		}.onFailure { Timber.w(it, "Album laden"); if (istWeg(it)) fehltAlbum = true }
 	}
 
 	val a = album
 	Box(Modifier.fillMaxSize().background(Farben.Hintergrund)) {
+		if (fehltAlbum) { NichtMehrDa(vm); return@Box }
 		if (a == null) { Hinweis("Wird geladen …"); return@Box }
 		Row(Modifier.fillMaxSize().padding(start = 48.dp, top = 40.dp, end = 48.dp), horizontalArrangement = Arrangement.spacedBy(40.dp)) {
 			Column(Modifier.width(300.dp)) {

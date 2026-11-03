@@ -16,8 +16,10 @@ android {
 
 		// Release version: eigene Kennung, damit die App neben der originalen Jellyfin-App installiert werden kann
 		applicationId = "ch.seliku.jellyfin.tv"
-		versionName = project.getVersionName()
-		versionCode = getVersionCode(versionName!!)
+		// Seliku: jede Version bekommt eine fortlaufende Nummer (Minuten seit 2026), damit das Selbst-Update sie als neuer erkennt
+		val selikuNummer = ((System.currentTimeMillis() / 60_000L) - 29_000_000L).toInt()
+		versionName = "1.0.$selikuNummer"
+		versionCode = selikuNummer
 	}
 
 	buildFeatures {

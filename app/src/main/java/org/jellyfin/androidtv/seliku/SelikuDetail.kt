@@ -90,6 +90,7 @@ fun SerienSeite(vm: SelikuViewModel, seite: Seite.Serie, oeffnen: (BaseItemDto) 
 	var aehnlich by remember { mutableStateOf<List<BaseItemDto>>(emptyList()) }
 	var gewaehlteFolge by remember { mutableStateOf<BaseItemDto?>(null) }
 	var neuLaden by remember { mutableStateOf(0) }
+	var fehltSerie by remember { mutableStateOf(false) }
 	val start = remember { FocusRequester() }
 
 	LaunchedEffect(seite.id, neuLaden) {
@@ -100,7 +101,7 @@ fun SerienSeite(vm: SelikuViewModel, seite: Seite.Serie, oeffnen: (BaseItemDto) 
 			if (staffel == null || staffeln.none { it.id == staffel }) staffel = naechste?.seasonId ?: staffeln.firstOrNull()?.id
 			if (neuLaden == 0 && vm.fokus[seite.schluessel] == null) runCatching { start.requestFocus() }
 			aehnlich = daten.aehnlich(seite.id)
-		}.onFailure { Timber.w(it, "Serie laden") }
+		}.onFailure { Timber.w(it, "Serie laden"); if (istWeg(it)) fehltSerie = true }
 	}
 	LaunchedEffect(staffel, neuLaden) {
 		val s = staffel ?: return@LaunchedEffect
@@ -111,6 +112,7 @@ fun SerienSeite(vm: SelikuViewModel, seite: Seite.Serie, oeffnen: (BaseItemDto) 
 	val sr = serie
 	Box(Modifier.fillMaxSize()) {
 		Kulisse(bilder.hintergrund(sr))
+		if (fehltSerie) { NichtMehrDa(vm); return@Box }
 		if (sr == null) { Hinweis("Wird geladen …"); return@Box }
 		SenkrechtRollen { LazyColumn(state = vm.liste(seite), contentPadding = PaddingValues(bottom = 48.dp), modifier = Modifier.fillMaxSize()) {
 			item {
@@ -180,6 +182,7 @@ fun TitelSeite(vm: SelikuViewModel, seite: Seite.Titel, oeffnen: (BaseItemDto) -
 	var titel by remember { mutableStateOf<BaseItemDto?>(null) }
 	var aehnlich by remember { mutableStateOf<List<BaseItemDto>>(emptyList()) }
 	var neuLaden by remember { mutableStateOf(0) }
+	var fehltTitel by remember { mutableStateOf(false) }
 	val start = remember { FocusRequester() }
 
 	LaunchedEffect(seite.id, neuLaden) {
@@ -187,12 +190,13 @@ fun TitelSeite(vm: SelikuViewModel, seite: Seite.Titel, oeffnen: (BaseItemDto) -
 			titel = daten.item(seite.id)
 			if (neuLaden == 0 && vm.fokus[seite.schluessel] == null) runCatching { start.requestFocus() }
 			aehnlich = daten.aehnlich(seite.id)
-		}.onFailure { Timber.w(it, "Titel laden") }
+		}.onFailure { Timber.w(it, "Titel laden"); if (istWeg(it)) fehltTitel = true }
 	}
 
 	val t = titel
 	Box(Modifier.fillMaxSize()) {
 		Kulisse(bilder.hintergrund(t))
+		if (fehltTitel) { NichtMehrDa(vm); return@Box }
 		if (t == null) { Hinweis("Wird geladen …"); return@Box }
 		SenkrechtRollen { LazyColumn(state = vm.liste(seite), contentPadding = PaddingValues(bottom = 48.dp), modifier = Modifier.fillMaxSize()) {
 			item {
