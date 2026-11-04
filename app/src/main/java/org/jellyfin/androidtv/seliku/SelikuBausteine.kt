@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -228,7 +229,13 @@ fun PosterKachel(
 	val hoehe = breite * 1.5f
 	val b by androidx.compose.animation.core.animateDpAsState(if (offen) hoehe * 16f / 9f else breite,
 		androidx.compose.animation.core.tween(240, easing = androidx.compose.animation.core.FastOutSlowInEasing), label = "kachel")
-	Column(Modifier.width(b)) {
+	// Die Reihe rollt beim Fokus nur so weit, dass die schmale Kachel passt; nach dem Aufklappen nochmals nachrollen,
+	// sonst ragt die breite Kachel am Ende der Reihe über den Rand.
+	val sichtbar = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
+	LaunchedEffect(offen) {
+		if (offen) { kotlinx.coroutines.delay(260); runCatching { sichtbar.bringIntoView() } }
+	}
+	Column(Modifier.width(b).bringIntoViewRequester(sichtbar)) {
 		Waehlbar(onClick = onClick, merken = merken, onFokus = onFokus, onMenue = onMenue, vergroessern = !aufklappen,
 			modifier = (if (erster != null) Modifier.focusRequester(erster) else Modifier).onFocusChanged { fokussiert = it.isFocused }) {
 			Box(Modifier.width(b).height(hoehe)) {
