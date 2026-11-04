@@ -1,5 +1,9 @@
 package org.jellyfin.androidtv.seliku
 
+import androidx.compose.ui.graphics.graphicsLayer
+
+import androidx.compose.runtime.key
+
 import androidx.compose.foundation.layout.wrapContentWidth
 
 import androidx.compose.foundation.background
@@ -59,13 +63,24 @@ fun Banner(
 	var hatFokus by remember { mutableStateOf(false) }
 	val item = items[nr % items.size]
 	LaunchedEffect(item.id) { zeigt(item) }
+	// Nach 3 Sekunden stumm den Trailer zeigen (falls einer auf dem Server liegt); solange er läuft, wird nicht weitergeblättert
+	val api = koinInject<org.jellyfin.sdk.api.client.ApiClient>()
+	var trailer by remember { mutableStateOf<String?>(null) }
+	var trailerBereit by remember { mutableStateOf(false) }
+	LaunchedEffect(item.id) {
+		trailer = null; trailerBereit = false
+		if (!SelikuEinstellungen.trailerImBanner(context)) return@LaunchedEffect
+		delay(3_000)
+		trailer = Trailer.adresse(api, item)
+	}
+	val trailerSicht by androidx.compose.animation.core.animateFloatAsState(if (trailerBereit) 1f else 0f, androidx.compose.animation.core.tween(900), label = "trailer")
 	// Fester Takt: zählt Sekunden und wechselt alle 9 s; Fokuswechsel setzen den Takt nicht zurück.
 	// Steht der Fokus im Banner (Knöpfe oder Punkte), wird nur pausiert.
 	LaunchedEffect(items) {
 		var sekunden = 0
 		while (items.size > 1) {
 			delay(1_000)
-			if (hatFokus) { sekunden = 0; continue }
+			if (hatFokus || trailer != null) { sekunden = 0; continue }
 			if (++sekunden >= 9) { sekunden = 0; nr = (nr + 1) % items.size }
 		}
 	}
@@ -74,6 +89,12 @@ fun Banner(
 		.clip(androidx.compose.foundation.shape.RoundedCornerShape(18.dp)).background(Farben.Flaeche)
 		.onFocusChanged { hatFokus = it.hasFocus }) {
 		Bild(bilder.hintergrund(item, 1280), Modifier.matchParentSize())
+		trailer?.let { url ->
+			key(url) {
+				TrailerVideo(url, Modifier.matchParentSize().graphicsLayer { alpha = trailerSicht }, onBereit = { trailerBereit = true },
+					onEnde = { trailer = null; trailerBereit = false; if (items.size > 1) nr = (nr + 1) % items.size })
+			}
+		}
 		Box(Modifier.matchParentSize().background(androidx.compose.ui.graphics.Brush.horizontalGradient(
 			listOf(androidx.compose.ui.graphics.Color(0xF0120D0B), androidx.compose.ui.graphics.Color(0x99120D0B), androidx.compose.ui.graphics.Color.Transparent))))
 	Column(Modifier.fillMaxWidth().padding(start = 28.dp, top = 22.dp, end = 340.dp)) {

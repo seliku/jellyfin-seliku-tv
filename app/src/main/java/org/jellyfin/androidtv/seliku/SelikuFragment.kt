@@ -390,7 +390,7 @@ private fun Seitenleiste(
 			.focusGroup()
 			// Viele Bibliotheken passen nicht auf den Bildschirm: die Leiste rollt mit dem Fokus mit
 			.verticalScroll(androidx.compose.foundation.rememberScrollState())
-			.padding(vertical = 24.dp, horizontal = 12.dp),
+			.padding(vertical = 16.dp, horizontal = 12.dp),
 		verticalArrangement = Arrangement.spacedBy(4.dp),
 	) {
 		// Oben eine Symbolreihe: Suche, Einstellungen, Update (falls vorhanden), Profilbild. Zugeklappt nur die Suche.
@@ -436,7 +436,7 @@ private fun Seitenleiste(
 					Modifier.fillMaxWidth()
 						.background(when { fokussiert -> Farben.Text; istAktiv -> Farben.FlaecheHell; else -> Color.Transparent })
 						// 14 dp Rand: zugeklappt steht das Symbol so genau mittig, aufgeklappt bleibt es an derselben Stelle
-						.padding(horizontal = 14.dp, vertical = 10.dp),
+						.padding(horizontal = 14.dp, vertical = 7.dp),
 					verticalAlignment = Alignment.CenterVertically,
 					horizontalArrangement = Arrangement.Start,
 				) {

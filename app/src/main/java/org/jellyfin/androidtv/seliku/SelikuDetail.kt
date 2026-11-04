@@ -1,5 +1,7 @@
 package org.jellyfin.androidtv.seliku
 
+import androidx.compose.ui.focus.onFocusChanged
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,8 +47,10 @@ private fun Kopf(
 	item: BaseItemDto,
 	zusatz: String? = null,
 	poster: Boolean = true,
+	liste: androidx.compose.foundation.lazy.LazyListState? = null,
 	knoepfe: @Composable () -> Unit,
 ) {
+	val scope = androidx.compose.runtime.rememberCoroutineScope()
 	val bilder = koinInject<Bilder>()
 	Row(Modifier.fillMaxWidth().padding(start = 48.dp, top = 40.dp, end = 48.dp), horizontalArrangement = Arrangement.spacedBy(32.dp)) {
 		if (poster) Bild(bilder.eigenesBild(item, 400), Modifier.width(190.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(8.dp)))
@@ -61,7 +65,10 @@ private fun Kopf(
 			Spacer(Modifier.height(10.dp))
 			Text(item.overview.orEmpty().takeUnless { it.trimStart().startsWith("http") }.orEmpty(), style = Schrift.Normal, maxLines = 4, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(end = 160.dp))
 			Spacer(Modifier.height(20.dp))
-			Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { knoepfe() }
+			// Steht der Fokus auf den Knöpfen, bleibt die Seite ganz oben (sonst schiebt die Rollregel den Titel hinaus)
+			Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.onFocusChanged {
+				if (it.hasFocus && liste != null) scope.launch { kotlinx.coroutines.delay(80); runCatching { liste.animateScrollToItem(0) } }
+			}) { knoepfe() }
 		}
 	}
 }
@@ -91,7 +98,8 @@ fun SerienSeite(vm: SelikuViewModel, seite: Seite.Serie, oeffnen: (BaseItemDto) 
 	var gewaehlteFolge by remember { mutableStateOf<BaseItemDto?>(null) }
 	var neuLaden by remember { mutableStateOf(0) }
 	var fehltSerie by remember { mutableStateOf(false) }
-	val start = remember { FocusRequester() }
+	// «Abspielen» ist der erste Platz der Seite: die Startlogik holt den Fokus dorthin, nicht zu «Ähnliche Titel»
+	val start = remember(seite.schluessel) { vm.ersteAnfrageFuer(seite.schluessel, "abspielen") }
 
 	LaunchedEffect(seite.id, neuLaden) {
 		runCatching {
@@ -118,7 +126,7 @@ fun SerienSeite(vm: SelikuViewModel, seite: Seite.Serie, oeffnen: (BaseItemDto) 
 			item {
 				val n = naechste
 				val zusatz = n?.let { "Als Nächstes: " + it.unterzeile() }
-				Kopf(sr, zusatz) {
+				Kopf(sr, zusatz, liste = vm.liste(seite)) {
 					Knopf(
 						text = n?.let { fortsetzenText(it) ?: "Abspielen  ${it.parentIndexNumber?.let { s -> "S$s" } ?: ""} ${it.indexNumber?.let { f -> "F$f" } ?: ""}".trimEnd() } ?: "Abspielen",
 						symbol = "▶",
@@ -183,7 +191,8 @@ fun TitelSeite(vm: SelikuViewModel, seite: Seite.Titel, oeffnen: (BaseItemDto) -
 	var aehnlich by remember { mutableStateOf<List<BaseItemDto>>(emptyList()) }
 	var neuLaden by remember { mutableStateOf(0) }
 	var fehltTitel by remember { mutableStateOf(false) }
-	val start = remember { FocusRequester() }
+	// «Abspielen» ist der erste Platz der Seite: die Startlogik holt den Fokus dorthin, nicht zu «Ähnliche Titel»
+	val start = remember(seite.schluessel) { vm.ersteAnfrageFuer(seite.schluessel, "abspielen") }
 
 	LaunchedEffect(seite.id, neuLaden) {
 		runCatching {
@@ -201,7 +210,7 @@ fun TitelSeite(vm: SelikuViewModel, seite: Seite.Titel, oeffnen: (BaseItemDto) -
 		SenkrechtRollen { LazyColumn(state = vm.liste(seite), contentPadding = PaddingValues(bottom = 48.dp), modifier = Modifier.fillMaxSize()) {
 			item {
 				val fortsetzen = fortsetzenText(t)
-				Kopf(t, zusatz = t.people?.filter { it.type?.name == "DIRECTOR" }?.take(2)?.joinToString(", ") { it.name.orEmpty() }?.takeIf { it.isNotBlank() }?.let { "Regie: $it" }) {
+				Kopf(t, zusatz = t.people?.filter { it.type?.name == "DIRECTOR" }?.take(2)?.joinToString(", ") { it.name.orEmpty() }?.takeIf { it.isNotBlank() }?.let { "Regie: $it" }, liste = vm.liste(seite)) {
 					Knopf(fortsetzen ?: "Abspielen", symbol = "▶", hervorgehoben = true, modifier = Modifier.focusRequester(start), onClick = { abspielen.video(context, t) })
 					if (fortsetzen != null) Knopf("Von vorn", symbol = "↺", onClick = { abspielen.video(context, t, vonVorn = true) })
 					val gesehen = t.userData?.played == true

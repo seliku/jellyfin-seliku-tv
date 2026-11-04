@@ -42,6 +42,7 @@ enum class MusikBildschirm(val titel: String) {
 	NORMAL("Bildschirm normal"),
 	DUNKEL("Bildschirm abdunkeln"),
 	HINTERGRUENDE("Filmhintergründe zeigen"),
+	TRAILER("Trailer zeigen (stumm)"),
 }
 
 /**
@@ -150,6 +151,7 @@ object SelikuMusikBildschirm {
 		}
 		Box(Modifier.fillMaxSize().background(Color.Black)) {
 			if (modus == MusikBildschirm.HINTERGRUENDE) Diashow()
+			if (modus == MusikBildschirm.TRAILER) TrailerSchleife()
 			// Titel klein unten links; im Dunkel-Modus kaum sichtbar, damit nichts einbrennt
 			Column(Modifier.align(Alignment.BottomStart).padding(start = 64.dp, bottom = 56.dp)) {
 				val a = if (modus == MusikBildschirm.DUNKEL) 0.35f else 0.9f
@@ -158,5 +160,21 @@ object SelikuMusikBildschirm {
 				Text(wer, style = Schrift.Normal.copy(color = Color.White.copy(alpha = a * 0.75f)))
 			}
 		}
+	}
+
+	/** Zufällige Trailer nacheinander, stumm; gibt es (noch) keine, bleibt es bei der Diashow. */
+	@Composable
+	private fun TrailerSchleife() {
+		val api = koinInject<org.jellyfin.sdk.api.client.ApiClient>()
+		var liste by remember { mutableStateOf<List<String>?>(null) }
+		var nr by remember { mutableStateOf(0) }
+		LaunchedEffect(Unit) { liste = Trailer.zufaellige(api) }
+		val l = liste
+		if (l.isNullOrEmpty()) { Diashow(); return }
+		androidx.compose.runtime.key(nr) {
+			TrailerVideo(l[nr % l.size], Modifier.fillMaxSize(), onEnde = { nr++ })
+		}
+		// Abdunkeln, damit Uhr und Titel lesbar bleiben
+		Box(Modifier.fillMaxSize().background(Color(0x66000000)))
 	}
 }

@@ -48,6 +48,10 @@ object SelikuEinstellungen {
 	@JvmStatic fun schlankerPlayer(c: Context) = prefs(c).getBoolean("schlanker_player", true)
 	fun schlankerPlayer(c: Context, an: Boolean) = prefs(c).edit().putBoolean("schlanker_player", an).apply()
 
+	/** An (Vorgabe): im Banner läuft nach ein paar Sekunden stumm der Trailer (falls auf dem Server einer liegt). */
+	fun trailerImBanner(c: Context) = prefs(c).getBoolean("trailer_banner", true)
+	fun trailerImBanner(c: Context, an: Boolean) = prefs(c).edit().putBoolean("trailer_banner", an).apply()
+
 	/** Aus (Vorgabe): die Seitenleiste kommt nur mit Zurück. An: auch mit Links am linken Rand. */
 	fun leisteMitLinks(c: Context) = prefs(c).getBoolean("leiste_mit_links", false)
 	fun leisteMitLinks(c: Context, an: Boolean) = prefs(c).edit().putBoolean("leiste_mit_links", an).apply()
