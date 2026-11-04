@@ -45,6 +45,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
@@ -98,11 +99,13 @@ fun Waehlbar(
 			}
 		}
 	}
-	var lage by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
+	// Echte Lage (nicht auf den sichtbaren Bereich zugeschnitten): eine gerade aus dem Bild gerollte Reihe ist ein gültiges Ziel.
+	// null = noch nie platziert.
+	var lage by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
 	val imInhalt = LocalImInhalt.current
 	Box(
 		modifier = modifier
-			.onGloballyPositioned { lage = it.boundsInRoot() }
+			.onGloballyPositioned { lage = androidx.compose.ui.geometry.Rect(it.positionInRoot(), androidx.compose.ui.geometry.Size(it.size.width.toFloat(), it.size.height.toFloat())) }
 			.focusRequester(anfrage)
 			.onFocusChanged {
 				fokussiert = it.isFocused
@@ -135,11 +138,14 @@ fun Waehlbar(
  */
 object FokusSpur {
 	var anfrage: FocusRequester? = null; private set
-	var lage: () -> androidx.compose.ui.geometry.Rect = { androidx.compose.ui.geometry.Rect.Zero }; private set
+	var lage: () -> androidx.compose.ui.geometry.Rect? = { null }; private set
 	/** Letzter Fokus im Inhalt (nicht in der Leiste): dorthin führen Zurück/Rechts aus der Leiste zurück. */
 	var imInhalt: FocusRequester? = null
-	fun setze(a: FocusRequester, l: () -> androidx.compose.ui.geometry.Rect, inhalt: Boolean) { anfrage = a; lage = l; if (inhalt) imInhalt = a }
+	fun setze(a: FocusRequester, l: () -> androidx.compose.ui.geometry.Rect?, inhalt: Boolean) { anfrage = a; lage = l; if (inhalt) imInhalt = a }
 }
+
+/** Wurde auf dieser Seite schon eine Taste gedrückt? Vorher klappen Kacheln nicht auf (sonst rollt der Start den Banner weg). */
+val LocalTasteGedrueckt = androidx.compose.runtime.compositionLocalOf { true }
 
 /** True innerhalb des Seiteninhalts, false in der Seitenleiste. */
 val LocalImInhalt = androidx.compose.runtime.staticCompositionLocalOf { false }
@@ -214,9 +220,10 @@ fun PosterKachel(
 	// Wie bei Netflix: Die gewählte Kachel zieht sich nach kurzem Verweilen ins Querformat auf (Hintergrundbild, Logo, Infos);
 	// bleibt man länger, läuft darin stumm der Trailer. Nur in Reihen – im Raster würde das Gitter verrutschen.
 	var offen by remember { mutableStateOf(false) }
-	LaunchedEffect(fokussiert) {
+	val tasteGedrueckt = LocalTasteGedrueckt.current
+	LaunchedEffect(fokussiert, tasteGedrueckt) {
 		offen = false
-		if (fokussiert && aufklappen && SelikuEinstellungen.netflixKacheln(context)) { kotlinx.coroutines.delay(450); offen = true }
+		if (fokussiert && aufklappen && tasteGedrueckt && SelikuEinstellungen.netflixKacheln(context)) { kotlinx.coroutines.delay(450); offen = true }
 	}
 	val hoehe = breite * 1.5f
 	val b by androidx.compose.animation.core.animateDpAsState(if (offen) hoehe * 16f / 9f else breite,

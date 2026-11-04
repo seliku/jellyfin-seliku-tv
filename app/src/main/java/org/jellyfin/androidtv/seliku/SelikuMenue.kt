@@ -92,6 +92,10 @@ fun TitelMenue(vm: SelikuViewModel, item: BaseItemDto, geaendert: () -> Unit) {
 		item.seriesId?.let { sid -> add(Punkt("Zur Serie", "›") { schliessen(); vm.zu(Seite.Serie(sid)) }) }
 		if (spielbar) add(Punkt(if (angefangen) fortsetzenText(item) ?: "Abspielen" else "Abspielen", "▶") { abspielen.video(context, item); schliessen() })
 		if (spielbar && angefangen) add(Punkt("Von vorn", "↺") { abspielen.video(context, item, vonVorn = true); schliessen() })
+		// Serie bzw. Film aus «Weiterschauen» nehmen (auch «Als Nächstes»-Folgen); kommt beim nächsten Abspielen von selbst zurück
+		if (item.type == BaseItemKind.EPISODE || (item.type == BaseItemKind.MOVIE && angefangen)) add(Punkt("Aus Weiterschauen entfernen", "✕") {
+			scope.launch { runCatching { daten.ausWeiterschauen(item) }; schliessen(); geaendert() }
+		})
 		if (item.type == BaseItemKind.SERIES || item.type == BaseItemKind.SEASON) add(Punkt("Zufällige Folge", "⤨") { abspielen.zufall(context, item); schliessen() })
 		add(Punkt(if (gesehen) "Als ungesehen markieren" else "Als gesehen markieren", if (gesehen) "○" else "✓") {
 			scope.launch { runCatching { daten.gesehen(item.id, !gesehen) }; schliessen(); geaendert() }

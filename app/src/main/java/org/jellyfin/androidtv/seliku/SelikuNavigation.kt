@@ -1,5 +1,7 @@
 package org.jellyfin.androidtv.seliku
 
+import kotlinx.coroutines.launch
+
 import android.content.Context
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -69,6 +71,8 @@ class SelikuViewModel : ViewModel() {
 	val reiterAnfragen = mutableMapOf<String, androidx.compose.ui.focus.FocusRequester>()
 	fun reiter(seite: Seite) = reiterAnfragen.getOrPut(seite.schluessel) { androidx.compose.ui.focus.FocusRequester() }
 	var reiterFokus = false
+	/** Zählt hoch, wenn sich Daten geändert haben (Titelmenü): Seiten laden ihre Reihen dann neu. */
+	var datenStand by androidx.compose.runtime.mutableIntStateOf(0)
 	val ersterSchluessel = mutableMapOf<String, String>()
 	private val ersteAnfragen = mutableMapOf<String, androidx.compose.ui.focus.FocusRequester>()
 	fun ersteAnfrageFuer(seite: String, kachel: String): androidx.compose.ui.focus.FocusRequester {
@@ -164,9 +168,13 @@ class Abspielen(
 	private val mediaManager: MediaManager,
 	private val navigation: NavigationRepository,
 ) {
+	private val daten: SelikuDaten by org.koin.java.KoinJavaComponent.inject(SelikuDaten::class.java)
+
 	/** Startet ein Video dort, wo man aufgehört hat (vonVorn = false), mit den folgenden Folgen in der Warteschlange. */
 	fun video(context: Context, item: BaseItemDto, vonVorn: Boolean = false) {
 		RadioSpieler.stoppen()
+		// Wer wieder schaut, will die Serie/den Film auch wieder in «Weiterschauen»
+		kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch { runCatching { daten.wiederAufnehmen(item) } }
 		val ticks = item.userData?.playbackPositionTicks ?: 0L
 		val start = if (vonVorn || ticks <= 0L) 0 else ((ticks / 10_000L) - 5_000L).coerceAtLeast(0L).toInt()
 		playbackHelper.getItemsToPlay(context, item, false, false, object : Response<List<BaseItemDto>>() {

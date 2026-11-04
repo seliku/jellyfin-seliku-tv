@@ -6,6 +6,7 @@ import kotlinx.coroutines.withContext
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.artistsApi
 import org.jellyfin.sdk.api.client.extensions.genresApi
+import org.jellyfin.sdk.api.client.extensions.displayPreferencesApi
 import org.jellyfin.sdk.api.client.extensions.instantMixApi
 import org.jellyfin.sdk.api.client.extensions.playlistsApi
 import org.jellyfin.sdk.api.client.extensions.itemsApi
@@ -119,6 +120,43 @@ class SelikuDaten(private val api: ApiClient) {
 		}.filter { it.second.isNotEmpty() }
 	}
 
+	// «Aus Weiterschauen entfernen» (nur diese persönliche Liste – andere Reihen bleiben dynamisch, S 04.11.):
+	// Jellyfin kann «Als Nächstes»-Folgen nicht ausblenden. Deshalb eine eigene Liste
+	// (Serie bzw. Film), gespeichert in den Anzeige-Einstellungen des Kontos – gilt auf allen Geräten.
+	// Spielt man später wieder etwas davon ab, verschwindet der Eintrag von selbst (Abspielen → wiederAufnehmen).
+	private val ausblendId = "seliku-weiterschauen"
+	private val ausblendClient = "seliku"
+
+	private suspend fun ausgeblendet(): Set<String> = runCatching {
+		api.displayPreferencesApi.getDisplayPreferences(displayPreferencesId = ausblendId, client = ausblendClient).content
+			.customPrefs["ausgeblendet"].orEmpty().split(",").filter { it.isNotBlank() }.toSet()
+	}.getOrDefault(emptySet())
+
+	private suspend fun ausgeblendetSetzen(ids: Set<String>) {
+		val alt = api.displayPreferencesApi.getDisplayPreferences(displayPreferencesId = ausblendId, client = ausblendClient).content
+		api.displayPreferencesApi.updateDisplayPreferences(displayPreferencesId = ausblendId, client = ausblendClient,
+			data = alt.copy(customPrefs = alt.customPrefs + ("ausgeblendet" to ids.joinToString(","))))
+	}
+
+	private fun BaseItemDto.ausblendSchluessel() = (seriesId ?: id).toString()
+
+	private suspend fun ohneAusgeblendete(liste: List<BaseItemDto>): List<BaseItemDto> {
+		val weg = ausgeblendet(); return if (weg.isEmpty()) liste else liste.filter { it.ausblendSchluessel() !in weg }
+	}
+
+	/** Aus «Weiterschauen» entfernen: ganze Serie bzw. den Film ausblenden und angefangenen Fortschritt zurücksetzen. */
+	suspend fun ausWeiterschauen(item: BaseItemDto) = io {
+		ausgeblendetSetzen(ausgeblendet() + item.ausblendSchluessel())
+		if ((item.userData?.playbackPositionTicks ?: 0L) > 0L)
+			api.itemsApi.updateItemUserData(itemId = item.id, data = org.jellyfin.sdk.model.api.UpdateUserItemDataDto(playbackPositionTicks = 0))
+	}
+
+	/** Wieder aufnehmen, sobald man etwas aus der Serie bzw. den Film abspielt. */
+	suspend fun wiederAufnehmen(item: BaseItemDto) = io {
+		val weg = ausgeblendet(); val k = item.ausblendSchluessel()
+		if (k in weg) ausgeblendetSetzen(weg - k)
+	}
+
 	suspend fun item(id: UUID): BaseItemDto = io { api.userLibraryApi.getItem(itemId = id).content }
 
 	/** «Weiterschauen»: angefangene Videos, danach die nächsten Folgen begonnener Serien (je Serie nur einmal). */
@@ -136,7 +174,7 @@ class SelikuDaten(private val api: ApiClient) {
 			enableResumable = false,
 		).content.items
 		val serien = angefangen.mapNotNull { it.seriesId }.toSet()
-		(angefangen + naechste.filter { it.seriesId !in serien }).distinctBy { it.id }.take(30)
+		ohneAusgeblendete((angefangen + naechste.filter { it.seriesId !in serien }).distinctBy { it.id }).take(30)
 	}
 
 	suspend fun neuIn(bibliothek: BaseItemDto): List<BaseItemDto> = io {
@@ -181,11 +219,11 @@ class SelikuDaten(private val api: ApiClient) {
 	// --- Startseiten der Bibliotheken ---
 
 	suspend fun weiterschauenIn(bib: BaseItemDto): List<BaseItemDto> = io {
-		api.itemsApi.getResumeItems(parentId = bib.id, limit = 24, mediaTypes = setOf(MediaType.VIDEO), fields = felder, enableUserData = true).content.items
+		ohneAusgeblendete(api.itemsApi.getResumeItems(parentId = bib.id, limit = 24, mediaTypes = setOf(MediaType.VIDEO), fields = felder, enableUserData = true).content.items)
 	}
 
 	suspend fun alsNaechstesIn(bib: BaseItemDto): List<BaseItemDto> = io {
-		api.tvShowsApi.getNextUp(parentId = bib.id, limit = 24, fields = felder, enableUserData = true, enableResumable = false).content.items
+		ohneAusgeblendete(api.tvShowsApi.getNextUp(parentId = bib.id, limit = 24, fields = felder, enableUserData = true, enableResumable = false).content.items)
 	}
 
 	private suspend fun liste(

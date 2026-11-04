@@ -109,7 +109,7 @@ private fun BibliothekEmpfohlen(vm: SelikuViewModel, seite: Seite.Bibliothek, oe
 	val schluessel = "${seite.schluessel}|start-reihen"
 	@Suppress("UNCHECKED_CAST")
 	var reihen by remember { mutableStateOf(vm.wahl[schluessel] as? List<BibReihe>) }
-	LaunchedEffect(seite.ansicht.id) {
+	LaunchedEffect(seite.ansicht.id, vm.datenStand) {
 		// Vorgeladenes sofort zeigen, danach still auffrischen
 		if (reihen != null) delay(1500)
 		runCatching { bibliothekReihenLaden(daten, seite.ansicht) }

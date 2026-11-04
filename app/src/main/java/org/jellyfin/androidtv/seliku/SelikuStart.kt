@@ -60,8 +60,8 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 		runCatching { daten.bannerEmpfehlungen() }.onSuccess { if (it.isNotEmpty()) { banner = it; vm.wahl["start-banner"] = it } }
 	}
 
-	LaunchedEffect(Unit) {
-		// Immer frisch laden (Fortschritt ändert sich nach dem Schauen), alte Reihen bis dahin stehen lassen
+	LaunchedEffect(vm.datenStand) {
+		// Immer frisch laden (auch nach Änderungen im Titelmenü, z. B. «Aus Weiterschauen entfernen») (Fortschritt ändert sich nach dem Schauen), alte Reihen bis dahin stehen lassen
 		val neu = runCatching {
 			val bibs = daten.bibliotheken()
 			buildList {

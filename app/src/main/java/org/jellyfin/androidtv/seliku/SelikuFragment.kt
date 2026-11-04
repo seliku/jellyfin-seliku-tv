@@ -145,11 +145,7 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 		androidx.compose.animation.core.tween(220, easing = androidx.compose.animation.core.FastOutSlowInEasing), label = "leiste")
 	val leiste = remember { FocusRequester() }
 	val inhalt = remember { FocusRequester() }
-	// Aus der Leiste zurück genau dorthin, wo man im Inhalt war (die Gruppe allein landete oft beim Banner-Knopf)
-	val zurueckInDenInhalt: () -> Unit = {
-		val ok = FokusSpur.imInhalt?.let { runCatching { it.requestFocus() }.isSuccess } == true
-		if (!ok) runCatching { inhalt.requestFocus() }
-	}
+
 
 	var neuLaden by remember { mutableStateOf(0) }
 	LaunchedEffect(neuLaden) {
@@ -236,6 +232,18 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 
 	// Beim Start und nach jedem Seitenwechsel steht der Fokus im Inhalt, nicht in der Seitenleiste
 	var inhaltHatFokus by remember { mutableStateOf(false) }
+	// Aus der Leiste zurück genau dorthin, wo man im Inhalt war (die Gruppe allein landete oft beim Banner-Knopf)
+	// Danach prüfen, ob der Fokus wirklich im Inhalt ist: ist die gemerkte Kachel verschwunden (z. B. «Aus Weiterschauen
+	// entfernen»), meldet requestFocus trotzdem Erfolg – dann die Gruppe bzw. das nächstbeste Ziel im Inhalt nehmen.
+	val zurueckInDenInhalt: () -> Unit = {
+		runCatching { FokusSpur.imInhalt?.requestFocus() }
+		scope.launch {
+			kotlinx.coroutines.delay(60)
+			if (!inhaltHatFokus) runCatching { inhalt.requestFocus() }
+			kotlinx.coroutines.delay(60)
+			if (!inhaltHatFokus) runCatching { fokusManager.moveFocus(FocusDirection.Right) }
+		}
+	}
 	var tasteGedrueckt by remember { mutableStateOf(false) }
 	LaunchedEffect(vm.aktuell.schluessel) {
 		// Hat die Seite eine gemerkte Kachel, holt sie den Fokus selbst; sonst (oder wenn das nicht klappt) die erste Kachel
@@ -294,8 +302,9 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 				if (!leisteOffen) leisteGewollt = false
 				val neu = FokusSpur.lage()
 				// Nur annehmen, wenn das neue Ziel wirklich links bzw. oberhalb liegt; sonst bleibt der Fokus, wo er war
-				// Ziel ohne sichtbare Fläche (Rect.Zero) ist auch falsch: dort sähe man den Fokus nicht
-				val falsch = FokusSpur.anfrage !== vorher && alt != androidx.compose.ui.geometry.Rect.Zero && (neu.isEmpty || when (richtung) {
+				// Ziel ohne Fläche ist auch falsch (dort sähe man den Fokus nicht). Geprüft wird die echte Lage, nicht die sichtbare:
+				// eine Reihe, die gerade aus dem Bild gerollt ist, ist ein gültiges Ziel (sonst kam man nach 4 Reihen nicht mehr hoch).
+				val falsch = FokusSpur.anfrage !== vorher && alt != null && neu != null && (neu.width <= 0f || neu.height <= 0f || when (richtung) {
 					FocusDirection.Left -> neu.center.x >= alt.left
 					else -> neu.center.y >= alt.top
 				})
@@ -313,7 +322,7 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 				val oeffnen: (BaseItemDto) -> Unit = { item -> seiteFuer(item)?.let(vm::zu) }
 				// Neue Seite bzw. wieder sichtbar: die gemerkte Kachel darf den Fokus einmal zurückholen
 				key(seite.schluessel) { androidx.compose.runtime.remember { vm.wiederhergestellt.remove(seite.schluessel); 0 }
- androidx.compose.runtime.CompositionLocalProvider(LocalImInhalt provides true) { SeitlichRollen(rand = 60.dp) {
+ androidx.compose.runtime.CompositionLocalProvider(LocalImInhalt provides true, LocalTasteGedrueckt provides tasteGedrueckt) { SeitlichRollen(rand = 60.dp) {
 					when (seite) {
 						Seite.Start -> StartSeite(vm, oeffnen)
 						Seite.Suche -> SuchSeite(vm, oeffnen)
@@ -363,7 +372,11 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 		}
 		androidx.compose.animation.AnimatedVisibility(radioEbene, enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(1500)),
 			exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(400))) { SelikuMusikBildschirm.Ebene(bildschirmModus) }
-		vm.menue?.let { item -> TitelMenue(vm, item) { vm.wahl.keys.removeAll { it.endsWith("start-reihen") || it == "start-reihen" }; neuLaden++ } }
+		vm.menue?.let { item -> TitelMenue(vm, item) {
+			vm.wahl.keys.removeAll { it.endsWith("start-reihen") || it == "start-reihen" }; neuLaden++; vm.datenStand++
+			// Ist die Kachel verschwunden, auf der man stand, nach dem Neuladen wieder in den Inhalt
+			scope.launch { kotlinx.coroutines.delay(900); if (!inhaltHatFokus) zurueckInDenInhalt() }
+		} }
 	}
 }
 
