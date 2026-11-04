@@ -123,6 +123,8 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 	// Die Leiste öffnet nur, wenn man sie holt (Zurück, bzw. Links falls eingestellt). Landet der Fokus sonst dort –
 	// etwa weil ein Knopf verschwindet, auf dem er lag –, geht er gleich in den Inhalt zurück, statt die Insel aufzuklappen.
 	var leisteGewollt by remember { mutableStateOf(false) }
+	// Steht der Fokus in der Symbolreihe oben (Suche, Einstellungen, Update, Profil), bewegt Rechts sich dort weiter
+	var obenHatFokus by remember { mutableStateOf(false) }
 	val fokusManager = androidx.compose.ui.platform.LocalFocusManager.current
 	// Radio läuft und niemand drückt: nach 20 s dunkel bzw. Diashow (Wahl wie im Musikplayer); der Fernseher bleibt an
 	var letzteTaste by remember { mutableStateOf(System.currentTimeMillis()) }
@@ -335,6 +337,7 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 			Seitenleiste(
 				eintraege = eintraege,
 				oben = listOfNotNull(einstellungenEintrag, updateEintrag),
+				obenFokus = { obenHatFokus = it },
 				aktiv = vm.stapel.first(),
 				offen = leisteOffen,
 				anteil = leisteAnteil,
@@ -346,7 +349,9 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 						else -> scope.launch { zurueckInDenInhalt() }
 					}
 				}.onPreviewKeyEvent { e ->
-					if (e.key == Key.DirectionRight && e.type == KeyEventType.KeyDown) { zurueckInDenInhalt(); true } else false
+					// Erst innerhalb der Leiste weiter (Symbolreihe oben: Suche → Einstellungen → Update → Profil);
+					// geht es dort nicht weiter, zurück an die Stelle im Inhalt, wo man war
+					if (e.key == Key.DirectionRight && e.type == KeyEventType.KeyDown && !obenHatFokus) { zurueckInDenInhalt(); true } else false
 				},
 				waehlen = { e ->
 					if (e.seite != null) {
@@ -370,6 +375,7 @@ private fun Seitenleiste(
 	offen: Boolean,
 	anteil: Float,
 	modifier: Modifier,
+	obenFokus: (Boolean) -> Unit = {},
 	waehlen: (Eintrag) -> Unit,
 ) {
 	val api = koinInject<ApiClient>()
@@ -405,7 +411,7 @@ private fun Seitenleiste(
 		verticalArrangement = Arrangement.spacedBy(4.dp),
 	) {
 		// Oben eine Symbolreihe: Suche, Einstellungen, Update (falls vorhanden), Profilbild. Zugeklappt nur die Suche.
-		Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+		Row(Modifier.fillMaxWidth().onFocusChanged { obenFokus(it.hasFocus) }, verticalAlignment = Alignment.CenterVertically,
 			horizontalArrangement = if (offen) Arrangement.spacedBy(6.dp) else Arrangement.Center) {
 			val sucheAktiv = aktiv.schluessel == Seite.Suche.schluessel
 			// Erster Platz oben: zugeklappt das Profilbild, aufgeklappt die Suche. Derselbe Baustein in beiden Zuständen –
