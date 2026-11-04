@@ -78,7 +78,14 @@ object SeerrVerbindung {
 	fun adresse(c: Context) = p(c).getString("seerr_url", "").orEmpty()
 	fun cookie(c: Context) = p(c).getString("seerr_cookie", "").orEmpty()
 	fun name(c: Context) = p(c).getString("seerr_name", "").orEmpty()
-	fun verbunden(c: Context) = adresse(c).isNotBlank() && cookie(c).isNotBlank()
+	/**
+	 * Über den Jellyfin-Server vermittelt (Weg /seerr, Anmeldung mit dem Jellyfin-Token): dann braucht es keine
+	 * eigene Seerr-Anmeldung. Wird beim Start geprüft; die eigene Adresse bleibt für Server ohne Vermittler.
+	 */
+	val vermittelt = androidx.compose.runtime.mutableStateOf(false)
+	/** Über die öffentliche Adresse /seerr oder direkt Port 8097 im Heimnetz. */
+	@Volatile var vermittlerAdresse: String? = null
+	fun verbunden(c: Context) = vermittelt.value || (adresse(c).isNotBlank() && cookie(c).isNotBlank())
 	fun speichern(c: Context, url: String, cookie: String, name: String) =
 		p(c).edit().putString("seerr_url", url).putString("seerr_cookie", cookie).putString("seerr_name", name).apply()
 	fun trennen(c: Context) = p(c).edit().remove("seerr_cookie").remove("seerr_name").apply()
@@ -162,8 +169,25 @@ class SeerrFehler(val code: Int, text: String) : Exception(text)
 class SeerrDaten(private val context: Context, private val api: ApiClient) {
 	private var ich: Int? = null
 
-	private suspend fun anfrage(methode: String, pfad: String, body: JSONObject? = null, basis: String = SeerrVerbindung.adresse(context),
-		cookie: String? = SeerrVerbindung.cookie(context), kopf: Map<String, String> = emptyMap()): Pair<String, HttpURLConnection> = withContext(Dispatchers.IO) {
+	/** Anmeldung beim Vermittler mit dem Jellyfin-Token (Jellyfin nimmt nur noch den Authorization-Kopf an). */
+	private fun jellyfinKopf() = mapOf("Authorization" to "MediaBrowser Token=\"${api.accessToken.orEmpty()}\"")
+
+	/** Gefundener Weg zum Vermittler – zentral, weil jede Seite ihre eigene SeerrDaten-Instanz bekommt. */
+	private var vermittler: String?
+		get() = SeerrVerbindung.vermittlerAdresse
+		set(v) { SeerrVerbindung.vermittlerAdresse = v }
+
+	private fun vermittlerKandidaten(): List<String> {
+		val basis = api.baseUrl?.trimEnd('/') ?: return emptyList()
+		val direkt = runCatching { java.net.URI(basis).let { u -> "http://${u.host}:8097" } }.getOrNull()
+		return listOfNotNull("$basis/seerr", direkt).distinct()
+	}
+
+	private suspend fun anfrage(methode: String, pfad: String, body: JSONObject? = null,
+		basis: String = if (SeerrVerbindung.vermittelt.value) vermittler.orEmpty() else SeerrVerbindung.adresse(context),
+		cookie: String? = if (SeerrVerbindung.vermittelt.value) null else SeerrVerbindung.cookie(context),
+		kopf: Map<String, String> = if (SeerrVerbindung.vermittelt.value) jellyfinKopf() else emptyMap(),
+	): Pair<String, HttpURLConnection> = withContext(Dispatchers.IO) {
 		val v = URL(basis + pfad).openConnection() as HttpURLConnection
 		v.requestMethod = methode
 		v.connectTimeout = 10_000; v.readTimeout = 20_000
@@ -182,6 +206,18 @@ class SeerrDaten(private val context: Context, private val api: ApiClient) {
 	}
 
 	private suspend fun json(pfad: String) = JSONObject(anfrage("GET", "/api/v1$pfad").first)
+
+	/** Beim Start: bietet der Jellyfin-Server Seerr an? Dann ist man ohne weitere Anmeldung verbunden. */
+	suspend fun vermittlerPruefen() {
+		for (basis in vermittlerKandidaten()) {
+			val ok = runCatching {
+				val (text, _) = anfrage("GET", "/api/v1/auth/me", basis = basis, cookie = null, kopf = jellyfinKopf())
+				ich = JSONObject(text).optInt("id").takeIf { it > 0 }
+			}.onFailure { Timber.d("Seerr-Vermittler nicht unter $basis: ${it.message}") }.isSuccess
+			if (ok) { vermittler = basis; SeerrVerbindung.vermittelt.value = true; return }
+		}
+		SeerrVerbindung.vermittelt.value = false
+	}
 
 	private suspend fun meineId(): Int? = ich ?: runCatching { json("/auth/me").optInt("id") }.getOrNull()?.also { ich = it }
 

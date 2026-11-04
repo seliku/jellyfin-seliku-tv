@@ -194,12 +194,19 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 		}
 	}
 
+	// Bietet der Jellyfin-Server Seerr an (Vermittler), ist man ohne eigene Anmeldung verbunden
+	val seerrDaten = koinInject<SeerrDaten>()
+	LaunchedEffect(Unit) {
+		// Gleich nach dem Start ist die Anmeldung manchmal noch nicht fertig: ein paarmal nachfragen
+		repeat(4) { runCatching { seerrDaten.vermittlerPruefen() }; if (SeerrVerbindung.vermittelt.value) return@LaunchedEffect; delay(15_000) }
+	}
+	val seerrDa = SeerrVerbindung.vermittelt.value || SeerrVerbindung.verbunden(context)
 	var updateEintrag: Eintrag? = null
 	var einstellungenEintrag: Eintrag? = null
 	val eintraege = buildList {
 		add(Eintrag(R.drawable.ic_house, "Startseite", Seite.Start))
 		// Seerr verbunden: «Entdecken» gleich nach der Startseite
-		if (SeerrVerbindung.verbunden(context)) add(Eintrag(R.drawable.seliku_entdecken, "Entdecken", Seite.Entdecken))
+		if (seerrDa) add(Eintrag(R.drawable.seliku_entdecken, "Entdecken", Seite.Entdecken))
 		// Feste Reihenfolge wie gewohnt: Filme, Serien, Live-TV, Musik, dann alles andere
 		val rang = { b: BaseItemDto -> when (b.collectionType?.serialName) { "movies" -> 0; "tvshows" -> 1; "livetv" -> 2; "music" -> 3; else -> 4 } }
 		bibliotheken.filter { it.collectionType?.serialName != "playlists" }.sortedBy(rang).forEach { bib -> add(Eintrag(symbolFuer(bib), bib.name.orEmpty(), seiteFuerBibliothek(bib))) }

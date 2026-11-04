@@ -154,6 +154,18 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 			"Aus: Zurück springt nach oben, dann in die Leiste, dann zur Startseite – wie bei Netflix. An: zusätzlich zweimal Zurück auf der Startseite zum Beenden") {
 			doppel = !doppel; SelikuEinstellungen.doppelZurueck(context, doppel)
 		},
+		Punkt("Player: " + (if (schlank) "schlanke Bedienung" else "Jellyfin-Bedienung"),
+			"Schlank: OK pausiert, Links/Rechts spult (Live-TV: Sender wechseln) – ohne Einblendung; Bedienleiste mit «hoch». Sonst wie in Jellyfin") {
+			schlank = !schlank; SelikuEinstellungen.schlankerPlayer(context, schlank)
+		},
+		Punkt("Seitenleiste: " + (if (links) "mit Zurück oder Links" else "nur mit Zurück"),
+			"Ob die Leiste auch aufgeht, wenn man am linken Rand nochmals Links drückt") {
+			links = !links; SelikuEinstellungen.leisteMitLinks(context, links)
+		},
+		if (SeerrVerbindung.vermittelt.value)
+			Punkt("Seerr: über Jellyfin verbunden", "Fehlende Filme und Serien entdecken und anfragen – ohne eigene Anmeldung") { vm.wurzel(Seite.Entdecken) }
+		else Punkt("Seerr: " + (if (SeerrVerbindung.verbunden(context)) "verbunden" + SeerrVerbindung.name(context).let { if (it.isBlank()) "" else " als $it" } else "nicht verbunden"),
+			"Fehlende Filme und Serien entdecken und mit einem Klick anfragen – mit deinem eigenen Seerr") { vm.zu(Seite.SeerrVerbinden) },
 		Punkt("Bibliotheken", "Welche Bibliotheken in der Leiste und auf der Startseite erscheinen; ausgeblendete hier öffnen") { vm.zu(Seite.Bibliotheken) },
 		Punkt("Jellyfin-Einstellungen", "Wiedergabe, Untertitel, Live-TV, Konten – die Einstellungen der Jellyfin-App") { jellyfinEinstellungen() },
 	)
