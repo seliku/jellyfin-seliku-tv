@@ -195,6 +195,9 @@ public class AudioNowPlayingFragment extends Fragment {
         });
         mArtistButton.setOnFocusChangeListener(mainAreaFocusListener);
 
+        // Seliku: Bildschirm-Knopf (normal / abdunkeln / Filmhintergründe nach 20 s ohne Tastendruck)
+        org.jellyfin.androidtv.seliku.SelikuMusikBildschirm.einrichten(this, (android.view.ViewGroup) binding.getRoot(), (android.view.ViewGroup) mArtistButton.getParent(), mArtistButton);
+
         AudioNowPlayingFragmentHelperKt.initializePlayerProgress(binding.playerProgress, playbackManager.getValue());
         binding.playerProgress.setOnFocusChangeListener(mainAreaFocusListener);
 

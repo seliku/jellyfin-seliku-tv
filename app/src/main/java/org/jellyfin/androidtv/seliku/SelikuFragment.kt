@@ -305,7 +305,6 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 				},
 			)
 		}
-		MiniPlayer(Modifier.align(Alignment.BottomEnd).padding(end = 32.dp, bottom = 24.dp))
 		vm.menue?.let { item -> TitelMenue(vm, item) { vm.wahl.keys.removeAll { it.endsWith("start-reihen") || it == "start-reihen" }; neuLaden++ } }
 	}
 }
@@ -414,28 +413,32 @@ private fun Seitenleiste(
 				}
 			}
 		}
+		// Was gerade läuft, unten in der Leiste: erreichbar mit Zurück, verdeckt keine Kacheln
+		Spacer(Modifier.height(12.dp))
+		LaeuftEintrag(offen, anteil)
 	}
 }
 
-/** Mini-Player: erscheint, solange Musik läuft; Klick öffnet die Wiedergabe, Musik läuft beim Herumklicken weiter. */
+/** Was gerade läuft (Musik oder Radio), als Eintrag in der Seitenleiste; zugeklappt nur das Cover. OK öffnet die Wiedergabe bzw. hält das Radio an. */
 @Composable
-private fun MiniPlayer(modifier: Modifier) {
+private fun LaeuftEintrag(offen: Boolean, anteil: Float) {
+	val modifier = Modifier
 	// Läuft ein Radiosender, zeigt der Mini-Player ihn; OK hält an bzw. spielt weiter
 	val radio by RadioSpieler.laeuft.collectAsState()
 	val radioSpielt by RadioSpieler.spielt.collectAsState()
 	radio?.let { r ->
 		Waehlbar(onClick = { RadioSpieler.umschalten() }, onMenue = { RadioSpieler.stoppen() }, modifier = modifier, vergroessern = false, shape = RoundedCornerShape(14.dp)) { fokussiert ->
 			Row(
-				Modifier.width(360.dp).background(if (fokussiert) Farben.FlaecheHell else Farben.Flaeche.copy(alpha = 0.95f)).padding(10.dp),
+				Modifier.fillMaxWidth().background(if (fokussiert) Farben.Text else Farben.FlaecheHell).padding(horizontal = 4.dp, vertical = 4.dp),
 				verticalAlignment = Alignment.CenterVertically,
 				horizontalArrangement = Arrangement.spacedBy(12.dp),
 			) {
-				Bild(r.logo, Modifier.size(52.dp).clip(RoundedCornerShape(6.dp)), androidx.compose.ui.layout.ContentScale.Fit, ersatz = "♫")
-				Column(Modifier.weight(1f)) {
-					Text(r.name, style = Schrift.Normal.copy(fontWeight = FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
+				Bild(r.logo, Modifier.size(44.dp).clip(RoundedCornerShape(6.dp)), androidx.compose.ui.layout.ContentScale.Fit, ersatz = "♫")
+				if (offen) Column(Modifier.weight(1f).graphicsLayer { alpha = anteil }) {
+					Text(r.name, style = Schrift.Normal.copy(fontWeight = FontWeight.Bold, color = if (fokussiert) Color.Black else Farben.Text), maxLines = 1, overflow = TextOverflow.Ellipsis)
 					Text("Radio" + if (radioSpielt) " · läuft" else " · angehalten", style = Schrift.Klein, maxLines = 1)
 				}
-				Text(if (radioSpielt) "❚❚" else "▶", style = Schrift.Titel.copy(color = Farben.Akzent))
+				if (offen) Text(if (radioSpielt) "❚❚" else "▶", style = Schrift.Titel.copy(color = Farben.Akzent))
 			}
 		}
 		return
@@ -449,16 +452,16 @@ private fun MiniPlayer(modifier: Modifier) {
 
 	Waehlbar(onClick = { abspielen.jetztLaeuft() }, modifier = modifier, vergroessern = false, shape = RoundedCornerShape(14.dp)) { fokussiert ->
 		Row(
-			Modifier.width(360.dp).background(if (fokussiert) Farben.FlaecheHell else Farben.Flaeche.copy(alpha = 0.95f)).padding(10.dp),
+			Modifier.fillMaxWidth().background(if (fokussiert) Farben.Text else Farben.FlaecheHell).padding(horizontal = 4.dp, vertical = 4.dp),
 			verticalAlignment = Alignment.CenterVertically,
 			horizontalArrangement = Arrangement.spacedBy(12.dp),
 		) {
-			Bild(bilder.poster(item, 120), Modifier.size(52.dp).clip(RoundedCornerShape(6.dp)))
+			Bild(bilder.poster(item, 120), Modifier.size(44.dp).clip(RoundedCornerShape(6.dp)))
 			Column(Modifier.weight(1f)) {
-				Text(item.name.orEmpty(), style = Schrift.Normal.copy(fontWeight = FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
+				Text(item.name.orEmpty(), style = Schrift.Normal.copy(fontWeight = FontWeight.Bold, color = if (fokussiert) Color.Black else Farben.Text), maxLines = 1, overflow = TextOverflow.Ellipsis)
 				Text(item.unterzeile(), style = Schrift.Klein, maxLines = 1, overflow = TextOverflow.Ellipsis)
 			}
-			if (zustand == PlayState.PLAYING) Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+			if (offen) if (zustand == PlayState.PLAYING) Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
 				repeat(2) { Box(Modifier.size(width = 5.dp, height = 18.dp).background(Farben.Akzent, RoundedCornerShape(1.dp))) }
 			} else Text("▶", style = Schrift.Titel.copy(color = Farben.Akzent))
 		}
