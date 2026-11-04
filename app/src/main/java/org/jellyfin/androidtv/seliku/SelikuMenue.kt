@@ -67,6 +67,10 @@ object SelikuEinstellungen {
 	/** Aus (Vorgabe): die Seitenleiste kommt nur mit Zurück. An: auch mit Links am linken Rand. */
 	fun leisteMitLinks(c: Context) = prefs(c).getBoolean("leiste_mit_links", false)
 	fun leisteMitLinks(c: Context, an: Boolean) = prefs(c).edit().putBoolean("leiste_mit_links", an).apply()
+
+	/** An (Vorgabe): Filme starten sofort; Untertitel kommen nach, sobald der Server sie aus der Datei gelesen hat. */
+	@JvmStatic fun untertitelNachladen(c: Context) = prefs(c).getBoolean("untertitel_nachladen", true)
+	fun untertitelNachladen(c: Context, an: Boolean) = prefs(c).edit().putBoolean("untertitel_nachladen", an).apply()
 }
 
 /**

@@ -153,6 +153,10 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 	var zufall by remember { mutableStateOf(SelikuEinstellungen.zufallKnopf(context)) }
 	var netflix by remember { mutableStateOf(SelikuEinstellungen.netflixKacheln(context)) }
 	var musik by remember { mutableStateOf(SelikuEinstellungen.titelmusik(context)) }
+	var nachladen by remember { mutableStateOf(SelikuEinstellungen.untertitelNachladen(context)) }
+	val userPrefs = remember { org.koin.java.KoinJavaComponent.get<org.jellyfin.androidtv.preference.UserPreferences>(org.jellyfin.androidtv.preference.UserPreferences::class.java) }
+	var bitrate by remember { mutableStateOf(userPrefs[org.jellyfin.androidtv.preference.UserPreferences.maxBitrate]) }
+	val bitrateStufen = listOf("100", "40", "20", "10", "5")
 	val punkte = listOf(
 		Punkt("Zurück-Taste: " + (if (doppel) "zweimal drücken beendet die App" else "beendet die App nie"),
 			"Aus: Zurück springt nach oben, dann in die Leiste, dann zur Startseite – wie bei Netflix. An: zusätzlich zweimal Zurück auf der Startseite zum Beenden") {
@@ -161,6 +165,15 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 		Punkt("Player: " + (if (schlank) "schlanke Bedienung" else "Jellyfin-Bedienung"),
 			"Schlank: OK pausiert, Links/Rechts spult (Live-TV: Sender wechseln) – ohne Einblendung; Bedienleiste mit «hoch». Sonst wie in Jellyfin") {
 			schlank = !schlank; SelikuEinstellungen.schlankerPlayer(context, schlank)
+		},
+		Punkt("Max. Streaming-Bitrate: $bitrate Mbit/s",
+			"Weniger = weniger Unterbrüche bei langsamem Internet, etwas weniger scharf. Gilt nur für dieses Gerät. OK wechselt: 100 → 40 → 20 → 10 → 5") {
+			bitrate = bitrateStufen[(bitrateStufen.indexOf(bitrate) + 1) % bitrateStufen.size]
+			userPrefs[org.jellyfin.androidtv.preference.UserPreferences.maxBitrate] = bitrate
+		},
+		Punkt("Untertitel nachladen: " + (if (nachladen) "an" else "aus"),
+			"An: Filme starten sofort, Untertitel kommen nach, sobald der Server sie bereit hat. Aus: wie in Jellyfin – Start wartet auf die Untertitel") {
+			nachladen = !nachladen; SelikuEinstellungen.untertitelNachladen(context, nachladen)
 		},
 		Punkt("Trailer im Banner und in Kacheln: " + (if (trailerBanner) "an" else "aus"),
 			"Nach ein paar Sekunden läuft im Banner und in der gewählten Kachel der Trailer, mit Ton (stumm, wenn Musik läuft)") {
@@ -192,9 +205,9 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 	Column(Modifier.fillMaxSize().background(Farben.Hintergrund)) {
 		Text("Einstellungen", style = Schrift.Titel, modifier = Modifier.padding(start = 48.dp, top = 28.dp, bottom = 16.dp))
 		LazyColumn(state = vm.liste(Seite.Einstellungen), contentPadding = PaddingValues(start = 40.dp, end = 48.dp, bottom = 40.dp)) {
-			items(punkte, key = { it.titel }) { p ->
+			items(punkte, key = { it.titel.substringBefore(":") }) { p ->
 				Waehlbar(onClick = p.aktion, vergroessern = false, modifier = Modifier.padding(vertical = 4.dp),
-					merken = vm to (Seite.Einstellungen.schluessel to p.titel)) { fokussiert ->
+					merken = vm to (Seite.Einstellungen.schluessel to p.titel.substringBefore(":"))) { fokussiert ->
 					Row(
 						Modifier.fillMaxWidth().background(if (fokussiert) Farben.FlaecheHell else Farben.Flaeche).padding(horizontal = 20.dp, vertical = 14.dp),
 						verticalAlignment = Alignment.CenterVertically,

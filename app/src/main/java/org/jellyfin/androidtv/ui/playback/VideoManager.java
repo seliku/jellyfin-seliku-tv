@@ -58,6 +58,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
+import org.jellyfin.androidtv.seliku.SelikuEinstellungen;
 import timber.log.Timber;
 
 @OptIn(markerClass = UnstableApi.class)
@@ -76,6 +77,9 @@ public class VideoManager {
     private long mMetaDuration = -1;
     private long lastExoPlayerPosition = -1;
     private boolean nightModeEnabled;
+    // Seliku: Untertitel nachladen (siehe setMediaStreamInfo)
+    private int untertitelGeneration = 0;
+    private boolean untertitelLaden = false;
 
     public boolean isContracted = false;
 
@@ -305,7 +309,13 @@ public class VideoManager {
         mExoPlayer.setPlayWhenReady(false);
     }
 
+    public boolean isUntertitelLaden() {
+        return untertitelLaden;
+    }
+
     public void stopPlayback() {
+        untertitelGeneration++;
+        untertitelLaden = false;
         if (mExoPlayer != null) {
             mExoPlayer.stop();
 
@@ -376,8 +386,55 @@ public class VideoManager {
                     .setSubtitleConfigurations(subtitleConfigurations)
                     .build();
 
-            mExoPlayer.setMediaItem(mediaItem);
-            mExoPlayer.prepare();
+            // Seliku: Der Player startet erst, wenn er von jeder Untertitelspur etwas hat. Beim ersten Abspielen liest der
+            // Server die Untertitel aber erst aus der ganzen Filmdatei – das Bild bliebe so lange schwarz. Darum die
+            // Untertitel vorab holen, höchstens 2 s warten, sonst ohne starten und sie nachladen, sobald sie da sind.
+            final int generation = ++untertitelGeneration;
+            if (subtitleConfigurations.isEmpty() || !SelikuEinstellungen.untertitelNachladen(mActivity)) {
+                untertitelLaden = false;
+                mExoPlayer.setMediaItem(mediaItem);
+                mExoPlayer.prepare();
+                return;
+            }
+            untertitelLaden = true;
+            final boolean[] gestartet = {false};
+            final MediaItem ohneUntertitel = new MediaItem.Builder().setUri(Uri.parse(path)).build();
+            final Runnable ohneStarten = () -> {
+                if (generation != untertitelGeneration || gestartet[0] || mExoPlayer == null) return;
+                gestartet[0] = true;
+                Timber.i("Seliku: Untertitel noch nicht bereit, Film startet ohne");
+                mExoPlayer.setMediaItem(ohneUntertitel);
+                mExoPlayer.prepare();
+            };
+            mHandler.postDelayed(ohneStarten, 2000);
+            final List<MediaItem.SubtitleConfiguration> alle = subtitleConfigurations;
+            new Thread(() -> {
+                List<MediaItem.SubtitleConfiguration> bereit = new ArrayList<>();
+                for (MediaItem.SubtitleConfiguration untertitel : alle) {
+                    if (generation != untertitelGeneration) return;
+                    if (VideoManagerHelperKt.untertitelVorladen(untertitel.uri.toString())) bereit.add(untertitel);
+                }
+                mHandler.post(() -> {
+                    if (generation != untertitelGeneration || mExoPlayer == null) return;
+                    untertitelLaden = false;
+                    MediaItem mitUntertiteln = mediaItem.buildUpon().setSubtitleConfigurations(bereit).build();
+                    try {
+                        if (!gestartet[0]) {
+                            gestartet[0] = true;
+                            mHandler.removeCallbacks(ohneStarten);
+                            mExoPlayer.setMediaItem(mitUntertiteln);
+                            mExoPlayer.prepare();
+                        } else if (!bereit.isEmpty()) {
+                            long position = mExoPlayer.getCurrentPosition();
+                            Timber.i("Seliku: %d Untertitel nachgeladen bei %d ms", bereit.size(), position);
+                            mExoPlayer.setMediaItem(mitUntertiteln, position);
+                            mExoPlayer.prepare();
+                        }
+                    } catch (IllegalStateException e) {
+                        Timber.w(e, "Seliku: Untertitel nachladen");
+                    }
+                });
+            }, "seliku-untertitel").start();
         } catch (IllegalStateException e) {
             Timber.e(e, "Unable to set video path.  Probably backing out.");
         }

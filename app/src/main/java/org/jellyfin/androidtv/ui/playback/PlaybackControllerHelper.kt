@@ -129,6 +129,12 @@ fun PlaybackController.setSubtitleIndex(index: Int, force: Boolean = false) {
 						.getOrNull(localIndex)
 				}?.mediaTrackGroup
 
+				if (group == null && stream.deliveryMethod == SubtitleDeliveryMethod.EXTERNAL && mVideoManager.isUntertitelLaden) {
+					Timber.i("Seliku: Untertitel $index lädt noch, wird danach eingeschaltet")
+					mCurrentOptions.subtitleStreamIndex = index
+					return
+				}
+
 				if (group == null) {
 					Timber.w("Failed to find correct subtitle group for method ${stream.deliveryMethod}")
 					return setSubtitleIndex(-1)

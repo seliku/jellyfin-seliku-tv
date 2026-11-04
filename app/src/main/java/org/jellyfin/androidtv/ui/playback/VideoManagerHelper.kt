@@ -23,6 +23,23 @@ fun getSubtitleMediaStreamCodec(stream: MediaStream): String {
 	return urlExtensionMediaType ?: codecMediaType ?: urlSubtitleExtension ?: codec
 }
 
+/**
+ * Seliku: holt eine Untertiteldatei einmal ganz. Beim ersten Abspielen liest der Server sie erst aus der Filmdatei
+ * (bei grossen Filmen bis ~1 Minute). true = Datei ist angekommen.
+ */
+fun untertitelVorladen(url: String): Boolean = runCatching {
+	val verbindung = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+	verbindung.connectTimeout = 10_000
+	verbindung.readTimeout = 180_000
+	try {
+		if (verbindung.responseCode !in 200..299) return@runCatching false
+		verbindung.inputStream.use { it.readBytes() }
+		true
+	} finally {
+		verbindung.disconnect()
+	}
+}.onFailure { Timber.w(it, "Seliku: Untertitel vorladen") }.getOrDefault(false)
+
 private var audioEffect: AudioEffect? = null
 
 fun applyAudioNightmode(audioSessionId: Int) {
