@@ -125,6 +125,16 @@ private fun BibliothekEmpfohlen(vm: SelikuViewModel, seite: Seite.Bibliothek, oe
 	val unterSeite = Seite.Ordner(seite.ansicht.id, "empfohlen-" + seite.ansicht.name)
 	val bannerAnfrage = remember { androidx.compose.ui.focus.FocusRequester() }
 	val rollScope = androidx.compose.runtime.rememberCoroutineScope()
+	// Seerr verbunden: beliebte Titel, die hier noch fehlen (bei Filmen bzw. Serien)
+	val seerr = koinInject<SeerrDaten>()
+	@Suppress("UNCHECKED_CAST")
+	var fehlend by remember { mutableStateOf(vm.wahl["${seite.schluessel}|seerr"] as? List<SeerrTitel> ?: emptyList()) }
+	val seerrTyp = when (seite.ansicht.collectionType) { CollectionType.MOVIES -> "movie"; CollectionType.TVSHOWS -> "tv"; else -> null }
+	LaunchedEffect(seite.ansicht.id) {
+		if (seerrTyp == null || !SeerrVerbindung.verbunden(context)) return@LaunchedEffect
+		runCatching { if (seerrTyp == "movie") seerr.beliebteFilme() + seerr.beliebteFilme(2) else seerr.beliebteSerien() + seerr.beliebteSerien(2) }
+			.onSuccess { l -> fehlend = l.filter { it.zustand != SeerrZustand.ANSEHEN }.take(30); vm.wahl["${seite.schluessel}|seerr"] = fehlend }
+	}
 	Box(Modifier.fillMaxSize()) {
 	SeitlichRollen(rand = 24.dp) {
 		LazyColumn(state = vm.liste(unterSeite), contentPadding = PaddingValues(top = 0.dp, bottom = 48.dp), modifier = Modifier.fillMaxSize()) {
@@ -145,6 +155,8 @@ private fun BibliothekEmpfohlen(vm: SelikuViewModel, seite: Seite.Bibliothek, oe
 					}
 				}, onFokus = setzeHero, kachel = { item, klick, merken, fokus -> PosterKachel(item, klick, breite = 120.dp, merken = merken, onFokus = fokus, onMenue = { vm.menue = item }) })
 			}
+			// Nach den eigenen Reihen: was beliebt ist, aber fehlt
+			if (fehlend.isNotEmpty()) item(key = "seerr") { SeerrReihe(if (seerrTyp == "movie") "Beliebte Filme – noch nicht da" else "Beliebte Serien – noch nicht da", fehlend, vm, unterSeite) }
 		}
 	}
 	}

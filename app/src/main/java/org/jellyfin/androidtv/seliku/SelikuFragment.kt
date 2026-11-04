@@ -140,6 +140,11 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 		androidx.compose.animation.core.tween(220, easing = androidx.compose.animation.core.FastOutSlowInEasing), label = "leiste")
 	val leiste = remember { FocusRequester() }
 	val inhalt = remember { FocusRequester() }
+	// Aus der Leiste zurück genau dorthin, wo man im Inhalt war (die Gruppe allein landete oft beim Banner-Knopf)
+	val zurueckInDenInhalt: () -> Unit = {
+		val ok = FokusSpur.imInhalt?.let { runCatching { it.requestFocus() }.isSuccess } == true
+		if (!ok) runCatching { inhalt.requestFocus() }
+	}
 
 	var neuLaden by remember { mutableStateOf(0) }
 	LaunchedEffect(neuLaden) {
@@ -193,6 +198,8 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 	var einstellungenEintrag: Eintrag? = null
 	val eintraege = buildList {
 		add(Eintrag(R.drawable.ic_house, "Startseite", Seite.Start))
+		// Seerr verbunden: «Entdecken» gleich nach der Startseite
+		if (SeerrVerbindung.verbunden(context)) add(Eintrag(R.drawable.seliku_entdecken, "Entdecken", Seite.Entdecken))
 		// Feste Reihenfolge wie gewohnt: Filme, Serien, Live-TV, Musik, dann alles andere
 		val rang = { b: BaseItemDto -> when (b.collectionType?.serialName) { "movies" -> 0; "tvshows" -> 1; "livetv" -> 2; "music" -> 3; else -> 4 } }
 		bibliotheken.filter { it.collectionType?.serialName != "playlists" }.sortedBy(rang).forEach { bib -> add(Eintrag(symbolFuer(bib), bib.name.orEmpty(), seiteFuerBibliothek(bib))) }
@@ -254,7 +261,7 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 				if (jetzt - letztesZurueck < 2000) (context as? android.app.Activity)?.finish()
 				else { letztesZurueck = jetzt; android.widget.Toast.makeText(context, "Nochmals Zurück zum Beenden", android.widget.Toast.LENGTH_SHORT).show() }
 			}
-			else -> runCatching { inhalt.requestFocus() }
+			else -> zurueckInDenInhalt()
 		}
 	}
 
@@ -292,7 +299,7 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 				.focusRestorer().focusGroup()) {
 				val seite = vm.aktuell
 				val oeffnen: (BaseItemDto) -> Unit = { item -> seiteFuer(item)?.let(vm::zu) }
-				key(seite.schluessel) { SeitlichRollen(rand = 60.dp) {
+				key(seite.schluessel) { androidx.compose.runtime.CompositionLocalProvider(LocalImInhalt provides true) { SeitlichRollen(rand = 60.dp) {
 					when (seite) {
 						Seite.Start -> StartSeite(vm, oeffnen)
 						Seite.Suche -> SuchSeite(vm, oeffnen)
@@ -305,9 +312,12 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 						is Seite.Album -> AlbumSeite(vm, seite, oeffnen)
 						is Seite.Ordner -> OrdnerSeite(vm, seite, oeffnen)
 						Seite.Einstellungen -> EinstellungenSeite(vm) { context.startActivity(ActivityDestinations.userPreferences(context)) }
+						Seite.Entdecken -> EntdeckenSeite(vm)
+						is Seite.SeerrDetail -> SeerrDetailSeite(vm, seite, oeffnen)
+						Seite.SeerrVerbinden -> SeerrVerbindenSeite(vm)
 						Seite.Bibliotheken -> BibliothekenSeite(vm, oeffnenBibliothek = { vm.zu(seiteFuerBibliothek(it)) }, geaendert = { neuLaden++ })
 					}
-				} }
+				} } }
 			}
 			Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f * leisteAnteil)))
 			Seitenleiste(
@@ -318,7 +328,7 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 				anteil = leisteAnteil,
 				// Rechts aus der Leiste: zurück genau dorthin, wo man im Inhalt war (nicht zum nächstbesten Knopf daneben)
 				modifier = Modifier.focusRequester(leiste).onFocusChanged { leisteOffen = it.hasFocus }.onPreviewKeyEvent { e ->
-					if (e.key == Key.DirectionRight && e.type == KeyEventType.KeyDown) { runCatching { inhalt.requestFocus() }; true } else false
+					if (e.key == Key.DirectionRight && e.type == KeyEventType.KeyDown) { zurueckInDenInhalt(); true } else false
 				},
 				waehlen = { e ->
 					if (e.seite != null) {

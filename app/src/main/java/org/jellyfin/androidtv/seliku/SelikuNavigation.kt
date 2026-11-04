@@ -46,6 +46,9 @@ sealed interface Seite {
 	data class Ordner(val id: UUID, val name: String) : Seite { override val schluessel = "ordner-$id" }
 	data object Bibliotheken : Seite { override val schluessel = "bibliotheken" }
 	data object Einstellungen : Seite { override val schluessel = "einstellungen" }
+	data object Entdecken : Seite { override val schluessel = "entdecken" }
+	data class SeerrDetail(val typ: String, val tmdb: Int) : Seite { override val schluessel = "seerr-$typ-$tmdb" }
+	data object SeerrVerbinden : Seite { override val schluessel = "seerr-verbinden" }
 }
 
 /** Seitenstapel und gemerkte Scroll-/Fokuspositionen; überlebt den Abstecher in den Player. */

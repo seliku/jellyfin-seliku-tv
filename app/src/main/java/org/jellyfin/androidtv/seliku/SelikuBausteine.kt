@@ -95,13 +95,14 @@ fun Waehlbar(
 		}
 	}
 	var lage by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
+	val imInhalt = LocalImInhalt.current
 	Box(
 		modifier = modifier
 			.onGloballyPositioned { lage = it.boundsInRoot() }
 			.focusRequester(anfrage)
 			.onFocusChanged {
 				fokussiert = it.isFocused
-				if (it.isFocused) FokusSpur.setze(anfrage) { lage }
+				if (it.isFocused) FokusSpur.setze(anfrage, { lage }, imInhalt)
 				if (it.isFocused) {
 					merken?.let { (vm, wo) -> vm.fokus[wo.first] = wo.second }
 					onFokus()
@@ -130,8 +131,13 @@ fun Waehlbar(
 object FokusSpur {
 	var anfrage: FocusRequester? = null; private set
 	var lage: () -> androidx.compose.ui.geometry.Rect = { androidx.compose.ui.geometry.Rect.Zero }; private set
-	fun setze(a: FocusRequester, l: () -> androidx.compose.ui.geometry.Rect) { anfrage = a; lage = l }
+	/** Letzter Fokus im Inhalt (nicht in der Leiste): dorthin führen Zurück/Rechts aus der Leiste zurück. */
+	var imInhalt: FocusRequester? = null
+	fun setze(a: FocusRequester, l: () -> androidx.compose.ui.geometry.Rect, inhalt: Boolean) { anfrage = a; lage = l; if (inhalt) imInhalt = a }
 }
+
+/** True innerhalb des Seiteninhalts, false in der Seitenleiste. */
+val LocalImInhalt = androidx.compose.runtime.staticCompositionLocalOf { false }
 
 @Composable
 fun Bild(url: String?, modifier: Modifier = Modifier, scale: ContentScale = ContentScale.Crop, ersatz: String? = null, grund: Color = Farben.FlaecheHell) {

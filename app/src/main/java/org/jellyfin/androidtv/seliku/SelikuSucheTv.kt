@@ -63,6 +63,17 @@ fun SuchSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 	val feld = remember { FocusRequester() }
 
 	LaunchedEffect(Unit) { if (text.isEmpty()) runCatching { feld.requestFocus() } }
+	// Seerr verbunden: die Suche findet auch, was noch fehlt (gemischt, mit derselben Markierung wie im Katalog)
+	val seerr = koinInject<SeerrDaten>()
+	val mitSeerr = remember { SeerrVerbindung.verbunden(context) }
+	@Suppress("UNCHECKED_CAST")
+	var seerrTreffer by remember { mutableStateOf(vm.wahl["suche|seerr"] as? List<SeerrTitel> ?: emptyList()) }
+	LaunchedEffect(text) {
+		if (!mitSeerr || text.trim().length < 2) { seerrTreffer = emptyList(); return@LaunchedEffect }
+		delay(450)
+		seerrTreffer = runCatching { seerr.suche(text.trim()) }.onFailure { Timber.w(it, "Seerr-Suche") }.getOrDefault(emptyList())
+		vm.wahl["suche|seerr"] = seerrTreffer
+	}
 	LaunchedEffect(text) {
 		vm.wahl["suche|text"] = text
 		if (text.trim().length < 2) { treffer = emptyList(); return@LaunchedEffect }
@@ -107,10 +118,19 @@ fun SuchSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 					)
 				}
 				if (sucht) { Spacer(Modifier.height(8.dp)); Text("Suche läuft …", style = Schrift.Leise) }
-				else if (text.trim().length >= 2 && treffer.isEmpty()) { Spacer(Modifier.height(8.dp)); Text("Nichts gefunden.", style = Schrift.Leise) }
+				else if (text.trim().length >= 2 && treffer.isEmpty() && seerrTreffer.isEmpty()) { Spacer(Modifier.height(8.dp)); Text("Nichts gefunden.", style = Schrift.Leise) }
 			}
 		}
-		gruppen.forEach { (titel, typen) ->
+		// Was schon da ist, steht oben unter Filme/Serien; hier nur, was fehlt oder unterwegs ist
+		val fehlend = seerrTreffer.filter { it.zustand != SeerrZustand.ANSEHEN }
+		gruppen.take(2).forEach { (titel, typen) ->
+			val liste = treffer.filter { it.type in typen }
+			if (liste.isNotEmpty()) item(key = titel) {
+				Reihe(titel, liste, vm, seite, onClick = { item -> oeffnen(item) })
+			}
+		}
+		if (fehlend.isNotEmpty()) item(key = "seerr") { SeerrReihe("Noch nicht da – anfragen", fehlend, vm, seite) }
+		gruppen.drop(2).forEach { (titel, typen) ->
 			val liste = treffer.filter { it.type in typen }
 			if (liste.isNotEmpty()) item(key = titel) {
 				Reihe(titel, liste, vm, seite, onClick = { item ->
