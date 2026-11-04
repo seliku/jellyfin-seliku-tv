@@ -56,22 +56,25 @@ fun BibliothekSeite(vm: SelikuViewModel, seite: Seite.Bibliothek, oeffnen: (Base
 
 	var sortierung by remember { mutableStateOf(vm.wahl["${seite.schluessel}|sort"] as? Sortierung ?: Sortierung.NEU) }
 	var ungesehen by remember { mutableStateOf(vm.wahl["${seite.schluessel}|ungesehen"] as? Boolean ?: false) }
+	var genre by remember { mutableStateOf(vm.wahl["${seite.schluessel}|genre"] as? String) }
+	var genres by remember { mutableStateOf<List<String>>(emptyList()) }
+	LaunchedEffect(bib.id) { genres = runCatching { daten.genres(bib, typen) }.getOrDefault(emptyList()) }
 	@Suppress("UNCHECKED_CAST")
-	val items = remember(sortierung, ungesehen) {
-		mutableStateListOf<BaseItemDto>().apply { addAll(vm.wahl["${seite.schluessel}|items|$sortierung|$ungesehen"] as? List<BaseItemDto> ?: emptyList()) }
+	val items = remember(sortierung, ungesehen, genre) {
+		mutableStateListOf<BaseItemDto>().apply { addAll(vm.wahl["${seite.schluessel}|items|$sortierung|$ungesehen|$genre"] as? List<BaseItemDto> ?: emptyList()) }
 	}
-	var gesamt by remember(sortierung, ungesehen) { mutableStateOf<Int?>(null) }
-	var laedt by remember(sortierung, ungesehen) { mutableStateOf(false) }
+	var gesamt by remember(sortierung, ungesehen, genre) { mutableStateOf<Int?>(null) }
+	var laedt by remember(sortierung, ungesehen, genre) { mutableStateOf(false) }
 
 	fun nachladen() {
 		if (laedt || (gesamt != null && items.size >= gesamt!!)) return
 		laedt = true
 		scope.launch {
-			runCatching { daten.inhalt(bib, typen, sortierung, ungesehen, items.size, SEITENGROESSE) }
+			runCatching { daten.inhalt(bib, typen, sortierung, ungesehen, items.size, SEITENGROESSE, genre) }
 				.onSuccess { r ->
 					items.addAll(r.items.filter { n -> items.none { it.id == n.id } })
 					gesamt = r.totalRecordCount
-					vm.wahl["${seite.schluessel}|items|$sortierung|$ungesehen"] = items.toList()
+					vm.wahl["${seite.schluessel}|items|$sortierung|$ungesehen|$genre"] = items.toList()
 				}
 				.onFailure { Timber.w(it, "Bibliothek laden") }
 			laedt = false
@@ -84,8 +87,8 @@ fun BibliothekSeite(vm: SelikuViewModel, seite: Seite.Bibliothek, oeffnen: (Base
 	LaunchedEffect(items.isNotEmpty()) {
 		if (items.isNotEmpty() && vm.fokus[seite.schluessel] == null) { kotlinx.coroutines.delay(100); runCatching { erstes.requestFocus() } }
 	}
-	LaunchedEffect(sortierung, ungesehen) { if (items.isEmpty()) nachladen() }
-	LaunchedEffect(raster, sortierung, ungesehen) {
+	LaunchedEffect(sortierung, ungesehen, genre) { if (items.isEmpty()) nachladen() }
+	LaunchedEffect(raster, sortierung, ungesehen, genre) {
 		snapshotFlow { raster.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }
 			.distinctUntilChanged()
 			.collect { letzter -> if (letzter >= items.size - 18) nachladen() }
@@ -118,6 +121,20 @@ fun BibliothekSeite(vm: SelikuViewModel, seite: Seite.Bibliothek, oeffnen: (Base
 				Knopf("Zufällig", onClick = {
 					items.randomOrNull()?.let { if (it.type == BaseItemKind.SERIES) abspielen.zufall(context, it) else abspielen.video(context, it, vonVorn = true) }
 				}, symbol = "⤨")
+			}
+		}
+		// Genres: wirken zusätzlich zu Sortierung und «Nur ungesehene»; nochmals drücken hebt die Wahl auf
+		if (genres.isNotEmpty()) LazyRow(
+			contentPadding = PaddingValues(horizontal = 48.dp, vertical = 6.dp),
+			horizontalArrangement = Arrangement.spacedBy(10.dp),
+		) {
+			items(genres) { g ->
+				Knopf(g, onClick = {
+					genre = if (genre == g) null else g
+					vm.wahl["${seite.schluessel}|genre"] = genre ?: ""
+					if (genre == null) vm.wahl.remove("${seite.schluessel}|genre")
+					scope.launch { raster.scrollToItem(0) }
+				}, aktiv = g == genre)
 			}
 		}
 		Box(Modifier.fillMaxSize()) {

@@ -5,6 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.artistsApi
+import org.jellyfin.sdk.api.client.extensions.genresApi
 import org.jellyfin.sdk.api.client.extensions.itemsApi
 import org.jellyfin.sdk.api.client.extensions.libraryApi
 import org.jellyfin.sdk.api.client.extensions.liveTvApi
@@ -152,6 +153,7 @@ class SelikuDaten(private val api: ApiClient) {
 		nurUngesehen: Boolean,
 		start: Int,
 		anzahl: Int,
+		genre: String? = null,
 	): BaseItemDtoQueryResult = io {
 		api.itemsApi.getItems(
 			parentId = bibliothek.id,
@@ -160,11 +162,17 @@ class SelikuDaten(private val api: ApiClient) {
 			sortBy = sortierung.nach,
 			sortOrder = listOf(sortierung.reihenfolge),
 			filters = if (nurUngesehen) setOf(ItemFilter.IS_UNPLAYED) else emptySet(),
+			genres = setOfNotNull(genre),
 			fields = felder,
 			enableUserData = true,
 			startIndex = start,
 			limit = anzahl,
 		).content
+	}
+
+	/** Genres einer Bibliothek, nach Name. */
+	suspend fun genres(bibliothek: BaseItemDto, typen: Set<BaseItemKind>): List<String> = io {
+		api.genresApi.getGenres(parentId = bibliothek.id, includeItemTypes = typen, sortBy = listOf(ItemSortBy.SORT_NAME)).content.items.mapNotNull { it.name }
 	}
 
 	suspend fun staffeln(serie: UUID): List<BaseItemDto> = io {

@@ -37,6 +37,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -160,13 +161,17 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 
 	// Beim Start und nach jedem Seitenwechsel steht der Fokus im Inhalt, nicht in der Seitenleiste
 	var inhaltHatFokus by remember { mutableStateOf(false) }
+	var tasteGedrueckt by remember { mutableStateOf(false) }
 	LaunchedEffect(vm.aktuell.schluessel) {
 		// Hat die Seite eine gemerkte Kachel, holt sie den Fokus selbst; sonst (oder wenn das nicht klappt) die erste Kachel
+		// Auf langsamen Geräten (Chromecast) kommen die Daten spät; bis dahin landet Android den Fokus sonst in der Leiste.
+		// Solange niemand eine Taste gedrückt hat, holen wir ihn in den Inhalt (erster Titel unter «Weiterschauen»).
 		val gemerkt = vm.fokus[vm.aktuell.schluessel] != null
-		repeat(12) { i ->
+		tasteGedrueckt = false
+		repeat(60) { i ->
 			kotlinx.coroutines.delay(150)
-			if (inhaltHatFokus) return@LaunchedEffect
-			if ((!gemerkt || i >= 5) && runCatching { inhalt.requestFocus() }.getOrDefault(false)) return@LaunchedEffect
+			if (inhaltHatFokus || tasteGedrueckt) return@LaunchedEffect
+			if ((!gemerkt || i >= 5) && runCatching { inhalt.requestFocus() }.getOrDefault(false) && inhaltHatFokus) return@LaunchedEffect
 		}
 	}
 
@@ -175,7 +180,7 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 		if (!vm.zurueck()) runCatching { leiste.requestFocus() }
 	}
 
-	Box(Modifier.fillMaxSize().background(Farben.Hintergrund)) {
+	Box(Modifier.fillMaxSize().background(Farben.Hintergrund).onPreviewKeyEvent { tasteGedrueckt = true; false }) {
 		Box(Modifier.fillMaxSize()) {
 			// Inhalt beginnt neben der schmalen Leiste; die offene Leiste legt sich als Insel darüber, ohne den Inhalt zu verschieben
 			Box(Modifier.fillMaxSize().padding(start = 76.dp).focusRequester(inhalt).onFocusChanged { inhaltHatFokus = it.hasFocus }.focusRestorer().focusGroup()) {
