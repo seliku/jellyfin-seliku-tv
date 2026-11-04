@@ -1,5 +1,9 @@
 package org.jellyfin.androidtv.seliku
 
+import androidx.compose.ui.focus.focusRequester
+
+import androidx.compose.ui.focus.onFocusChanged
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -82,12 +86,12 @@ fun BibliothekRahmen(vm: SelikuViewModel, seite: Seite.Bibliothek, oeffnen: (Bas
 	Box(Modifier.fillMaxSize()) {
 	if (reiter == 0) Kulisse(bilder.hintergrund(hero, 1280))
 	Column(Modifier.fillMaxSize()) {
-		Row(Modifier.padding(start = 48.dp, top = 24.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically,
+		Row(Modifier.padding(start = 48.dp, top = 24.dp, bottom = 4.dp).onFocusChanged { vm.reiterFokus = it.hasFocus }, verticalAlignment = Alignment.CenterVertically,
 			horizontalArrangement = Arrangement.spacedBy(12.dp)) {
 			Text(seite.ansicht.name.orEmpty(), style = Schrift.Titel)
 			Spacer(Modifier.width(12.dp))
-			Knopf("Empfohlen", onClick = { reiter = 0; vm.wahl["${seite.schluessel}|reiter"] = 0 }, aktiv = reiter == 0)
-			Knopf("Bibliothek", onClick = { reiter = 1; vm.wahl["${seite.schluessel}|reiter"] = 1 }, aktiv = reiter == 1)
+			Knopf("Empfohlen", onClick = { reiter = 0; vm.wahl["${seite.schluessel}|reiter"] = 0 }, aktiv = reiter == 0, modifier = if (reiter == 0) Modifier.focusRequester(vm.reiter(seite)) else Modifier)
+			Knopf("Bibliothek", onClick = { reiter = 1; vm.wahl["${seite.schluessel}|reiter"] = 1 }, aktiv = reiter == 1, modifier = if (reiter == 1) Modifier.focusRequester(vm.reiter(seite)) else Modifier)
 		}
 		Box(Modifier.weight(1f)) {
 			if (reiter == 0) BibliothekEmpfohlen(vm, seite, oeffnen) { hero = it }

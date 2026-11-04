@@ -48,6 +48,10 @@ object SelikuEinstellungen {
 	@JvmStatic fun schlankerPlayer(c: Context) = prefs(c).getBoolean("schlanker_player", true)
 	fun schlankerPlayer(c: Context, an: Boolean) = prefs(c).edit().putBoolean("schlanker_player", an).apply()
 
+	/** Aus (Vorgabe): Knopf «Zufällig» auf Serienseiten (sonst im Menü «⋯ Mehr»). */
+	fun zufallKnopf(c: Context) = prefs(c).getBoolean("zufall_knopf", false)
+	fun zufallKnopf(c: Context, an: Boolean) = prefs(c).edit().putBoolean("zufall_knopf", an).apply()
+
 	/** An (Vorgabe): im Banner läuft nach ein paar Sekunden stumm der Trailer (falls auf dem Server einer liegt). */
 	fun trailerImBanner(c: Context) = prefs(c).getBoolean("trailer_banner", true)
 	fun trailerImBanner(c: Context, an: Boolean) = prefs(c).edit().putBoolean("trailer_banner", an).apply()

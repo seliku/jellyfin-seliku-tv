@@ -65,6 +65,10 @@ class SelikuViewModel : ViewModel() {
 	/** Erste Kachel je Seite: «Zurück» springt dorthin, bevor die Leiste aufgeht. */
 	/** Seiten, auf denen die gemerkte Kachel den Fokus schon zurückgeholt hat (einmal pro Besuch, nicht bei jedem Auftauchen). */
 	val wiederhergestellt = mutableSetOf<String>()
+	/** Reiterleiste oben (Musik, Filme, Serien): Zurück springt erst dorthin, erst das nächste Zurück öffnet die Leiste. */
+	val reiterAnfragen = mutableMapOf<String, androidx.compose.ui.focus.FocusRequester>()
+	fun reiter(seite: Seite) = reiterAnfragen.getOrPut(seite.schluessel) { androidx.compose.ui.focus.FocusRequester() }
+	var reiterFokus = false
 	val ersterSchluessel = mutableMapOf<String, String>()
 	private val ersteAnfragen = mutableMapOf<String, androidx.compose.ui.focus.FocusRequester>()
 	fun ersteAnfrageFuer(seite: String, kachel: String): androidx.compose.ui.focus.FocusRequester {

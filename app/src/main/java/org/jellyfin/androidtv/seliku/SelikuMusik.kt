@@ -1,5 +1,7 @@
 package org.jellyfin.androidtv.seliku
 
+import androidx.compose.ui.focus.onFocusChanged
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -68,10 +70,10 @@ fun MusikSeite(vm: SelikuViewModel, seite: Seite.Musik, oeffnen: (BaseItemDto) -
 	}
 
 	Column(Modifier.fillMaxSize()) {
-		Row(Modifier.padding(start = 48.dp, top = 28.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+		Row(Modifier.padding(start = 48.dp, top = 28.dp, bottom = 8.dp).onFocusChanged { vm.reiterFokus = it.hasFocus }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
 			Text(seite.ansicht.name.orEmpty(), style = Schrift.Titel)
 			Spacer(Modifier.width(12.dp))
-			listOf("Übersicht", "Playlists", "Interpreten", "Alben", "Radio").forEachIndexed { n, t -> Knopf(t, onClick = { reiter = n }, aktiv = reiter == n) }
+			listOf("Übersicht", "Playlists", "Interpreten", "Alben", "Radio").forEachIndexed { n, t -> Knopf(t, onClick = { reiter = n }, aktiv = reiter == n, modifier = if (reiter == n) Modifier.focusRequester(vm.reiter(seite)) else Modifier) }
 		}
 		when (reiter) {
 			0 -> { MusikUebersicht(vm, seite, oeffnen); return@Column }

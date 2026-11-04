@@ -150,6 +150,7 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 	var schlank by remember { mutableStateOf(SelikuEinstellungen.schlankerPlayer(context)) }
 	var links by remember { mutableStateOf(SelikuEinstellungen.leisteMitLinks(context)) }
 	var trailerBanner by remember { mutableStateOf(SelikuEinstellungen.trailerImBanner(context)) }
+	var zufall by remember { mutableStateOf(SelikuEinstellungen.zufallKnopf(context)) }
 	val punkte = listOf(
 		Punkt("Zurück-Taste: " + (if (doppel) "zweimal drücken beendet die App" else "beendet die App nie"),
 			"Aus: Zurück springt nach oben, dann in die Leiste, dann zur Startseite – wie bei Netflix. An: zusätzlich zweimal Zurück auf der Startseite zum Beenden") {
@@ -162,6 +163,10 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 		Punkt("Trailer im Banner: " + (if (trailerBanner) "an" else "aus"),
 			"Nach ein paar Sekunden läuft im grossen Banner oben stumm der Trailer – wie bei Netflix") {
 			trailerBanner = !trailerBanner; SelikuEinstellungen.trailerImBanner(context, trailerBanner)
+		},
+		Punkt("Knopf «Zufällig» bei Serien: " + (if (zufall) "an" else "aus"),
+			"Zufällige Folge direkt auf der Serienseite; sonst im Menü «⋯ Mehr»") {
+			zufall = !zufall; SelikuEinstellungen.zufallKnopf(context, zufall)
 		},
 		Punkt("Seitenleiste: " + (if (links) "mit Zurück oder Links" else "nur mit Zurück"),
 			"Ob die Leiste auch aufgeht, wenn man am linken Rand nochmals Links drückt") {

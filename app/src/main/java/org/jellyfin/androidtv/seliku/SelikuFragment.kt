@@ -120,6 +120,9 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 	val context = LocalContext.current
 	var bibliotheken by remember { mutableStateOf<List<BaseItemDto>>(emptyList()) }
 	var leisteOffen by remember { mutableStateOf(false) }
+	// Die Leiste öffnet nur, wenn man sie holt (Zurück, bzw. Links falls eingestellt). Landet der Fokus sonst dort –
+	// etwa weil ein Knopf verschwindet, auf dem er lag –, geht er gleich in den Inhalt zurück, statt die Insel aufzuklappen.
+	var leisteGewollt by remember { mutableStateOf(false) }
 	val fokusManager = androidx.compose.ui.platform.LocalFocusManager.current
 	// Radio läuft und niemand drückt: nach 20 s dunkel bzw. Diashow (Wahl wie im Musikplayer); der Fernseher bleibt an
 	var letzteTaste by remember { mutableStateOf(System.currentTimeMillis()) }
@@ -254,15 +257,13 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 	BackHandler(enabled = true) {
 		val seite = vm.aktuell
 		when {
-			vm.zurueck() -> Unit
-			!leisteOffen && vm.fokus[seite.schluessel] != null && vm.fokus[seite.schluessel] != vm.ersterSchluessel[seite.schluessel] -> scope.launch {
-				runCatching { vm.listen[seite.schluessel]?.scrollToItem(0) }
-				runCatching { vm.raster[seite.schluessel]?.scrollToItem(0) }
-				kotlinx.coroutines.delay(80)
-				if (vm.ersteAnfrage(seite.schluessel)?.let { runCatching { it.requestFocus() }.getOrDefault(false) } != true) runCatching { leiste.requestFocus() }
-			}
-			!leisteOffen -> runCatching { leiste.requestFocus() }
-			seite != Seite.Start -> { vm.wurzel(Seite.Start); runCatching { inhalt.requestFocus() } }
+			// Insel offen: Zurück schliesst sie, man bleibt, wo man war (nicht zur Startseite springen)
+			leisteOffen && !(seite == Seite.Start && SelikuEinstellungen.doppelZurueck(context)) -> zurueckInDenInhalt()
+			!leisteOffen && vm.zurueck() -> Unit
+			// Seiten mit Reitern oben (Musik, Filme, Serien): erst auf die Reiter, dann erst die Leiste
+			!leisteOffen && !vm.reiterFokus && vm.reiterAnfragen[seite.schluessel]?.let { runCatching { it.requestFocus() }.isSuccess } == true -> Unit
+			// Sonst öffnet Zurück direkt die Leiste (S 04.11.: auf der Startseite erst nach oben springen war nicht intuitiv)
+			!leisteOffen -> { leisteGewollt = true; runCatching { leiste.requestFocus() } }
 			SelikuEinstellungen.doppelZurueck(context) -> {
 				val jetzt = System.currentTimeMillis()
 				if (jetzt - letztesZurueck < 2000) (context as? android.app.Activity)?.finish()
@@ -285,8 +286,10 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 		.onKeyEvent { e ->
 			val richtung = when (e.key) { Key.DirectionLeft -> FocusDirection.Left; Key.DirectionUp -> FocusDirection.Up; else -> null }
 			if (richtung != null && e.type == KeyEventType.KeyDown) {
+				if (richtung == FocusDirection.Left && SelikuEinstellungen.leisteMitLinks(context)) leisteGewollt = true
 				val vorher = FokusSpur.anfrage; val alt = FokusSpur.lage()
 				fokusManager.moveFocus(richtung)
+				if (!leisteOffen) leisteGewollt = false
 				val neu = FokusSpur.lage()
 				// Nur annehmen, wenn das neue Ziel wirklich links bzw. oberhalb liegt; sonst bleibt der Fokus, wo er war
 				// Ziel ohne sichtbare Fläche (Rect.Zero) ist auch falsch: dort sähe man den Fokus nicht
@@ -336,7 +339,13 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 				offen = leisteOffen,
 				anteil = leisteAnteil,
 				// Rechts aus der Leiste: zurück genau dorthin, wo man im Inhalt war (nicht zum nächstbesten Knopf daneben)
-				modifier = Modifier.focusRequester(leiste).onFocusChanged { leisteOffen = it.hasFocus }.onPreviewKeyEvent { e ->
+				modifier = Modifier.focusRequester(leiste).onFocusChanged {
+					when {
+						!it.hasFocus -> { leisteOffen = false; leisteGewollt = false }
+						leisteGewollt -> leisteOffen = true
+						else -> scope.launch { zurueckInDenInhalt() }
+					}
+				}.onPreviewKeyEvent { e ->
 					if (e.key == Key.DirectionRight && e.type == KeyEventType.KeyDown) { zurueckInDenInhalt(); true } else false
 				},
 				waehlen = { e ->

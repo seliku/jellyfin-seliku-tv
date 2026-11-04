@@ -238,27 +238,63 @@ class SelikuDaten(private val api: ApiClient) {
 		val serienGenres = gesehen.mapNotNull { it.seriesId }.distinct().take(30).flatMap { id ->
 			runCatching { api.userLibraryApi.getItem(itemId = id).content.genres.orEmpty() }.getOrDefault(emptyList())
 		}
+		genreVerlauf(gesehen, serienGenres).entries.sortedByDescending { it.value }.map { it.key }
+	}
+
+	private fun genreVerlauf(gesehen: List<BaseItemDto>, serienGenres: List<String>): Map<String, Int> =
 		(gesehen.flatMap { it.genres.orEmpty() } + serienGenres).groupingBy { it }.eachCount()
-			.entries.sortedByDescending { it.value }.map { it.key }
+
+	/** Anteil jedes Genres am Sehverlauf (0..1). */
+	private suspend fun genreAnteile(): Map<String, Double> {
+		val gesehen = api.itemsApi.getItems(
+			includeItemTypes = setOf(BaseItemKind.MOVIE, BaseItemKind.EPISODE), recursive = true,
+			filters = setOf(ItemFilter.IS_PLAYED), sortBy = listOf(ItemSortBy.DATE_PLAYED), sortOrder = listOf(SortOrder.DESCENDING),
+			fields = setOf(ItemFields.GENRES), limit = 300,
+		).content.items
+		val serienGenres = gesehen.mapNotNull { it.seriesId }.distinct().take(40).flatMap { id ->
+			runCatching { api.userLibraryApi.getItem(itemId = id).content.genres.orEmpty() }.getOrDefault(emptyList())
+		}
+		val zaehler = genreVerlauf(gesehen, serienGenres)
+		val summe = zaehler.values.sum().toDouble().coerceAtLeast(1.0)
+		return zaehler.mapValues { it.value / summe }
 	}
 
 	/**
 	 * Banner-Empfehlungen: noch nicht gesehene Filme/Serien mit Hintergrundbild, bevorzugt in den Lieblings-Genres
 	 * des Benutzers und gut bewertet; sonst zufällig Ungesehenes. [bib] schränkt auf eine Bibliothek ein.
 	 */
+	/**
+	 * Banner-Empfehlungen: noch nicht Gesehenes mit Hintergrundbild, bewertet nach dem eigenen Sehverlauf.
+	 * Jedes Genre zählt mit seinem Anteil am Verlauf; Genres, die man kaum schaut, ziehen ab. «Spezial-Genres»
+	 * (Animation, Horror, Kinder, Doku …) fliegen ganz raus, wenn sie im Verlauf praktisch nicht vorkommen.
+	 * Kein Auffüllen mit Zufälligem mehr (brachte Horror und Trickfilme, die nie jemand schaut). [bib] schränkt ein.
+	 */
 	suspend fun bannerEmpfehlungen(bib: BaseItemDto? = null, anzahl: Int = 6): List<BaseItemDto> = io {
 		val typen = bib?.let { typenFuer(it) } ?: setOf(BaseItemKind.MOVIE, BaseItemKind.SERIES)
-		val genres = runCatching { lieblingsGenres() }.getOrDefault(emptyList()).take(3)
-		suspend fun abfrage(mitGenres: Boolean) = api.itemsApi.getItems(
+		val anteile = runCatching { genreAnteile() }.getOrDefault(emptyMap())
+		val kandidaten = api.itemsApi.getItems(
 			parentId = bib?.id, includeItemTypes = typen, recursive = true,
 			filters = setOf(ItemFilter.IS_UNPLAYED), imageTypes = setOf(org.jellyfin.sdk.model.api.ImageType.BACKDROP),
-			genres = if (mitGenres) genres.toSet() else emptySet(),
-			sortBy = if (mitGenres) listOf(ItemSortBy.COMMUNITY_RATING) else listOf(ItemSortBy.RANDOM),
-			sortOrder = listOf(SortOrder.DESCENDING), fields = felder, enableUserData = true, limit = 40,
+			sortBy = listOf(ItemSortBy.COMMUNITY_RATING), sortOrder = listOf(SortOrder.DESCENDING),
+			fields = felder + ItemFields.GENRES, enableUserData = true, limit = 300,
 		).content.items
-		val passend = if (genres.isNotEmpty()) abfrage(true).shuffled().take(anzahl) else emptyList()
-		(passend + abfrage(false)).distinctBy { it.id }.take(anzahl)
+		if (anteile.isEmpty()) return@io kandidaten.take(40).shuffled().take(anzahl)
+		val spezial = listOf("animation", "anime", "horror", "kinder", "familie", "family", "dokumentar", "documentary", "dokumentation", "reality", "musik", "music")
+		fun anteil(g: String) = anteile[g] ?: 0.0
+		val bewertet = kandidaten.mapNotNull { k ->
+			val g = k.genres.orEmpty()
+			if (g.isEmpty()) return@mapNotNull null
+			// Spezial-Genre, das man so gut wie nie schaut → weg
+			if (g.any { x -> spezial.any { x.lowercase().contains(it) } && anteil(x) < 0.03 }) return@mapNotNull null
+			val treffer = g.sumOf { anteil(it) }
+			val fremd = g.count { anteil(it) < 0.02 }
+			val wert = treffer - 0.08 * fremd + (k.communityRating ?: 6f) / 100.0
+			if (treffer <= 0.0) null else k to wert
+		}.sortedByDescending { it.second }.map { it.first }
+		// Aus den besten zwanzig zufällig wählen, damit der Banner nicht jeden Tag gleich ist
+		bewertet.take(20).shuffled().take(anzahl)
 	}
+
 
 	// --- Musik ---
 

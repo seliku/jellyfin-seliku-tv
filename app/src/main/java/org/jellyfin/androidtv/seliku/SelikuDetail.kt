@@ -1,5 +1,11 @@
 package org.jellyfin.androidtv.seliku
 
+import androidx.compose.ui.Alignment
+
+import androidx.compose.foundation.background
+
+import androidx.compose.foundation.layout.size
+
 import androidx.compose.ui.focus.onFocusChanged
 
 import androidx.compose.foundation.layout.Arrangement
@@ -67,7 +73,8 @@ private fun Kopf(
 			Spacer(Modifier.height(20.dp))
 			// Steht der Fokus auf den Knöpfen, bleibt die Seite ganz oben (sonst schiebt die Rollregel den Titel hinaus)
 			Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.onFocusChanged {
-				if (it.hasFocus && liste != null) scope.launch { kotlinx.coroutines.delay(80); runCatching { liste.animateScrollToItem(0) } }
+				if (it.hasFocus && liste != null && (liste.firstVisibleItemIndex > 0 || liste.firstVisibleItemScrollOffset > 0))
+					scope.launch { kotlinx.coroutines.delay(80); runCatching { liste.animateScrollToItem(0) } }
 			}) { knoepfe() }
 		}
 	}
@@ -134,11 +141,13 @@ fun SerienSeite(vm: SelikuViewModel, seite: Seite.Serie, oeffnen: (BaseItemDto) 
 						modifier = Modifier.focusRequester(start),
 						onClick = { n?.let { abspielen.video(context, it) } ?: abspielen.zufall(context, sr) },
 					)
-					Knopf("Zufällig", onClick = { abspielen.zufall(context, sr) }, symbol = "⤨")
+					// «Zufällig» nur auf Wunsch (Einstellung); sonst steht es im Menü «⋯ Mehr»
+					if (SelikuEinstellungen.zufallKnopf(context)) Knopf("Zufällig", onClick = { abspielen.zufall(context, sr) }, symbol = "⤨")
 					val gesehen = sr.userData?.played == true
 					Knopf(if (gesehen) "Ungesehen" else "Gesehen", symbol = if (gesehen) "○" else "✓", onClick = {
 						scope.launch { runCatching { daten.gesehen(sr.id, !gesehen) }; neuLaden++ }
 					})
+					MehrKnopf { vm.menue = sr }
 				}
 				Spacer(Modifier.height(28.dp))
 			}
@@ -217,6 +226,7 @@ fun TitelSeite(vm: SelikuViewModel, seite: Seite.Titel, oeffnen: (BaseItemDto) -
 					Knopf(if (gesehen) "Ungesehen" else "Gesehen", symbol = if (gesehen) "○" else "✓", onClick = {
 						scope.launch { runCatching { daten.gesehen(t.id, !gesehen) }; neuLaden++ }
 					})
+					MehrKnopf { vm.menue = t }
 				}
 				Spacer(Modifier.height(32.dp))
 			}
@@ -231,4 +241,14 @@ fun folgenTitel(f: BaseItemDto): String {
 	val nr = f.indexNumber ?: return name
 	val ohne = name.replace(Regex("^\\s*0*$nr[.)\\-:]?\\s+"), "")
 	return "$nr. $ohne"
+}
+
+/** Kleiner runder Knopf mit drei senkrechten Punkten: öffnet das Menü zum Titel (wie bei Plex). */
+@Composable
+fun MehrKnopf(onClick: () -> Unit) {
+	Waehlbar(onClick = onClick, vergroessern = false, shape = androidx.compose.foundation.shape.CircleShape) { fokussiert ->
+		Box(Modifier.size(44.dp).background(if (fokussiert) Farben.Text else Farben.Flaeche), contentAlignment = Alignment.Center) {
+			Text("⋮", style = Schrift.Titel.copy(color = if (fokussiert) androidx.compose.ui.graphics.Color.Black else Farben.Text))
+		}
+	}
 }

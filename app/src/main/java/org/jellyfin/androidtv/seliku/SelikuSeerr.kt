@@ -419,6 +419,11 @@ fun SeerrDetailSeite(vm: SelikuViewModel, seite: Seite.SeerrDetail, oeffnen: (Ba
 		Kulisse(x?.hintergrund)
 		if (x == null) { Hinweis(meldung ?: "Wird geladen …"); return@Box }
 		LaunchedEffect(x.tmdb) { delay(150); runCatching { erster.requestFocus() } }
+		// Wechselt der Stand (Anfragen → Angefragt …), ist es ein anderer Knopf: Fokus gleich wieder darauf setzen
+		var letzterZustand by remember { mutableStateOf(x.zustand) }
+		LaunchedEffect(x.zustand) {
+			if (x.zustand != letzterZustand) { letzterZustand = x.zustand; delay(80); runCatching { erster.requestFocus() } }
+		}
 		Row(Modifier.fillMaxSize().padding(start = 48.dp, top = 48.dp, end = 64.dp), horizontalArrangement = Arrangement.spacedBy(32.dp)) {
 			Bild(x.poster, Modifier.width(220.dp).aspectRatio(2f / 3f), ersatz = initialen(x.titel))
 			Column(Modifier.weight(1f)) {
