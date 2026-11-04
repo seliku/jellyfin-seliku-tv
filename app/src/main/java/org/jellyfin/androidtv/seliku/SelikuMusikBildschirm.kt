@@ -52,6 +52,17 @@ enum class MusikBildschirm(val titel: String) {
 object SelikuMusikBildschirm {
 	private const val WARTEN_MS = 20_000L
 
+	/** Gewählter Modus, für Musikplayer und Radio gemeinsam (wird beim ersten Zugriff aus den Einstellungen gelesen). */
+	private val zustand = mutableStateOf<MusikBildschirm?>(null)
+	fun aktuell(c: android.content.Context): MusikBildschirm = zustand.value ?: modus(c).also { zustand.value = it }
+	fun weiter(c: android.content.Context): MusikBildschirm {
+		val m = MusikBildschirm.entries[(aktuell(c).ordinal + 1) % MusikBildschirm.entries.size]
+		zustand.value = m; modus(c, m)
+		Toast.makeText(c, m.titel + if (m != MusikBildschirm.NORMAL) " (nach 20 Sekunden ohne Tastendruck)" else "", Toast.LENGTH_SHORT).show()
+		return m
+	}
+	const val WARTEZEIT_MS = 20_000L
+
 	fun modus(c: android.content.Context): MusikBildschirm =
 		runCatching { MusikBildschirm.valueOf(c.getSharedPreferences("seliku", 0).getString("musik_bildschirm", null)!!) }.getOrDefault(MusikBildschirm.NORMAL)
 
@@ -61,7 +72,7 @@ object SelikuMusikBildschirm {
 	@JvmStatic
 	fun einrichten(fragment: Fragment, wurzel: ViewGroup, knopfReihe: ViewGroup, vorlage: ImageButton) {
 		val context = fragment.requireContext()
-		var modus by mutableStateOf(modus(context))
+		var modus by mutableStateOf(aktuell(context))
 		var zeigt by mutableStateOf(false)
 		var letzteTaste by mutableStateOf(System.currentTimeMillis())
 
@@ -71,11 +82,7 @@ object SelikuMusikBildschirm {
 			setImageResource(R.drawable.seliku_bildschirm)
 			contentDescription = "Bildschirm"
 			onFocusChangeListener = vorlage.onFocusChangeListener
-			setOnClickListener {
-				modus = MusikBildschirm.entries[(modus.ordinal + 1) % MusikBildschirm.entries.size]
-				modus(context, modus)
-				Toast.makeText(context, modus.titel + if (modus != MusikBildschirm.NORMAL) " (nach 20 Sekunden ohne Tastendruck)" else "", Toast.LENGTH_SHORT).show()
-			}
+			setOnClickListener { modus = weiter(context) }
 		}
 		knopfReihe.addView(knopf)
 
@@ -126,15 +133,18 @@ object SelikuMusikBildschirm {
 	}
 
 	@Composable
-	private fun Ebene(modus: MusikBildschirm) {
+	fun Ebene(modus: MusikBildschirm) {
 		val mediaManager = koinInject<MediaManager>()
 		var titel by remember { mutableStateOf("") }
 		var wer by remember { mutableStateOf("") }
+		var uhr by remember { mutableStateOf("") }
 		LaunchedEffect(Unit) {
 			while (true) {
+				val radio = RadioSpieler.laeuft.value
 				val a = mediaManager.currentAudioItem
-				titel = a?.name.orEmpty()
-				wer = a?.albumArtist ?: a?.artists?.firstOrNull().orEmpty()
+				titel = radio?.name ?: a?.name.orEmpty()
+				wer = if (radio != null) "Radio" else a?.albumArtist ?: a?.artists?.firstOrNull().orEmpty()
+				uhr = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
 				delay(2_000)
 			}
 		}
@@ -143,6 +153,7 @@ object SelikuMusikBildschirm {
 			// Titel klein unten links; im Dunkel-Modus kaum sichtbar, damit nichts einbrennt
 			Column(Modifier.align(Alignment.BottomStart).padding(start = 64.dp, bottom = 56.dp)) {
 				val a = if (modus == MusikBildschirm.DUNKEL) 0.35f else 0.9f
+				Text(uhr, style = Schrift.Riesig.copy(color = Color.White.copy(alpha = a)))
 				Text(titel, style = Schrift.Titel.copy(color = Color.White.copy(alpha = a)))
 				Text(wer, style = Schrift.Normal.copy(color = Color.White.copy(alpha = a * 0.75f)))
 			}

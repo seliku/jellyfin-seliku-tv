@@ -262,7 +262,13 @@ private fun SenderReihe(
 
 /** Läuft ein Sender: grosse Karte oben. OK hält an bzw. spielt weiter, Links/Rechts zappt in der Reihe, aus der er kam. */
 @Composable
-private fun LaeuftKarte(anfrage: androidx.compose.ui.focus.FocusRequester) {
+private fun LaeuftKarte(anfrage: androidx.compose.ui.focus.FocusRequester) = Column {
+	LaeuftKarteInnen(anfrage)
+}
+
+/** Karte und darunter der Bildschirm-Knopf (untereinander, weil der Aufrufer sie in eine Column legt). */
+@Composable
+private fun LaeuftKarteInnen(anfrage: androidx.compose.ui.focus.FocusRequester) {
 	val context = LocalContext.current
 	val sender by RadioSpieler.laeuft.collectAsState()
 	val spielt by RadioSpieler.spielt.collectAsState()
@@ -288,4 +294,7 @@ private fun LaeuftKarte(anfrage: androidx.compose.ui.focus.FocusRequester) {
 			Text("›", style = Schrift.Riesig.copy(color = if (fokussiert) Farben.Akzent else Farben.TextLeise))
 		}
 	}
+	// Was der Bildschirm zeigt, wenn eine Weile niemand drückt (gleiche Wahl wie im Musikplayer)
+	var modus by remember { mutableStateOf(SelikuMusikBildschirm.aktuell(context)) }
+	Knopf(modus.titel, symbol = "☾", modifier = Modifier.padding(start = 48.dp, bottom = 16.dp), onClick = { modus = SelikuMusikBildschirm.weiter(context) })
 }

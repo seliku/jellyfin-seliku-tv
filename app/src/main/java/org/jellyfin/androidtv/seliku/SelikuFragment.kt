@@ -28,6 +28,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import kotlinx.coroutines.delay
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -119,6 +121,21 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 	var bibliotheken by remember { mutableStateOf<List<BaseItemDto>>(emptyList()) }
 	var leisteOffen by remember { mutableStateOf(false) }
 	val fokusManager = androidx.compose.ui.platform.LocalFocusManager.current
+	// Radio läuft und niemand drückt: nach 20 s dunkel bzw. Diashow (Wahl wie im Musikplayer); der Fernseher bleibt an
+	var letzteTaste by remember { mutableStateOf(System.currentTimeMillis()) }
+	var radioEbene by remember { mutableStateOf(false) }
+	var schluckeLoslassen by remember { mutableStateOf(false) }
+	val radioSpielt by RadioSpieler.spielt.collectAsState()
+	val bildschirmModus = SelikuMusikBildschirm.aktuell(context)
+	LaunchedEffect(letzteTaste, radioSpielt, bildschirmModus) {
+		radioEbene = false
+		if (!radioSpielt || bildschirmModus == MusikBildschirm.NORMAL) return@LaunchedEffect
+		delay(SelikuMusikBildschirm.WARTEZEIT_MS)
+		radioEbene = true
+	}
+	val ansicht = androidx.compose.ui.platform.LocalView.current
+	DisposableEffect(radioSpielt) { ansicht.keepScreenOn = radioSpielt; onDispose { ansicht.keepScreenOn = false } }
+	org.jellyfin.androidtv.ui.ScreensaverLock(enabled = radioSpielt)
 	val leisteAnteil by androidx.compose.animation.core.animateFloatAsState(if (leisteOffen) 1f else 0f,
 		androidx.compose.animation.core.tween(220, easing = androidx.compose.animation.core.FastOutSlowInEasing), label = "leiste")
 	val leiste = remember { FocusRequester() }
@@ -242,7 +259,13 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 	}
 
 
-	Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Farben.HintergrundOben, Farben.Hintergrund), end = androidx.compose.ui.geometry.Offset(1400f, 1100f))).onPreviewKeyEvent { tasteGedrueckt = true; false }
+	Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Farben.HintergrundOben, Farben.Hintergrund), end = androidx.compose.ui.geometry.Offset(1400f, 1100f))).onPreviewKeyEvent { e ->
+			tasteGedrueckt = true; letzteTaste = System.currentTimeMillis()
+			// Steht die Radio-Ebene (dunkel/Diashow), holt der Druck nur die Oberfläche zurück – samt Loslassen
+			if (radioEbene && e.type == KeyEventType.KeyDown) { radioEbene = false; schluckeLoslassen = true; true }
+			else if (schluckeLoslassen) { if (e.type == KeyEventType.KeyUp) schluckeLoslassen = false; true }
+			else false
+		}
 		// Links/oben am Rand will niemand weiter: sonst reicht Compose die Taste an die Android-Ansicht dahinter weiter
 		// und der Fokus verschwindet in einem unsichtbaren Element
 		.onKeyEvent { e ->
@@ -305,6 +328,8 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 				},
 			)
 		}
+		androidx.compose.animation.AnimatedVisibility(radioEbene, enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(1500)),
+			exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(400))) { SelikuMusikBildschirm.Ebene(bildschirmModus) }
 		vm.menue?.let { item -> TitelMenue(vm, item) { vm.wahl.keys.removeAll { it.endsWith("start-reihen") || it == "start-reihen" }; neuLaden++ } }
 	}
 }
@@ -414,8 +439,11 @@ private fun Seitenleiste(
 			}
 		}
 		// Was gerade läuft, unten in der Leiste: erreichbar mit Zurück, verdeckt keine Kacheln
-		Spacer(Modifier.height(12.dp))
-		LaeuftEintrag(offen, anteil)
+		// Zugeklappt nicht: dort reicht der Platz nicht, die schmale Leiste würde sonst rollen und das Profilbild abschneiden
+		if (anteil > 0f) {
+			Spacer(Modifier.height(12.dp))
+			LaeuftEintrag(offen, anteil)
+		}
 	}
 }
 
