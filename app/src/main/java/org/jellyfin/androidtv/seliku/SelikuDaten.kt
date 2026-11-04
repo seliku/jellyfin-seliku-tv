@@ -12,6 +12,7 @@ import org.jellyfin.sdk.api.client.extensions.playStateApi
 import org.jellyfin.sdk.api.client.extensions.tvShowsApi
 import org.jellyfin.sdk.api.client.extensions.userLibraryApi
 import org.jellyfin.sdk.api.client.extensions.userViewsApi
+import org.jellyfin.sdk.api.client.extensions.userApi
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemDtoQueryResult
 import org.jellyfin.sdk.model.api.BaseItemKind
@@ -65,7 +66,54 @@ class SelikuDaten(private val api: ApiClient) {
 
 	private suspend fun <T> io(block: suspend () -> T): T = withContext(Dispatchers.IO) { block() }
 
-	suspend fun bibliotheken(): List<BaseItemDto> = io { api.userViewsApi.getUserViews().content.items }
+	/** Sichtbare Bibliotheken (ohne die in den Benutzereinstellungen ausgeblendeten). */
+	suspend fun bibliotheken(): List<BaseItemDto> {
+		val aus = versteckteBibliotheken()
+		return alleBibliotheken().filter { it.id !in aus }
+	}
+
+	suspend fun alleBibliotheken(): List<BaseItemDto> = io { api.userViewsApi.getUserViews().content.items }
+
+	suspend fun versteckteBibliotheken(): Set<UUID> = io {
+		api.userApi.getCurrentUser().content.configuration?.myMediaExcludes?.toSet().orEmpty()
+	}
+
+	/** Ausblenden gilt für Leiste/«Meine Medien» und für die «Neu in …»-Reihen. */
+	suspend fun versteckteSetzen(ids: Set<UUID>) = io {
+		val ich = api.userApi.getCurrentUser().content
+		val cfg = ich.configuration ?: return@io
+		api.userApi.updateUserConfiguration(ich.id, cfg.copy(myMediaExcludes = ids.toList(), latestItemsExcludes = ids.toList()))
+	}
+
+	suspend fun benutzer() = io { api.userApi.getCurrentUser().content }
+
+	/** Inhalt eines Ordners: Unterordner zuerst, dann Dateien nach Name. */
+	suspend fun ordnerInhalt(id: UUID): List<BaseItemDto> = io {
+		api.itemsApi.getItems(
+			parentId = id,
+			sortBy = listOf(ItemSortBy.IS_FOLDER, ItemSortBy.SORT_NAME),
+			sortOrder = listOf(SortOrder.DESCENDING, SortOrder.ASCENDING),
+			fields = felder,
+			enableUserData = true,
+		).content.items
+	}
+
+	/** Startseiten-Sammlungen (Tag «seliku-startseite», z. B. «bald gelöscht» aus Maintainerr) mit Löschdatum je Titel. */
+	suspend fun startseitenSammlungen(): List<Triple<String, List<BaseItemDto>, Map<UUID, String>>> = io {
+		api.itemsApi.getItems(
+			includeItemTypes = setOf(BaseItemKind.BOX_SET),
+			recursive = true,
+			tags = setOf("seliku-startseite"),
+			fields = setOf(ItemFields.OVERVIEW),
+		).content.items.map { s ->
+			val daten = s.overview.orEmpty().lines().mapNotNull { z ->
+				val t = z.trim().split(" ")
+				runCatching { UUID.fromString(t[0]) to t[1] }.getOrNull()
+			}.toMap()
+			val inhalt = api.itemsApi.getItems(parentId = s.id, fields = felder, enableUserData = true).content.items
+			Triple(s.name.orEmpty(), inhalt, daten)
+		}.filter { it.second.isNotEmpty() }
+	}
 
 	suspend fun item(id: UUID): BaseItemDto = io { api.userLibraryApi.getItem(itemId = id).content }
 

@@ -41,6 +41,8 @@ sealed interface Seite {
 	data class Titel(val id: UUID) : Seite { override val schluessel = "titel-$id" }
 	data class Interpret(val id: UUID) : Seite { override val schluessel = "interpret-$id" }
 	data class Album(val id: UUID) : Seite { override val schluessel = "album-$id" }
+	data class Ordner(val id: UUID, val name: String) : Seite { override val schluessel = "ordner-$id" }
+	data object Bibliotheken : Seite { override val schluessel = "bibliotheken" }
 }
 
 /** Seitenstapel und gemerkte Scroll-/Fokuspositionen; überlebt den Abstecher in den Player. */
@@ -87,6 +89,7 @@ fun seiteFuer(item: BaseItemDto): Seite? = when (item.type) {
 	BaseItemKind.MOVIE, BaseItemKind.VIDEO, BaseItemKind.MUSIC_VIDEO, BaseItemKind.TRAILER -> Seite.Titel(item.id)
 	BaseItemKind.MUSIC_ARTIST -> Seite.Interpret(item.id)
 	BaseItemKind.MUSIC_ALBUM -> Seite.Album(item.id)
+	BaseItemKind.FOLDER, BaseItemKind.COLLECTION_FOLDER, BaseItemKind.BOX_SET -> Seite.Ordner(item.id, item.name.orEmpty())
 	else -> null
 }
 

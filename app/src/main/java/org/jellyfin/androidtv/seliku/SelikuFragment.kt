@@ -50,6 +50,7 @@ import kotlinx.coroutines.launch
 import androidx.lifecycle.repeatOnLifecycle
 import org.jellyfin.androidtv.auth.repository.SessionRepository
 import org.jellyfin.androidtv.auth.repository.UserRepository
+import org.jellyfin.androidtv.R
 import org.jellyfin.androidtv.ui.base.JellyfinTheme
 import org.jellyfin.androidtv.ui.base.Text
 import org.jellyfin.androidtv.ui.composable.rememberQueueEntry
@@ -77,7 +78,27 @@ class SelikuFragment : Fragment() {
 	}
 }
 
-private data class Eintrag(val symbol: String, val titel: String, val seite: Seite?, val hervor: Boolean = false, val aktion: (() -> Unit)? = null)
+private data class Eintrag(val symbol: Int, val titel: String, val seite: Seite?, val hervor: Boolean = false, val aktion: (() -> Unit)? = null)
+
+/** Seite und Symbol je Bibliotheksart. */
+fun seiteFuerBibliothek(bib: BaseItemDto): Seite = when (bib.collectionType?.serialName) {
+	"livetv" -> Seite.LiveTv
+	"music" -> Seite.Musik(bib)
+	"movies", "tvshows", "boxsets", "musicvideos" -> Seite.Bibliothek(bib)
+	else -> Seite.Ordner(bib.id, bib.name.orEmpty())
+}
+
+private fun symbolFuer(bib: BaseItemDto): Int = when (bib.collectionType?.serialName) {
+	"movies" -> R.drawable.ic_movie
+	"tvshows" -> R.drawable.ic_tv
+	"livetv" -> R.drawable.ic_tv_guide
+	"music" -> if (bib.name.orEmpty().contains("podcast", true)) R.drawable.ic_microphone else R.drawable.ic_music_album
+	"books" -> R.drawable.seliku_buch
+	"homevideos", "photos" -> R.drawable.ic_camera
+	"playlists" -> R.drawable.ic_mix
+	"boxsets" -> R.drawable.ic_grid
+	else -> R.drawable.ic_folder
+}
 
 @Composable
 private fun Oberflaeche(vm: SelikuViewModel) {
@@ -88,8 +109,10 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 	val leiste = remember { FocusRequester() }
 	val inhalt = remember { FocusRequester() }
 
-	LaunchedEffect(Unit) {
+	var neuLaden by remember { mutableStateOf(0) }
+	LaunchedEffect(neuLaden) {
 		bibliotheken = runCatching { daten.bibliotheken() }.onFailure { Timber.w(it, "Bibliotheken") }.getOrDefault(emptyList())
+		vm.wahl.remove("start-reihen")
 	}
 
 	// Selbst-Update: beim Start und danach alle 6 Stunden nachsehen, ob es eine neuere Version gibt
@@ -108,19 +131,14 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 	}
 
 	val eintraege = buildList {
-		add(Eintrag("⌂", "Startseite", Seite.Start))
-		add(Eintrag("⌕", "Suche", Seite.Suche))
+		add(Eintrag(R.drawable.ic_house, "Startseite", Seite.Start))
+		add(Eintrag(R.drawable.ic_search, "Suche", Seite.Suche))
 		// Feste Reihenfolge wie gewohnt: Filme, Serien, Live-TV, Musik, dann alles andere
 		val rang = { b: BaseItemDto -> when (b.collectionType?.serialName) { "movies" -> 0; "tvshows" -> 1; "livetv" -> 2; "music" -> 3; else -> 4 } }
-		bibliotheken.sortedBy(rang).forEach { bib ->
-			when {
-				bib.istLiveTv() -> add(Eintrag("◉", bib.name ?: "Live-TV", Seite.LiveTv))
-				bib.istMusik() -> add(Eintrag("♪", bib.name ?: "Musik", Seite.Musik(bib)))
-				else -> add(Eintrag(if (bib.collectionType?.serialName == "tvshows") "▤" else "▶", bib.name.orEmpty(), Seite.Bibliothek(bib)))
-			}
-		}
+		bibliotheken.sortedBy(rang).forEach { bib -> add(Eintrag(symbolFuer(bib), bib.name.orEmpty(), seiteFuerBibliothek(bib))) }
+		add(Eintrag(R.drawable.ic_grid, "Bibliotheken", Seite.Bibliotheken))
 		update?.let { v ->
-			add(Eintrag("⬇", updateText ?: "Update ${v.name}", null, hervor = true) {
+			add(Eintrag(R.drawable.seliku_update, updateText ?: "Update ${v.name}", null, hervor = true) {
 				when {
 					updateText != null && updateText!!.startsWith("Lädt") -> Unit
 					!SelikuUpdate.darfInstallieren(context) -> {
@@ -135,7 +153,7 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 				}
 			})
 		}
-		add(Eintrag("⚙", "Einstellungen", null) {
+		add(Eintrag(R.drawable.ic_settings, "Einstellungen", null) {
 			context.startActivity(ActivityDestinations.userPreferences(context))
 		})
 	}
@@ -185,6 +203,8 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 						is Seite.Titel -> TitelSeite(vm, seite, oeffnen)
 						is Seite.Interpret -> InterpretSeite(vm, seite, oeffnen)
 						is Seite.Album -> AlbumSeite(vm, seite, oeffnen)
+						is Seite.Ordner -> OrdnerSeite(vm, seite, oeffnen)
+						Seite.Bibliotheken -> BibliothekenSeite(vm, oeffnenBibliothek = { vm.zu(seiteFuerBibliothek(it)) }, geaendert = { neuLaden++ })
 					}
 				} }
 			}
@@ -206,7 +226,11 @@ private fun Seitenleiste(
 	val sessionRepository = koinInject<SessionRepository>()
 	val mediaManager = koinInject<MediaManager>()
 	val context = LocalContext.current
-	val benutzer by remember { userRepository.currentUser.filterNotNull() }.collectAsState(null)
+	val benutzerAlt by remember { userRepository.currentUser.filterNotNull() }.collectAsState(null)
+	val daten = koinInject<SelikuDaten>()
+	var benutzerNeu by remember { mutableStateOf<org.jellyfin.sdk.model.api.UserDto?>(null) }
+	LaunchedEffect(Unit) { benutzerNeu = runCatching { daten.benutzer() }.getOrNull() }
+	val benutzer = benutzerNeu ?: benutzerAlt
 	// Beim Betreten der Seitenleiste steht der Fokus auf der aktiven Seite, nicht oben beim Profil
 	val aktivAnfrage = remember { FocusRequester() }
 
@@ -229,7 +253,8 @@ private fun Seitenleiste(
 			sessionRepository.destroyCurrentSession()
 			context.startActivity(ActivityDestinations.startup(context))
 		}, vergroessern = false, shape = RoundedCornerShape(26.dp)) { fokussiert ->
-			Row(Modifier.fillMaxWidth().background(if (fokussiert) Farben.FlaecheHell else Color.Transparent).padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
+			Row(Modifier.fillMaxWidth().background(if (fokussiert) Farben.FlaecheHell else Color.Transparent).padding(6.dp), verticalAlignment = Alignment.CenterVertically,
+				horizontalArrangement = if (offen) Arrangement.Start else Arrangement.Center) {
 				Bild(benutzer?.primaryImage?.getUrl(api), Modifier.size(40.dp).clip(CircleShape))
 				if (offen) {
 					Spacer(Modifier.width(12.dp))
@@ -248,11 +273,17 @@ private fun Seitenleiste(
 				Row(
 					Modifier.fillMaxWidth()
 						.background(when { fokussiert -> Farben.Text; istAktiv -> Farben.FlaecheHell; else -> Color.Transparent })
-						.padding(horizontal = 14.dp, vertical = 8.dp),
+						.padding(horizontal = if (offen) 14.dp else 0.dp, vertical = 10.dp),
 					verticalAlignment = Alignment.CenterVertically,
+					horizontalArrangement = if (offen) Arrangement.Start else Arrangement.Center,
 				) {
 					val farbe = when { fokussiert -> Color.Black; istAktiv || e.hervor -> Farben.Akzent; else -> Farben.TextLeise }
-					Text(e.symbol, style = Schrift.Titel.copy(color = farbe, fontWeight = FontWeight.Normal), modifier = Modifier.width(26.dp))
+					androidx.compose.foundation.Image(
+						painter = androidx.compose.ui.res.painterResource(e.symbol),
+						contentDescription = e.titel,
+						colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(farbe),
+						modifier = Modifier.size(24.dp),
+					)
 					if (offen) {
 						Spacer(Modifier.width(14.dp))
 						Text(e.titel, style = Schrift.Normal.copy(color = if (fokussiert) Color.Black else if (e.hervor) Farben.Akzent else Farben.Text, fontWeight = if (istAktiv) FontWeight.Bold else FontWeight.Normal),

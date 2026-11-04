@@ -30,7 +30,7 @@ import org.jellyfin.sdk.model.api.BaseItemKind
 import org.koin.compose.koinInject
 import timber.log.Timber
 
-private data class StartReihe(val titel: String, val items: List<BaseItemDto>)
+private data class StartReihe(val titel: String, val items: List<BaseItemDto>, val loeschdatum: Map<java.util.UUID, String> = emptyMap())
 
 /** Startseite: oben das gewählte Element gross, darunter Weiterschauen, Live-TV und «Neu in …» je Bibliothek. */
 @Composable
@@ -53,6 +53,8 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 			buildList {
 				add(StartReihe("Weiterschauen", daten.weiterschauen()))
 				if (bibs.any { it.istLiveTv() }) add(StartReihe("Jetzt im TV", daten.sender().filter { it.currentProgram != null }.take(20)))
+				// Sonderreihen wie «Diese Filme werden bald gelöscht» (Maintainerr, gespiegelt als Jellyfin-Sammlung)
+				runCatching { daten.startseitenSammlungen() }.getOrDefault(emptyList()).forEach { (name, items, datum) -> add(StartReihe(name, items, datum)) }
 				bibs.filter { !it.istLiveTv() }.forEach { bib ->
 					add(StartReihe("Neu in ${bib.name}", runCatching { daten.neuIn(bib) }.getOrDefault(emptyList())))
 				}
@@ -114,6 +116,10 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 							QuerKachel(item, klick, merken = merken, onFokus = fokus, breite = 280.dp)
 						} else if (reihe.titel == "Jetzt im TV") { item, klick, merken, fokus ->
 							SenderKachel(item, klick, merken = merken, onFokus = fokus)
+						} else if (reihe.loeschdatum.isNotEmpty()) { item, klick, merken, fokus ->
+							val tag = reihe.loeschdatum[item.id]?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() }
+							val wann = tag?.let { "Wird am " + it.format(java.time.format.DateTimeFormatter.ofPattern("d.M.")) + " gelöscht" } ?: "Wird bald gelöscht"
+							QuerKachel(item, klick, merken = merken, onFokus = fokus, zeilen = item.name.orEmpty() to wann)
 						} else if (reihe.titel.startsWith("Neu in") && reihe.items.none { it.type == BaseItemKind.MUSIC_ALBUM || it.type == BaseItemKind.AUDIO }) { item, klick, merken, fokus ->
 							PosterKachel(item, klick, merken = merken, onFokus = fokus)
 						} else null,
