@@ -4,7 +4,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.animateContentSize
+import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.verticalScroll
@@ -176,20 +176,9 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 	}
 
 	Box(Modifier.fillMaxSize().background(Farben.Hintergrund)) {
-		Row(Modifier.fillMaxSize()) {
-			Seitenleiste(
-				eintraege = eintraege,
-				aktiv = vm.stapel.first(),
-				offen = leisteOffen,
-				modifier = Modifier.focusRequester(leiste).onFocusChanged { leisteOffen = it.hasFocus },
-				waehlen = { e ->
-					if (e.seite != null) {
-						vm.wurzel(e.seite)
-						runCatching { inhalt.requestFocus() }
-					} else e.aktion?.invoke()
-				},
-			)
-			Box(Modifier.fillMaxSize().focusRequester(inhalt).onFocusChanged { inhaltHatFokus = it.hasFocus }.focusRestorer().focusGroup()) {
+		Box(Modifier.fillMaxSize()) {
+			// Inhalt beginnt neben der schmalen Leiste; die offene Leiste legt sich als Insel darüber, ohne den Inhalt zu verschieben
+			Box(Modifier.fillMaxSize().padding(start = 76.dp).focusRequester(inhalt).onFocusChanged { inhaltHatFokus = it.hasFocus }.focusRestorer().focusGroup()) {
 				val seite = vm.aktuell
 				val oeffnen: (BaseItemDto) -> Unit = { item -> seiteFuer(item)?.let(vm::zu) }
 				key(seite.schluessel) { SeitlichRollen(rand = 60.dp) {
@@ -208,6 +197,19 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 					}
 				} }
 			}
+			if (leisteOffen) Box(Modifier.fillMaxSize().background(Color(0x99000000)))
+			Seitenleiste(
+				eintraege = eintraege,
+				aktiv = vm.stapel.first(),
+				offen = leisteOffen,
+				modifier = Modifier.focusRequester(leiste).onFocusChanged { leisteOffen = it.hasFocus },
+				waehlen = { e ->
+					if (e.seite != null) {
+						vm.wurzel(e.seite)
+						runCatching { inhalt.requestFocus() }
+					} else e.aktion?.invoke()
+				},
+			)
 		}
 		MiniPlayer(Modifier.align(Alignment.BottomEnd).padding(end = 32.dp, bottom = 24.dp))
 	}
@@ -237,9 +239,11 @@ private fun Seitenleiste(
 	Column(
 		modifier
 			.fillMaxHeight()
-			.width(if (offen) 250.dp else 76.dp)
-			.animateContentSize()
-			.background(if (offen) Farben.Flaeche else Farben.Hintergrund)
+			.then(
+				if (offen) Modifier.padding(start = 10.dp, top = 14.dp, bottom = 14.dp).width(260.dp)
+					.shadow(24.dp, RoundedCornerShape(22.dp)).clip(RoundedCornerShape(22.dp)).background(Farben.Flaeche)
+				else Modifier.width(76.dp).background(Farben.Hintergrund)
+			)
 			.focusRestorer(aktivAnfrage)
 			.focusGroup()
 			// Viele Bibliotheken passen nicht auf den Bildschirm: die Leiste rollt mit dem Fokus mit
