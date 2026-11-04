@@ -24,6 +24,8 @@ android {
 		// ohne sie gibt es kein Selbst-Update und keine vorausgefüllte Serveradresse
 		buildConfigField("String", "SELIKU_UPDATE_URL", "\"${project.findProperty("seliku.updateUrl") ?: ""}\"")
 		buildConfigField("String", "SELIKU_SERVER", "\"${project.findProperty("seliku.server") ?: ""}\"")
+		// Updates kommen als GitHub-Releases aus diesem Repo (öffentlich); eigener Fork: seliku.updateRepo setzen, leer = aus
+		buildConfigField("String", "SELIKU_UPDATE_REPO", "\"${project.findProperty("seliku.updateRepo") ?: "seliku/jellyfin-seliku-tv"}\"")
 	}
 
 	buildFeatures {

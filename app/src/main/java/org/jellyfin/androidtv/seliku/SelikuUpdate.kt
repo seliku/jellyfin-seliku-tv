@@ -19,7 +19,8 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * Selbst-Update der App: liest version.json von der eigenen Ablage, lädt bei neuerer Version die APK
+ * Selbst-Update der App: fragt das neueste GitHub-Release des Repos (SELIKU_UPDATE_REPO) ab – sonst version.json
+ * von einer eigenen Ablage (seliku.updateUrl) –, lädt bei neuerer Version die APK
  * und übergibt sie dem Android-Installer. Der Fernseher fragt einmal nach der Erlaubnis
  * «Unbekannte Apps installieren», danach genügt ein Klick auf «Installieren».
  */
@@ -30,7 +31,33 @@ object SelikuUpdate {
 
 	data class Version(val code: Int, val name: String, val apk: String, val notiz: String)
 
+	private val REPO: String = BuildConfig.SELIKU_UPDATE_REPO
+	@Volatile private var zuletzt = 0L
+	@Volatile private var letztes: Version? = null
+
+	/** Neuestes GitHub-Release: Tag «v1.0.<versionCode>», APK als Anhang. */
+	private fun github(): Version? {
+		val text = (URL("https://api.github.com/repos/$REPO/releases/latest").openConnection() as HttpURLConnection).run {
+			connectTimeout = 10_000; readTimeout = 10_000; useCaches = false
+			setRequestProperty("Accept", "application/vnd.github+json")
+			if (responseCode == 404) return null // noch kein Release
+			inputStream.bufferedReader().use { it.readText() }
+		}
+		val j = JSONObject(text)
+		val tag = j.getString("tag_name").removePrefix("v")
+		val code = tag.substringAfterLast('.').toInt()
+		val anhaenge = j.getJSONArray("assets")
+		val apk = (0 until anhaenge.length()).map { anhaenge.getJSONObject(it) }
+			.firstOrNull { it.getString("name").endsWith(".apk") }?.getString("browser_download_url") ?: return null
+		return Version(code, tag, apk, j.optString("body").take(300))
+	}
+
 	suspend fun pruefen(): Version? = withContext(Dispatchers.IO) {
+		// GitHub erlaubt ohne Anmeldung 60 Abfragen pro Stunde – höchstens alle 20 Minuten fragen
+		if (System.currentTimeMillis() - zuletzt < 20 * 60_000L) return@withContext letztes
+		zuletzt = System.currentTimeMillis()
+		if (REPO.isNotBlank()) runCatching { github() }.onFailure { Timber.w(it, "Update prüfen (GitHub)") }.getOrNull()
+			?.let { v -> letztes = v.takeIf { it.code > BuildConfig.VERSION_CODE }; if (ABLAGE.isBlank()) return@withContext letztes; if (letztes != null) return@withContext letztes }
 		if (ABLAGE.isBlank()) return@withContext null
 		runCatching {
 			val text = (URL(ABLAGE + "version.json").openConnection() as HttpURLConnection).run {
@@ -39,7 +66,7 @@ object SelikuUpdate {
 			}
 			val j = JSONObject(text)
 			Version(j.getInt("versionCode"), j.optString("versionName"), j.getString("apk"), j.optString("notiz"))
-		}.onFailure { Timber.w(it, "Update prüfen") }.getOrNull()?.takeIf { it.code > BuildConfig.VERSION_CODE }
+		}.onFailure { Timber.w(it, "Update prüfen") }.getOrNull()?.takeIf { it.code > BuildConfig.VERSION_CODE }.also { letztes = it }
 	}
 
 	fun darfInstallieren(context: Context) =
@@ -62,7 +89,9 @@ object SelikuUpdate {
 			val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
 			val sitzung = installer.openSession(installer.createSession(params))
 			sitzung.use { s ->
-				val verbindung = URL(ABLAGE + v.apk).openConnection() as HttpURLConnection
+				// GitHub liefert eine volle Adresse (mit Weiterleitung), die eigene Ablage nur den Dateinamen
+				val verbindung = URL(if (v.apk.startsWith("http")) v.apk else ABLAGE + v.apk).openConnection() as HttpURLConnection
+				verbindung.instanceFollowRedirects = true
 				verbindung.connectTimeout = 15_000; verbindung.readTimeout = 30_000
 				val gesamt = verbindung.contentLengthLong.coerceAtLeast(1)
 				verbindung.inputStream.use { ein ->
