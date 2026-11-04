@@ -265,7 +265,7 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 			// Inhalt beginnt neben der schmalen Leiste; die offene Leiste legt sich als Insel darüber, ohne den Inhalt zu verschieben
 			Box(Modifier.fillMaxSize().padding(start = 76.dp).focusRequester(inhalt).onFocusChanged { inhaltHatFokus = it.hasFocus }
 				// Links/oben am Rand nicht in die Leiste springen (passierte zu oft aus Versehen); die Leiste kommt mit Zurück
-				.focusProperties { exit = { richtung -> if (richtung == FocusDirection.Left || richtung == FocusDirection.Up) FocusRequester.Cancel else FocusRequester.Default } }
+				.focusProperties { exit = { richtung -> if ((richtung == FocusDirection.Left && !SelikuEinstellungen.leisteMitLinks(context)) || richtung == FocusDirection.Up) FocusRequester.Cancel else FocusRequester.Default } }
 				.focusRestorer().focusGroup()) {
 				val seite = vm.aktuell
 				val oeffnen: (BaseItemDto) -> Unit = { item -> seiteFuer(item)?.let(vm::zu) }

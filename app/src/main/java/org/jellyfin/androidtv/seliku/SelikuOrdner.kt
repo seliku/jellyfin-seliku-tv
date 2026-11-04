@@ -147,6 +147,8 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 	data class Punkt(val titel: String, val text: String, val aktion: () -> Unit)
 	val context = androidx.compose.ui.platform.LocalContext.current
 	var doppel by remember { mutableStateOf(SelikuEinstellungen.doppelZurueck(context)) }
+	var schlank by remember { mutableStateOf(SelikuEinstellungen.schlankerPlayer(context)) }
+	var links by remember { mutableStateOf(SelikuEinstellungen.leisteMitLinks(context)) }
 	val punkte = listOf(
 		Punkt("Zurück-Taste: " + (if (doppel) "zweimal drücken beendet die App" else "beendet die App nie"),
 			"Aus: Zurück springt nach oben, dann in die Leiste, dann zur Startseite – wie bei Netflix. An: zusätzlich zweimal Zurück auf der Startseite zum Beenden") {

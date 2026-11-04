@@ -43,6 +43,14 @@ object SelikuEinstellungen {
 	/** Aus (Vorgabe): Zurück beendet die App nie – wie bei Netflix. An: zweimal Zurück auf der Startseite beendet. */
 	fun doppelZurueck(c: Context) = prefs(c).getBoolean("doppel_zurueck", false)
 	fun doppelZurueck(c: Context, an: Boolean) = prefs(c).edit().putBoolean("doppel_zurueck", an).apply()
+
+	/** An (Vorgabe): im Player tun OK/Links/Rechts nur das Gedrückte (Pause, Spulen, Zappen) – ohne Bedienleiste; die kommt mit «hoch». */
+	@JvmStatic fun schlankerPlayer(c: Context) = prefs(c).getBoolean("schlanker_player", true)
+	fun schlankerPlayer(c: Context, an: Boolean) = prefs(c).edit().putBoolean("schlanker_player", an).apply()
+
+	/** Aus (Vorgabe): die Seitenleiste kommt nur mit Zurück. An: auch mit Links am linken Rand. */
+	fun leisteMitLinks(c: Context) = prefs(c).getBoolean("leiste_mit_links", false)
+	fun leisteMitLinks(c: Context, an: Boolean) = prefs(c).edit().putBoolean("leiste_mit_links", an).apply()
 }
 
 /**

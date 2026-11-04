@@ -504,6 +504,19 @@ public class CustomPlaybackOverlayFragment extends Fragment implements LiveTvGui
                     return true;
                 }
 
+                // Seliku: Ohne Bedienleiste tun Links/Rechts nur, was man drückt – ohne Einblendung, ohne Abdunkeln.
+                // Filme/Serien spulen, Live-TV zappt zum vorigen/nächsten Sender. Die Bedienleiste kommt mit «hoch».
+                if ((keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT)
+                        && !mIsVisible && !mGuideVisible && !mPopupPanelVisible && org.jellyfin.androidtv.seliku.SelikuEinstellungen.schlankerPlayer(requireContext())) {
+                    leanbackOverlayFragment.setShouldShowOverlay(false);
+                    PlaybackController pc = playbackControllerContainer.getValue().getPlaybackController();
+                    if (pc.isLiveTv()) {
+                        if (event.getRepeatCount() == 0) selikuZappen(keyCode == KeyEvent.KEYCODE_DPAD_RIGHT ? 1 : -1);
+                    } else if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) pc.fastForward();
+                    else pc.rewind();
+                    return true;
+                }
+
                 if (keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_BUTTON_B || keyCode == KeyEvent.KEYCODE_ESCAPE) {
                     if (mPopupPanelVisible) {
                         // back should just hide the popup panel
@@ -590,7 +603,7 @@ public class CustomPlaybackOverlayFragment extends Fragment implements LiveTvGui
                     // Seliku: Links/Rechts springt sofort zurück bzw. vor und spielt danach von selbst weiter.
                     // Vorher hielt das Ziehen der Zeitleiste die Wiedergabe an, bis man erneut «Play» drückte.
                     if ((keyCode == KeyEvent.KEYCODE_DPAD_RIGHT || keyCode == KeyEvent.KEYCODE_DPAD_LEFT)
-                            && !playbackControllerContainer.getValue().getPlaybackController().isLiveTv()) {
+                            && !playbackControllerContainer.getValue().getPlaybackController().isLiveTv() && org.jellyfin.androidtv.seliku.SelikuEinstellungen.schlankerPlayer(requireContext())) {
                         View fokus = requireActivity().getCurrentFocus();
                         boolean aufLeiste = fokus != null && fokus.getId() == androidx.leanback.R.id.playback_progress;
                         if (!mIsVisible || aufLeiste) {
@@ -621,7 +634,7 @@ public class CustomPlaybackOverlayFragment extends Fragment implements LiveTvGui
                             // if the player is playing and the overlay is hidden, this will pause
                             // if the player is paused and then 'back' is pressed to hide the overlay, this will play
                             // Seliku: OK hält nur das Bild an bzw. lässt es weiterlaufen, ohne die Bedienleiste einzublenden
-                            leanbackOverlayFragment.setShouldShowOverlay(false);
+                            if (org.jellyfin.androidtv.seliku.SelikuEinstellungen.schlankerPlayer(requireContext())) leanbackOverlayFragment.setShouldShowOverlay(false);
                             playbackControllerContainer.getValue().getPlaybackController().playPause();
                             return true;
                         }
@@ -648,6 +661,28 @@ public class CustomPlaybackOverlayFragment extends Fragment implements LiveTvGui
 
     public LocalDateTime getCurrentLocalEndDate() {
         return mCurrentGuideEnd;
+    }
+
+    /** Seliku: vorigen/nächsten Sender nach Sendernummer, im Kreis. */
+    private void selikuZappen(int schritt) {
+        BaseItemDto jetzt = playbackControllerContainer.getValue().getPlaybackController().getCurrentlyPlayingItem();
+        if (jetzt == null) return;
+        java.util.function.Consumer<List<BaseItemDto>> weiter = alle -> {
+            if (alle == null || alle.isEmpty()) return;
+            List<BaseItemDto> sortiert = new java.util.ArrayList<>(alle);
+            sortiert.sort(java.util.Comparator.comparingDouble(CustomPlaybackOverlayFragment::selikuNummer));
+            int i = -1;
+            for (int k = 0; k < sortiert.size(); k++) if (sortiert.get(k).getId().equals(jetzt.getId())) { i = k; break; }
+            int n = sortiert.size();
+            int ziel = i < 0 ? 0 : ((i + schritt) % n + n) % n;
+            switchChannel(sortiert.get(ziel).getId());
+        };
+        if (TvManager.getAllChannels() != null) weiter.accept(TvManager.getAllChannels());
+        else TvManager.loadAllChannels(this, x -> { weiter.accept(TvManager.getAllChannels()); return null; });
+    }
+
+    private static double selikuNummer(BaseItemDto c) {
+        try { return Double.parseDouble(c.getNumber()); } catch (Exception e) { return Double.MAX_VALUE; }
     }
 
     public void switchChannel(UUID id) {

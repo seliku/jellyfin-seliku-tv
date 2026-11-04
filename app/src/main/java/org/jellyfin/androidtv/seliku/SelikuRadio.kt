@@ -26,6 +26,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.runtime.collectAsState
+import androidx.compose.foundation.layout.Row
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
@@ -110,6 +119,21 @@ object RadioSpieler {
 	private var spieler: ExoPlayer? = null
 	val laeuft = MutableStateFlow<RadioSender?>(null)
 	val spielt = MutableStateFlow(false)
+	/** Die Reihe, aus der gestartet wurde: Links/Rechts auf der «Läuft gerade»-Karte zappt darin weiter. */
+	var liste: List<RadioSender> = emptyList(); private set
+	var listenName: String = ""; private set
+
+	fun spielen(context: Context, sender: RadioSender, aus: List<RadioSender>, name: String) {
+		liste = aus; listenName = name
+		spielen(context, sender)
+	}
+
+	/** Nächster (+1) bzw. voriger (-1) Sender der Reihe, im Kreis. */
+	fun zappen(context: Context, schritt: Int) {
+		val l = liste.ifEmpty { return }
+		val i = l.indexOfFirst { it.id == laeuft.value?.id }
+		spielen(context, l[((if (i < 0) 0 else i + schritt) % l.size + l.size) % l.size])
+	}
 
 	fun spielen(context: Context, sender: RadioSender) {
 		val p = spieler ?: ExoPlayer.Builder(context.applicationContext).build().also {
@@ -147,6 +171,7 @@ fun RadioReiter(vm: SelikuViewModel) {
 	var reihen by remember { mutableStateOf(vm.wahl["radio-reihen"] as? List<Pair<String, List<RadioSender>>> ?: emptyList()) }
 	var favoriten by remember { mutableStateOf<List<RadioSender>>(emptyList()) }
 	var suchtext by remember { mutableStateOf("") }
+	var suchen by remember { mutableStateOf(false) }
 	var treffer by remember { mutableStateOf<List<RadioSender>>(emptyList()) }
 	val genres = listOf("pop" to "Pop", "rock" to "Rock", "dance" to "Dance", "schlager" to "Schlager", "classical" to "Klassik", "jazz" to "Jazz", "news" to "Nachrichten")
 
@@ -168,7 +193,13 @@ fun RadioReiter(vm: SelikuViewModel) {
 		treffer = runCatching { daten.suche(suchtext.trim()) }.getOrDefault(emptyList())
 	}
 
-	val spielen: (RadioSender) -> Unit = { s -> mediaManager.stopAudio(true); RadioSpieler.spielen(context, s) }
+	val laeuftKarte = remember { androidx.compose.ui.focus.FocusRequester() }
+	val spielen: (RadioSender, List<RadioSender>, String) -> Unit = { s, liste, name ->
+		mediaManager.stopAudio(true); RadioSpieler.spielen(context, s, liste, name)
+		// Danach steht der Fokus auf der «Läuft gerade»-Karte: dort zappt Links/Rechts mit einem Druck weiter
+		scope.launch { runCatching { vm.liste(Seite.Ordner(java.util.UUID.nameUUIDFromBytes("radio".toByteArray()), "radio")).animateScrollToItem(0) }
+			kotlinx.coroutines.delay(120); runCatching { laeuftKarte.requestFocus() } }
+	}
 	val favoritUmschalten: (RadioSender) -> Unit = { s ->
 		val neu = if (favoriten.any { it.id == s.id }) favoriten.filter { it.id != s.id } else favoriten + s
 		favoriten = neu
@@ -179,11 +210,17 @@ fun RadioReiter(vm: SelikuViewModel) {
 
 	SenkrechtRollen {
 		LazyColumn(state = vm.liste(seite), contentPadding = PaddingValues(top = 8.dp, bottom = 48.dp), modifier = Modifier.fillMaxSize()) {
+			item(key = "laeuft") { LaeuftKarte(laeuftKarte) }
+			// Suchfeld erst auf Knopfdruck: ein Textfeld holt sich auf dem TV sonst beim Vorbeiscrollen die Bildschirmtastatur
 			item {
-				Box(Modifier.padding(start = 48.dp, bottom = 12.dp).width(520.dp).background(Farben.Flaeche, RoundedCornerShape(10.dp)).padding(horizontal = 16.dp, vertical = 12.dp)) {
+				if (!suchen && suchtext.isEmpty()) Knopf("Sender suchen", symbol = "⌕", modifier = Modifier.padding(start = 48.dp, bottom = 12.dp), onClick = { suchen = true })
+				else Box(Modifier.padding(start = 48.dp, bottom = 12.dp).width(520.dp).background(Farben.Flaeche, RoundedCornerShape(10.dp)).padding(horizontal = 16.dp, vertical = 12.dp)) {
+					val feld = remember { androidx.compose.ui.focus.FocusRequester() }
+					LaunchedEffect(Unit) { if (suchen) runCatching { feld.requestFocus() } }
 					if (suchtext.isEmpty()) Text("Sender suchen, z. B. SRF 3 oder Radio Kosova …", style = Schrift.Leise)
 					androidx.compose.foundation.text.BasicTextField(value = suchtext, onValueChange = { suchtext = it }, singleLine = true, textStyle = Schrift.Normal,
-						cursorBrush = androidx.compose.ui.graphics.SolidColor(Farben.Akzent), modifier = Modifier.fillMaxWidth())
+						cursorBrush = androidx.compose.ui.graphics.SolidColor(Farben.Akzent),
+						modifier = Modifier.fillMaxWidth().focusRequester(feld).onFocusChanged { if (!it.isFocused && suchtext.isEmpty()) suchen = false })
 				}
 			}
 			if (treffer.isNotEmpty()) item { SenderReihe("Treffer", treffer, favoriten, vm, seite, spielen, favoritUmschalten) }
@@ -197,7 +234,7 @@ fun RadioReiter(vm: SelikuViewModel) {
 @Composable
 private fun SenderReihe(
 	titel: String, liste: List<RadioSender>, favoriten: List<RadioSender>, vm: SelikuViewModel, seite: Seite,
-	spielen: (RadioSender) -> Unit, favoritUmschalten: (RadioSender) -> Unit,
+	spielen: (RadioSender, List<RadioSender>, String) -> Unit, favoritUmschalten: (RadioSender) -> Unit,
 ) {
 	Column(Modifier.fillMaxWidth().padding(bottom = 18.dp)) {
 		Text(titel, style = Schrift.Reihe, modifier = Modifier.padding(start = 48.dp, bottom = 8.dp))
@@ -206,7 +243,7 @@ private fun SenderReihe(
 				items(liste, key = { titel + it.id }) { s ->
 					val fav = favoriten.any { it.id == s.id }
 					Column(Modifier.width(140.dp)) {
-						Waehlbar(onClick = { spielen(s) }, onMenue = { favoritUmschalten(s) }, merken = vm to (seite.schluessel to titel + s.id)) {
+						Waehlbar(onClick = { spielen(s, liste, titel) }, onMenue = { favoritUmschalten(s) }, merken = vm to (seite.schluessel to titel + s.id)) {
 							Box(Modifier.fillMaxWidth().aspectRatio(1f).background(Farben.FlaecheHell), contentAlignment = Alignment.Center) {
 								if (s.logo != null) Bild(s.logo, Modifier.fillMaxSize().padding(14.dp), ContentScale.Fit, grund = androidx.compose.ui.graphics.Color.Transparent)
 								else Text(initialen(s.name), style = Schrift.Riesig.copy(color = Farben.TextLeise))
@@ -219,6 +256,36 @@ private fun SenderReihe(
 					}
 				}
 			}
+		}
+	}
+}
+
+/** Läuft ein Sender: grosse Karte oben. OK hält an bzw. spielt weiter, Links/Rechts zappt in der Reihe, aus der er kam. */
+@Composable
+private fun LaeuftKarte(anfrage: androidx.compose.ui.focus.FocusRequester) {
+	val context = LocalContext.current
+	val sender by RadioSpieler.laeuft.collectAsState()
+	val spielt by RadioSpieler.spielt.collectAsState()
+	val s = sender ?: return
+	Waehlbar(onClick = { RadioSpieler.umschalten() }, vergroessern = false, shape = RoundedCornerShape(14.dp),
+		modifier = Modifier.padding(start = 48.dp, end = 48.dp, bottom = 16.dp).focusRequester(anfrage).onPreviewKeyEvent { e ->
+			val schritt = when (e.key) { Key.DirectionRight -> 1; Key.DirectionLeft -> -1; else -> 0 }
+			if (schritt != 0 && e.type == KeyEventType.KeyDown) { RadioSpieler.zappen(context, schritt); true } else schritt != 0
+		}) { fokussiert ->
+		Row(Modifier.width(720.dp).background(if (fokussiert) Farben.FlaecheHell else Farben.Flaeche).padding(14.dp),
+			verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+			Text("‹", style = Schrift.Riesig.copy(color = if (fokussiert) Farben.Akzent else Farben.TextLeise))
+			Box(Modifier.width(96.dp).aspectRatio(1f).background(Farben.FlaecheHell, RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
+				if (s.logo != null) Bild(s.logo, Modifier.fillMaxSize().padding(10.dp), ContentScale.Fit, grund = androidx.compose.ui.graphics.Color.Transparent)
+				else Text(initialen(s.name), style = Schrift.Titel.copy(color = Farben.TextLeise))
+			}
+			Column(Modifier.weight(1f)) {
+				Text(if (spielt) "Läuft gerade" else "Angehalten", style = Schrift.Klein.copy(color = Farben.Akzent))
+				Text(s.name, style = Schrift.Titel, maxLines = 1, overflow = TextOverflow.Ellipsis)
+				Text(if (fokussiert) "◀ ▶ anderer Sender aus «${RadioSpieler.listenName}» · OK " + (if (spielt) "anhalten" else "weiter")
+					else RadioSpieler.listenName, style = Schrift.Klein, maxLines = 1)
+			}
+			Text("›", style = Schrift.Riesig.copy(color = if (fokussiert) Farben.Akzent else Farben.TextLeise))
 		}
 	}
 }
