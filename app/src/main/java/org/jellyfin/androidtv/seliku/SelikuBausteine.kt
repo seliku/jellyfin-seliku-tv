@@ -44,6 +44,8 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
@@ -92,11 +94,14 @@ fun Waehlbar(
 			if (vm.fokus[wo.first] == wo.second) runCatching { anfrage.requestFocus() }
 		}
 	}
+	var lage by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
 	Box(
 		modifier = modifier
+			.onGloballyPositioned { lage = it.boundsInRoot() }
 			.focusRequester(anfrage)
 			.onFocusChanged {
 				fokussiert = it.isFocused
+				if (it.isFocused) FokusSpur.setze(anfrage) { lage }
 				if (it.isFocused) {
 					merken?.let { (vm, wo) -> vm.fokus[wo.first] = wo.second }
 					onFokus()
@@ -116,6 +121,16 @@ fun Waehlbar(
 	) {
 		content(fokussiert)
 	}
+}
+
+/**
+ * Wo der Fokus gerade steht. Compose springt bei «links» manchmal auf etwas, das gar nicht links liegt
+ * (z. B. vom ersten Poster auf die Banner-Punkte); damit lässt sich das prüfen und rückgängig machen.
+ */
+object FokusSpur {
+	var anfrage: FocusRequester? = null; private set
+	var lage: () -> androidx.compose.ui.geometry.Rect = { androidx.compose.ui.geometry.Rect.Zero }; private set
+	fun setze(a: FocusRequester, l: () -> androidx.compose.ui.geometry.Rect) { anfrage = a; lage = l }
 }
 
 @Composable

@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+
 package org.jellyfin.androidtv.seliku
 
 import android.os.Bundle
@@ -37,8 +39,15 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -109,6 +118,9 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 	val context = LocalContext.current
 	var bibliotheken by remember { mutableStateOf<List<BaseItemDto>>(emptyList()) }
 	var leisteOffen by remember { mutableStateOf(false) }
+	val fokusManager = androidx.compose.ui.platform.LocalFocusManager.current
+	val leisteAnteil by androidx.compose.animation.core.animateFloatAsState(if (leisteOffen) 1f else 0f,
+		androidx.compose.animation.core.tween(220, easing = androidx.compose.animation.core.FastOutSlowInEasing), label = "leiste")
 	val leiste = remember { FocusRequester() }
 	val inhalt = remember { FocusRequester() }
 
@@ -195,7 +207,7 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 		// Solange niemand eine Taste gedrückt hat, holen wir ihn in den Inhalt (erster Titel unter «Weiterschauen»).
 		val gemerkt = vm.fokus[vm.aktuell.schluessel] != null
 		tasteGedrueckt = false
-		repeat(60) { i ->
+		repeat(200) { i ->
 			kotlinx.coroutines.delay(150)
 			if (inhaltHatFokus || tasteGedrueckt) return@LaunchedEffect
 			// Erste Kachel der Seite (auf der Startseite: erster Titel unter «Weiterschauen», nicht der Banner)
@@ -230,10 +242,31 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 	}
 
 
-	Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Farben.HintergrundOben, Farben.Hintergrund), end = androidx.compose.ui.geometry.Offset(1400f, 1100f))).onPreviewKeyEvent { tasteGedrueckt = true; false }) {
+	Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Farben.HintergrundOben, Farben.Hintergrund), end = androidx.compose.ui.geometry.Offset(1400f, 1100f))).onPreviewKeyEvent { tasteGedrueckt = true; false }
+		// Links/oben am Rand will niemand weiter: sonst reicht Compose die Taste an die Android-Ansicht dahinter weiter
+		// und der Fokus verschwindet in einem unsichtbaren Element
+		.onKeyEvent { e ->
+			val richtung = when (e.key) { Key.DirectionLeft -> FocusDirection.Left; Key.DirectionUp -> FocusDirection.Up; else -> null }
+			if (richtung != null && e.type == KeyEventType.KeyDown) {
+				val vorher = FokusSpur.anfrage; val alt = FokusSpur.lage()
+				fokusManager.moveFocus(richtung)
+				val neu = FokusSpur.lage()
+				// Nur annehmen, wenn das neue Ziel wirklich links bzw. oberhalb liegt; sonst bleibt der Fokus, wo er war
+				// Ziel ohne sichtbare Fläche (Rect.Zero) ist auch falsch: dort sähe man den Fokus nicht
+				val falsch = FokusSpur.anfrage !== vorher && alt != androidx.compose.ui.geometry.Rect.Zero && (neu.isEmpty || when (richtung) {
+					FocusDirection.Left -> neu.center.x >= alt.left
+					else -> neu.center.y >= alt.top
+				})
+				if (falsch) runCatching { vorher?.requestFocus() }
+				true
+			} else false
+		}) {
 		Box(Modifier.fillMaxSize()) {
 			// Inhalt beginnt neben der schmalen Leiste; die offene Leiste legt sich als Insel darüber, ohne den Inhalt zu verschieben
-			Box(Modifier.fillMaxSize().padding(start = 76.dp).focusRequester(inhalt).onFocusChanged { inhaltHatFokus = it.hasFocus }.focusRestorer().focusGroup()) {
+			Box(Modifier.fillMaxSize().padding(start = 76.dp).focusRequester(inhalt).onFocusChanged { inhaltHatFokus = it.hasFocus }
+				// Links/oben am Rand nicht in die Leiste springen (passierte zu oft aus Versehen); die Leiste kommt mit Zurück
+				.focusProperties { exit = { richtung -> if (richtung == FocusDirection.Left || richtung == FocusDirection.Up) FocusRequester.Cancel else FocusRequester.Default } }
+				.focusRestorer().focusGroup()) {
 				val seite = vm.aktuell
 				val oeffnen: (BaseItemDto) -> Unit = { item -> seiteFuer(item)?.let(vm::zu) }
 				key(seite.schluessel) { SeitlichRollen(rand = 60.dp) {
@@ -253,13 +286,17 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 					}
 				} }
 			}
-			if (leisteOffen) Box(Modifier.fillMaxSize().background(Color(0x99000000)))
+			Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f * leisteAnteil)))
 			Seitenleiste(
 				eintraege = eintraege,
 				oben = listOfNotNull(einstellungenEintrag, updateEintrag),
 				aktiv = vm.stapel.first(),
 				offen = leisteOffen,
-				modifier = Modifier.focusRequester(leiste).onFocusChanged { leisteOffen = it.hasFocus },
+				anteil = leisteAnteil,
+				// Rechts aus der Leiste: zurück genau dorthin, wo man im Inhalt war (nicht zum nächstbesten Knopf daneben)
+				modifier = Modifier.focusRequester(leiste).onFocusChanged { leisteOffen = it.hasFocus }.onPreviewKeyEvent { e ->
+					if (e.key == Key.DirectionRight && e.type == KeyEventType.KeyDown) { runCatching { inhalt.requestFocus() }; true } else false
+				},
 				waehlen = { e ->
 					if (e.seite != null) {
 						vm.wurzel(e.seite)
@@ -279,6 +316,7 @@ private fun Seitenleiste(
 	oben: List<Eintrag>,
 	aktiv: Seite,
 	offen: Boolean,
+	anteil: Float,
 	modifier: Modifier,
 	waehlen: (Eintrag) -> Unit,
 ) {
@@ -300,11 +338,13 @@ private fun Seitenleiste(
 	Column(
 		modifier
 			.fillMaxHeight()
-			.then(
-				if (offen) Modifier.padding(start = 10.dp, top = 14.dp, bottom = 14.dp).width(260.dp)
-					.shadow(24.dp, RoundedCornerShape(22.dp)).clip(RoundedCornerShape(22.dp)).background(Farben.Flaeche)
-				else Modifier.width(76.dp).background(Farben.Hintergrund)
-			)
+			// Gleiche Modifier-Kette in beiden Zuständen, nur andere Werte: eine andere Kette baut die Fokusknoten neu
+			// auf, und der Fokus, der gerade in die Leiste gesprungen ist, fällt ins Leere
+			// Weich aufziehen (wie bei Disney): Breite, Rand und Farbe folgen einem Anteil 0..1, kein Schatten (der kostet auf TV-Chips jedes Bild)
+			.padding(start = 10.dp * anteil, top = 14.dp * anteil, bottom = 14.dp * anteil)
+			.width(76.dp + 184.dp * anteil)
+			.clip(RoundedCornerShape(22.dp * anteil))
+			.background(androidx.compose.ui.graphics.lerp(Farben.Hintergrund, Farben.Flaeche, anteil))
 			.focusRestorer(aktivAnfrage)
 			.focusGroup()
 			// Viele Bibliotheken passen nicht auf den Bildschirm: die Leiste rollt mit dem Fokus mit
@@ -316,12 +356,20 @@ private fun Seitenleiste(
 		Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
 			horizontalArrangement = if (offen) Arrangement.spacedBy(6.dp) else Arrangement.Center) {
 			val sucheAktiv = aktiv.schluessel == Seite.Suche.schluessel
-			// Zugeklappt steht oben nur das Profilbild; aufgeklappt die Symbolreihe
-			if (!offen) Box(Modifier.size(44.dp).padding(3.dp)) {
-				Avatar(benutzer?.primaryImage?.getUrl(api), benutzer?.name, Modifier.fillMaxSize())
+			// Erster Platz oben: zugeklappt das Profilbild, aufgeklappt die Suche. Derselbe Baustein in beiden Zuständen –
+			// wechselt hier die Struktur, verliert die Leiste beim Aufklappen den Fokus (Fokus war danach nirgends).
+			Waehlbar(onClick = { if (offen) waehlen(Eintrag(R.drawable.ic_search, "Suche", Seite.Suche)) }, vergroessern = false, shape = CircleShape,
+				modifier = Modifier.focusRequester(sucheAnfrage).focusProperties { canFocus = offen }) { fokussiert ->
+				Box(Modifier.size(44.dp).background(when { fokussiert -> Farben.Text; offen && sucheAktiv -> Farben.FlaecheHell; else -> Color.Transparent }),
+					contentAlignment = Alignment.Center) {
+					if (offen) androidx.compose.foundation.Image(
+						painter = androidx.compose.ui.res.painterResource(R.drawable.ic_search), contentDescription = "Suche",
+						colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(when { fokussiert -> Color.Black; sucheAktiv -> Farben.Akzent; else -> Farben.TextLeise }),
+						modifier = Modifier.size(24.dp),
+					) else Avatar(benutzer?.primaryImage?.getUrl(api), benutzer?.name, Modifier.fillMaxSize().padding(3.dp))
+				}
 			}
 			if (offen) {
-				SymbolKnopf(R.drawable.ic_search, "Suche", aktiv = sucheAktiv, modifier = Modifier.focusRequester(sucheAnfrage)) { waehlen(Eintrag(R.drawable.ic_search, "Suche", Seite.Suche)) }
 				oben.forEach { e -> SymbolKnopf(e.symbol, e.titel, hervor = e.hervor) { waehlen(e) } }
 				Spacer(Modifier.weight(1f))
 				Waehlbar(onClick = {
@@ -346,9 +394,10 @@ private fun Seitenleiste(
 				Row(
 					Modifier.fillMaxWidth()
 						.background(when { fokussiert -> Farben.Text; istAktiv -> Farben.FlaecheHell; else -> Color.Transparent })
-						.padding(horizontal = if (offen) 14.dp else 0.dp, vertical = 10.dp),
+						// 14 dp Rand: zugeklappt steht das Symbol so genau mittig, aufgeklappt bleibt es an derselben Stelle
+						.padding(horizontal = 14.dp, vertical = 10.dp),
 					verticalAlignment = Alignment.CenterVertically,
-					horizontalArrangement = if (offen) Arrangement.Start else Arrangement.Center,
+					horizontalArrangement = Arrangement.Start,
 				) {
 					val farbe = when { fokussiert -> Color.Black; istAktiv || e.hervor -> Farben.Akzent; else -> Farben.TextLeise }
 					androidx.compose.foundation.Image(
@@ -357,9 +406,9 @@ private fun Seitenleiste(
 						colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(farbe),
 						modifier = Modifier.size(24.dp),
 					)
-					if (offen) {
+					if (anteil > 0f) {
 						Spacer(Modifier.width(14.dp))
-						Text(e.titel, style = Schrift.Normal.copy(color = if (fokussiert) Color.Black else if (e.hervor) Farben.Akzent else Farben.Text, fontWeight = if (istAktiv) FontWeight.Bold else FontWeight.Normal),
+						Text(e.titel, modifier = Modifier.graphicsLayer { alpha = anteil }, style = Schrift.Normal.copy(color = if (fokussiert) Color.Black else if (e.hervor) Farben.Akzent else Farben.Text, fontWeight = if (istAktiv) FontWeight.Bold else FontWeight.Normal),
 							maxLines = 1, overflow = TextOverflow.Ellipsis)
 					}
 				}
@@ -371,6 +420,26 @@ private fun Seitenleiste(
 /** Mini-Player: erscheint, solange Musik läuft; Klick öffnet die Wiedergabe, Musik läuft beim Herumklicken weiter. */
 @Composable
 private fun MiniPlayer(modifier: Modifier) {
+	// Läuft ein Radiosender, zeigt der Mini-Player ihn; OK hält an bzw. spielt weiter
+	val radio by RadioSpieler.laeuft.collectAsState()
+	val radioSpielt by RadioSpieler.spielt.collectAsState()
+	radio?.let { r ->
+		Waehlbar(onClick = { RadioSpieler.umschalten() }, onMenue = { RadioSpieler.stoppen() }, modifier = modifier, vergroessern = false, shape = RoundedCornerShape(14.dp)) { fokussiert ->
+			Row(
+				Modifier.width(360.dp).background(if (fokussiert) Farben.FlaecheHell else Farben.Flaeche.copy(alpha = 0.95f)).padding(10.dp),
+				verticalAlignment = Alignment.CenterVertically,
+				horizontalArrangement = Arrangement.spacedBy(12.dp),
+			) {
+				Bild(r.logo, Modifier.size(52.dp).clip(RoundedCornerShape(6.dp)), androidx.compose.ui.layout.ContentScale.Fit, ersatz = "♫")
+				Column(Modifier.weight(1f)) {
+					Text(r.name, style = Schrift.Normal.copy(fontWeight = FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
+					Text("Radio" + if (radioSpielt) " · läuft" else " · angehalten", style = Schrift.Klein, maxLines = 1)
+				}
+				Text(if (radioSpielt) "❚❚" else "▶", style = Schrift.Titel.copy(color = Farben.Akzent))
+			}
+		}
+		return
+	}
 	val playbackManager = koinInject<PlaybackManager>()
 	val abspielen = koinInject<Abspielen>()
 	val bilder = koinInject<Bilder>()

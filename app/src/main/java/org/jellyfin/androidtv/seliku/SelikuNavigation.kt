@@ -157,6 +157,7 @@ class Abspielen(
 ) {
 	/** Startet ein Video dort, wo man aufgehört hat (vonVorn = false), mit den folgenden Folgen in der Warteschlange. */
 	fun video(context: Context, item: BaseItemDto, vonVorn: Boolean = false) {
+		RadioSpieler.stoppen()
 		val ticks = item.userData?.playbackPositionTicks ?: 0L
 		val start = if (vonVorn || ticks <= 0L) 0 else ((ticks / 10_000L) - 5_000L).coerceAtLeast(0L).toInt()
 		playbackHelper.getItemsToPlay(context, item, false, false, object : Response<List<BaseItemDto>>() {
@@ -185,6 +186,7 @@ class Abspielen(
 	/** Musik: Liste ab Titel [ab] abspielen. Die Wiedergabe läuft im Hintergrund weiter, die Seite bleibt offen. */
 	fun musik(context: Context, titel: List<BaseItemDto>, ab: Int = 0, zufall: Boolean = false) {
 		if (titel.isEmpty()) return
+		RadioSpieler.stoppen()
 		mediaManager.playNow(context, titel, ab, zufall)
 	}
 

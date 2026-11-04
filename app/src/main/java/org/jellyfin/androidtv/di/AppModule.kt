@@ -160,6 +160,7 @@ val appModule = module {
 	// Seliku-Oberfläche
 	factory { org.jellyfin.androidtv.seliku.SelikuDaten(get()) }
 	factory { org.jellyfin.androidtv.seliku.Bilder(get()) }
+	factory { org.jellyfin.androidtv.seliku.RadioDaten(get()) }
 	single { org.jellyfin.androidtv.seliku.Abspielen(get(), get(), get(), get()) }
 
 	factory { (context: Context) -> SearchFragmentDelegate(context, get(), get()) }

@@ -1,5 +1,7 @@
 package org.jellyfin.androidtv.seliku
 
+import androidx.compose.foundation.layout.wrapContentWidth
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -83,7 +85,10 @@ fun Banner(
 		Spacer(Modifier.height(6.dp))
 		Text(item.overview.orEmpty(), style = Schrift.Normal, maxLines = 2, overflow = TextOverflow.Ellipsis)
 		Spacer(Modifier.height(12.dp))
-		Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+		// Die Knopfreihe darf über den Textrand hinaus: sonst bekommen hintere Punkte keinen Platz, bleiben aber
+		// anwählbar – unsichtbar, und der Fokus verschwindet darin (passierte beim Linksdrücken vom ersten Poster)
+		Row(Modifier.wrapContentWidth(androidx.compose.ui.Alignment.Start, unbounded = true),
+			horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
 			Knopf("Abspielen", symbol = "▶", hervorgehoben = true,
 				modifier = if (fokus != null) Modifier.focusRequester(fokus) else Modifier, onClick = {
 				// Serie: nächste ungesehene Folge

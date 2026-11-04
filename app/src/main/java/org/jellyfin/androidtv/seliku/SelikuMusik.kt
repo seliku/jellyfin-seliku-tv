@@ -60,7 +60,7 @@ fun MusikSeite(vm: SelikuViewModel, seite: Seite.Musik, oeffnen: (BaseItemDto) -
 
 	LaunchedEffect(reiter) {
 		vm.wahl["${seite.schluessel}|reiter2"] = reiter
-		if (reiter < 2) return@LaunchedEffect
+		if (reiter < 2 || reiter > 3) return@LaunchedEffect
 		val neu = runCatching { if (reiter == 2) daten.interpreten(seite.ansicht) else daten.alben(seite.ansicht, null) }
 			.onFailure { Timber.w(it, "Musik laden") }.getOrNull()
 		if (neu != null) { liste = neu; vm.wahl["${seite.schluessel}|liste2|$reiter"] = neu }
@@ -71,11 +71,12 @@ fun MusikSeite(vm: SelikuViewModel, seite: Seite.Musik, oeffnen: (BaseItemDto) -
 		Row(Modifier.padding(start = 48.dp, top = 28.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
 			Text(seite.ansicht.name.orEmpty(), style = Schrift.Titel)
 			Spacer(Modifier.width(12.dp))
-			listOf("Übersicht", "Playlists", "Interpreten", "Alben").forEachIndexed { n, t -> Knopf(t, onClick = { reiter = n }, aktiv = reiter == n) }
+			listOf("Übersicht", "Playlists", "Interpreten", "Alben", "Radio").forEachIndexed { n, t -> Knopf(t, onClick = { reiter = n }, aktiv = reiter == n) }
 		}
 		when (reiter) {
 			0 -> { MusikUebersicht(vm, seite, oeffnen); return@Column }
 			1 -> { AllePlaylists(vm, seite); return@Column }
+			4 -> { RadioReiter(vm); return@Column }
 		}
 		val l = liste
 		if (l == null) { Hinweis("Wird geladen …"); return@Column }
