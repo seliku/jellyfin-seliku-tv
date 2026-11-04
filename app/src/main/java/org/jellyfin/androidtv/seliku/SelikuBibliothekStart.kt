@@ -76,6 +76,11 @@ suspend fun bibliothekReihenLaden(daten: SelikuDaten, bib: BaseItemDto): List<Bi
 @Composable
 fun BibliothekRahmen(vm: SelikuViewModel, seite: Seite.Bibliothek, oeffnen: (BaseItemDto) -> Unit) {
 	var reiter by remember { mutableStateOf(vm.wahl["${seite.schluessel}|reiter"] as? Int ?: 0) }
+	val bilder = koinInject<Bilder>()
+	var hero by remember { mutableStateOf<BaseItemDto?>(null) }
+	// Das Hintergrundbild liegt hinter der ganzen Seite, die Reiterleiste oben ist durchsichtig darauf
+	Box(Modifier.fillMaxSize()) {
+	if (reiter == 0) Kulisse(bilder.hintergrund(hero, 1280))
 	Column(Modifier.fillMaxSize()) {
 		Row(Modifier.padding(start = 48.dp, top = 24.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically,
 			horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -85,14 +90,15 @@ fun BibliothekRahmen(vm: SelikuViewModel, seite: Seite.Bibliothek, oeffnen: (Bas
 			Knopf("Bibliothek", onClick = { reiter = 1; vm.wahl["${seite.schluessel}|reiter"] = 1 }, aktiv = reiter == 1)
 		}
 		Box(Modifier.weight(1f)) {
-			if (reiter == 0) BibliothekEmpfohlen(vm, seite, oeffnen)
+			if (reiter == 0) BibliothekEmpfohlen(vm, seite, oeffnen) { hero = it }
 			else BibliothekSeite(vm, seite, oeffnen, mitKopf = false)
 		}
+	}
 	}
 }
 
 @Composable
-private fun BibliothekEmpfohlen(vm: SelikuViewModel, seite: Seite.Bibliothek, oeffnen: (BaseItemDto) -> Unit) {
+private fun BibliothekEmpfohlen(vm: SelikuViewModel, seite: Seite.Bibliothek, oeffnen: (BaseItemDto) -> Unit, setzeHero: (BaseItemDto) -> Unit) {
 	val daten = koinInject<SelikuDaten>()
 	val abspielen = koinInject<Abspielen>()
 	val context = LocalContext.current
@@ -110,7 +116,6 @@ private fun BibliothekEmpfohlen(vm: SelikuViewModel, seite: Seite.Bibliothek, oe
 	val bilder = koinInject<Bilder>()
 	@Suppress("UNCHECKED_CAST")
 	var banner by remember { mutableStateOf(vm.wahl["${seite.schluessel}|banner"] as? List<BaseItemDto> ?: emptyList()) }
-	var hero by remember { mutableStateOf<BaseItemDto?>(null) }
 	LaunchedEffect(seite.ansicht.id) {
 		runCatching { daten.bannerEmpfehlungen(seite.ansicht) }.onSuccess { if (it.isNotEmpty()) { banner = it; vm.wahl["${seite.schluessel}|banner"] = it } }
 	}
@@ -121,21 +126,24 @@ private fun BibliothekEmpfohlen(vm: SelikuViewModel, seite: Seite.Bibliothek, oe
 	val bannerAnfrage = remember { androidx.compose.ui.focus.FocusRequester() }
 	val rollScope = androidx.compose.runtime.rememberCoroutineScope()
 	Box(Modifier.fillMaxSize()) {
-	Kulisse(bilder.hintergrund(hero, 1280))
 	SeitlichRollen(rand = 24.dp) {
 		LazyColumn(state = vm.liste(unterSeite), contentPadding = PaddingValues(top = 0.dp, bottom = 48.dp), modifier = Modifier.fillMaxSize()) {
-			item(key = "banner") { Banner(banner, oeffnen = oeffnen, zeigt = { hero = it }, fokus = bannerAnfrage) }
+			item(key = "banner") { Banner(banner, oeffnen = oeffnen, zeigt = { }, fokus = bannerAnfrage) }
 			items(r, key = { it.titel }) { reihe ->
 				Reihe(reihe.titel, reihe.items, vm, unterSeite, beiHoch = if (reihe == r.firstOrNull() && banner.isNotEmpty()) ({
-					rollScope.launch { runCatching { vm.liste(unterSeite).animateScrollToItem(0) } }
-					runCatching { bannerAnfrage.requestFocus() }.getOrDefault(false)
+					rollScope.launch {
+						runCatching { vm.liste(unterSeite).scrollToItem(0) }
+						kotlinx.coroutines.delay(60)
+						runCatching { bannerAnfrage.requestFocus() }
+					}
+					true
 				}) else null, onClick = { item ->
 					when {
 						reihe.titel == "Weiterschauen" -> abspielen.video(context, item)
 						item.type == BaseItemKind.EPISODE -> abspielen.video(context, item)
 						else -> oeffnen(item)
 					}
-				}, onFokus = { hero = it }, kachel = { item, klick, merken, fokus -> PosterKachel(item, klick, breite = 120.dp, merken = merken, onFokus = fokus, onMenue = { vm.menue = item }) })
+				}, onFokus = setzeHero, kachel = { item, klick, merken, fokus -> PosterKachel(item, klick, breite = 120.dp, merken = merken, onFokus = fokus, onMenue = { vm.menue = item }) })
 			}
 		}
 	}

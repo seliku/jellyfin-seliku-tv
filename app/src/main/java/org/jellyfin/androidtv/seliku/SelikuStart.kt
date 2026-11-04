@@ -102,15 +102,19 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 				modifier = Modifier.fillMaxSize(),
 			) {
 				item(key = "banner") {
-					Banner(banner, oeffnen = { b -> seiteFuer(b)?.let(vm::zu) }, zeigt = { b -> if (gewaehlt == null || bannerFokus) hero = b }, fokus = bannerAnfrage,
+					Banner(banner, oeffnen = { b -> seiteFuer(b)?.let(vm::zu) }, zeigt = { }, fokus = bannerAnfrage,
 						modifier = Modifier.onFocusChanged { bannerFokus = it.hasFocus; if (it.hasFocus) gewaehlt = null })
 				}
 				items(r, key = { it.titel }) { reihe ->
 					val ersteReihe = reihe == r.firstOrNull()
 					Reihe(
 						beiHoch = if (ersteReihe && banner.isNotEmpty()) ({
-							rollScope.launch { runCatching { vm.liste(seite).animateScrollToItem(0) } }
-							runCatching { bannerAnfrage.requestFocus() }.getOrDefault(false)
+							rollScope.launch {
+								runCatching { vm.liste(seite).scrollToItem(0) }
+								kotlinx.coroutines.delay(60)
+								runCatching { bannerAnfrage.requestFocus() }
+							}
+							true
 						}) else null,
 						titel = reihe.titel,
 						items = reihe.items,

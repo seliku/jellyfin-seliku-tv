@@ -85,10 +85,14 @@ fun TitelMenue(vm: SelikuViewModel, item: BaseItemDto, geaendert: () -> Unit) {
 		Column(
 			Modifier.width(420.dp).background(Farben.Flaeche, RoundedCornerShape(18.dp)).padding(20.dp)
 				.onPreviewKeyEvent { e ->
+					// Solange OK noch vom langen Druck gehalten wird, schickt die Fernbedienung Wiederholungen (repeatCount > 0)
+					// und am Ende das Loslassen – beides verschlucken. Erst ein neuer Druck (repeatCount 0) gilt.
+					val ok = e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter
+					val wiederholung = e.nativeKeyEvent.repeatCount > 0
 					when {
 						bereit -> false
-						e.type == KeyEventType.KeyDown -> { bereit = true; false }
-						e.type == KeyEventType.KeyUp && (e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter) -> true
+						e.type == KeyEventType.KeyDown && !wiederholung -> { bereit = true; false }
+						ok -> true
 						else -> false
 					}
 				},

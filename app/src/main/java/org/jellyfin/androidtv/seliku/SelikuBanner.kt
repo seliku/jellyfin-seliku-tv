@@ -20,6 +20,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.layout.ContentScale
@@ -59,7 +60,14 @@ fun Banner(
 	LaunchedEffect(hatFokus, items) {
 		while (!hatFokus && items.size > 1) { delay(9_000); nr = (nr + 1) % items.size }
 	}
-	Column(modifier.fillMaxWidth().height(250.dp).padding(start = 48.dp, top = 30.dp, end = 360.dp).onFocusChanged { hatFokus = it.hasFocus }) {
+	// Eigene Karte mit eigenem Bild: der Seitenhintergrund folgt den Reihen, der Banner bleibt für sich
+	Box(modifier.fillMaxWidth().height(262.dp).padding(start = 40.dp, end = 40.dp, top = 16.dp)
+		.clip(androidx.compose.foundation.shape.RoundedCornerShape(18.dp)).background(Farben.Flaeche)
+		.onFocusChanged { hatFokus = it.hasFocus }) {
+		Bild(bilder.hintergrund(item, 1280), Modifier.matchParentSize())
+		Box(Modifier.matchParentSize().background(androidx.compose.ui.graphics.Brush.horizontalGradient(
+			listOf(androidx.compose.ui.graphics.Color(0xF0120D0B), androidx.compose.ui.graphics.Color(0x99120D0B), androidx.compose.ui.graphics.Color.Transparent))))
+	Column(Modifier.fillMaxWidth().padding(start = 28.dp, top = 22.dp, end = 340.dp)) {
 		val logo = bilder.logo(item)
 		if (logo != null) Bild(logo, Modifier.height(76.dp).width(320.dp), ContentScale.Fit, grund = androidx.compose.ui.graphics.Color.Transparent)
 		else Text(item.name.orEmpty(), style = Schrift.Riesig, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -84,6 +92,7 @@ fun Banner(
 				Box(Modifier.size(if (i == nr % items.size) 9.dp else 6.dp).background(if (i == nr % items.size) Farben.Akzent else Farben.TextLeise, CircleShape))
 			}
 		}
+	}
 	}
 }
 
