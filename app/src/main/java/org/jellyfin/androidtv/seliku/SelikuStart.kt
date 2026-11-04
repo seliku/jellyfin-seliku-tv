@@ -120,7 +120,15 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 						items = reihe.items,
 						vm = vm,
 						seite = seite,
-						onFokus = { gewaehlt = it },
+						onFokus = {
+							gewaehlt = it
+							// Erste Reihe gewählt (auch beim Zurückkommen): Seite ganz oben halten, damit der Banner sichtbar bleibt
+							if (ersteReihe) rollScope.launch {
+								kotlinx.coroutines.delay(60)
+								val l = vm.liste(seite)
+								if (l.firstVisibleItemIndex > 0 || l.firstVisibleItemScrollOffset > 0) runCatching { l.animateScrollToItem(0) }
+							}
+						},
 						onClick = { item ->
 							when {
 								reihe.titel == "Jetzt im TV" -> abspielen.sender(context, item)
