@@ -52,6 +52,10 @@ object SelikuEinstellungen {
 	fun netflixKacheln(c: Context) = prefs(c).getBoolean("netflix_kacheln", true)
 	fun netflixKacheln(c: Context, an: Boolean) = prefs(c).edit().putBoolean("netflix_kacheln", an).apply()
 
+	/** An (Vorgabe): leise Titelmusik beim Öffnen einer Serie (wie Plex). */
+	fun titelmusik(c: Context) = prefs(c).getBoolean("titelmusik", true)
+	fun titelmusik(c: Context, an: Boolean) = prefs(c).edit().putBoolean("titelmusik", an).apply()
+
 	/** Aus (Vorgabe): Knopf «Zufällig» auf Serienseiten (sonst im Menü «⋯ Mehr»). */
 	fun zufallKnopf(c: Context) = prefs(c).getBoolean("zufall_knopf", false)
 	fun zufallKnopf(c: Context, an: Boolean) = prefs(c).edit().putBoolean("zufall_knopf", an).apply()

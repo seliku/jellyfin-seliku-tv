@@ -4,6 +4,7 @@ import android.view.TextureView
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
@@ -19,6 +20,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.itemsApi
+import org.jellyfin.sdk.api.client.extensions.libraryApi
 import org.jellyfin.sdk.api.client.extensions.userLibraryApi
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
@@ -49,6 +51,12 @@ object Trailer {
 		return url
 	}
 
+	/** Der erste lokale Trailer als Eintrag (zum Abspielen im normalen Player), sonst null. */
+	suspend fun eintrag(api: ApiClient, item: BaseItemDto): BaseItemDto? {
+		val id = if (item.type == BaseItemKind.EPISODE || item.type == BaseItemKind.SEASON) item.seriesId ?: item.id else item.id
+		return runCatching { withContext(Dispatchers.IO) { api.userLibraryApi.getLocalTrailers(itemId = id).content.firstOrNull() } }.getOrNull()
+	}
+
 	/** Zufällige Trailer aus Filmen und Serien (für den Bildschirm bei Musik). */
 	suspend fun zufaellige(api: ApiClient, anzahl: Int = 20): List<String> {
 		val kandidaten = runCatching {
@@ -69,7 +77,10 @@ object Trailer {
  * [onEnde] am Schluss oder bei einem Fehler.
  */
 @Composable
-fun TrailerVideo(url: String, modifier: Modifier = Modifier, onBereit: () -> Unit = {}, onEnde: () -> Unit = {}) {
+fun TrailerVideo(url: String, modifier: Modifier = Modifier, mitTon: Boolean = false, onBereit: () -> Unit = {}, onEnde: () -> Unit = {}) {
+	// Ton nur, wenn gerade keine Musik und kein Radio läuft – die sollen nicht unterbrochen werden
+	val mediaManager = koinInject<org.jellyfin.androidtv.ui.playback.MediaManager>()
+	val ton = mitTon && !mediaManager.isPlayingAudio && !RadioSpieler.spielt.value
 	val context = LocalContext.current
 	val api = koinInject<ApiClient>()
 	val bereit by rememberUpdatedState(onBereit)
@@ -90,7 +101,10 @@ fun TrailerVideo(url: String, modifier: Modifier = Modifier, onBereit: () -> Uni
 		val quelle = DefaultHttpDataSource.Factory()
 			.setDefaultRequestProperties(mapOf("Authorization" to "MediaBrowser Token=\"${api.accessToken.orEmpty()}\""))
 		ExoPlayer.Builder(context.applicationContext).setMediaSourceFactory(DefaultMediaSourceFactory(quelle)).build().apply {
-			volume = 0f
+			// Kein Audio-Fokus anfordern: sonst hielte Android laufende Musik an
+			setAudioAttributes(androidx.media3.common.AudioAttributes.Builder().setUsage(androidx.media3.common.C.USAGE_MEDIA)
+				.setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MOVIE).build(), false)
+			volume = if (ton) 1f else 0f
 			setMediaItem(MediaItem.fromUri(url))
 			addListener(object : Player.Listener {
 				override fun onRenderedFirstFrame() { bereit() }
@@ -111,3 +125,36 @@ fun TrailerVideo(url: String, modifier: Modifier = Modifier, onBereit: () -> Uni
 	}, modifier = modifier)
 }
 
+/**
+ * Titelmusik einer Serie (theme.mp3 im Serienordner), leise beim Öffnen der Serienseite – wie bei Plex.
+ * Nicht, wenn Musik/Radio läuft; hört auf, sobald man die Seite verlässt oder etwas abspielt.
+ */
+@Composable
+fun TitelMusik(itemId: UUID) {
+	val context = LocalContext.current
+	val api = koinInject<ApiClient>()
+	val mediaManager = koinInject<org.jellyfin.androidtv.ui.playback.MediaManager>()
+	if (!SelikuEinstellungen.titelmusik(context) || mediaManager.isPlayingAudio || RadioSpieler.spielt.value) return
+	var url by androidx.compose.runtime.remember(itemId) { androidx.compose.runtime.mutableStateOf<String?>(null) }
+	androidx.compose.runtime.LaunchedEffect(itemId) {
+		url = runCatching {
+			withContext(Dispatchers.IO) { api.libraryApi.getThemeSongs(itemId = itemId, inheritFromParent = true).content.items.firstOrNull() }
+		}.getOrNull()?.let { "${api.baseUrl?.trimEnd('/')}/Audio/${it.id}/stream?static=true" }
+	}
+	val u = url ?: return
+	val lebenszyklus = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+	DisposableEffect(u, lebenszyklus) {
+		val quelle = DefaultHttpDataSource.Factory()
+			.setDefaultRequestProperties(mapOf("Authorization" to "MediaBrowser Token=\"${api.accessToken.orEmpty()}\""))
+		val p = ExoPlayer.Builder(context.applicationContext).setMediaSourceFactory(DefaultMediaSourceFactory(quelle)).build().apply {
+			setAudioAttributes(androidx.media3.common.AudioAttributes.Builder().setUsage(androidx.media3.common.C.USAGE_MEDIA)
+				.setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MUSIC).build(), false)
+			volume = 0.35f
+			setMediaItem(MediaItem.fromUri(u)); prepare(); playWhenReady = true
+		}
+		// Startet man eine Folge (Player-Fenster), sofort aufhören
+		val beobachter = androidx.lifecycle.LifecycleEventObserver { _, e -> if (e == androidx.lifecycle.Lifecycle.Event.ON_PAUSE) p.stop() }
+		lebenszyklus.addObserver(beobachter)
+		onDispose { lebenszyklus.removeObserver(beobachter); p.release() }
+	}
+}

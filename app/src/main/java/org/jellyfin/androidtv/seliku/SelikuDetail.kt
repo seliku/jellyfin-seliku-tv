@@ -94,6 +94,7 @@ fun SerienSeite(vm: SelikuViewModel, seite: Seite.Serie, oeffnen: (BaseItemDto) 
 	val bilder = koinInject<Bilder>()
 	val abspielen = koinInject<Abspielen>()
 	val context = LocalContext.current
+	TitelMusik(seite.id)
 	val scope = rememberCoroutineScope()
 
 	var serie by remember { mutableStateOf<BaseItemDto?>(null) }
@@ -147,6 +148,7 @@ fun SerienSeite(vm: SelikuViewModel, seite: Seite.Serie, oeffnen: (BaseItemDto) 
 					Knopf(if (gesehen) "Ungesehen" else "Gesehen", symbol = if (gesehen) "○" else "✓", onClick = {
 						scope.launch { runCatching { daten.gesehen(sr.id, !gesehen) }; neuLaden++ }
 					})
+					TrailerKnopf(sr)
 					MehrKnopf { vm.menue = sr }
 				}
 				Spacer(Modifier.height(28.dp))
@@ -182,7 +184,8 @@ fun SerienSeite(vm: SelikuViewModel, seite: Seite.Serie, oeffnen: (BaseItemDto) 
 					)
 				}
 			}
-			item { Spacer(Modifier.height(12.dp)); Reihe("Ähnliche Serien", aehnlich, vm, seite, onClick = oeffnen) }
+			item { Spacer(Modifier.height(12.dp)); Reihe("Ähnliche Serien", aehnlich, vm, seite, onClick = oeffnen, kachel = { item, klick, merken, fokus ->
+				PosterKachel(item, klick, breite = 120.dp, merken = merken, onFokus = fokus, onMenue = { vm.menue = item }, aufklappen = true) }) }
 		} }
 	}
 }
@@ -226,11 +229,13 @@ fun TitelSeite(vm: SelikuViewModel, seite: Seite.Titel, oeffnen: (BaseItemDto) -
 					Knopf(if (gesehen) "Ungesehen" else "Gesehen", symbol = if (gesehen) "○" else "✓", onClick = {
 						scope.launch { runCatching { daten.gesehen(t.id, !gesehen) }; neuLaden++ }
 					})
+					TrailerKnopf(t)
 					MehrKnopf { vm.menue = t }
 				}
 				Spacer(Modifier.height(32.dp))
 			}
-			item { Reihe("Ähnliche Titel", aehnlich, vm, seite, onClick = oeffnen) }
+			item { Reihe("Ähnliche Titel", aehnlich, vm, seite, onClick = oeffnen, kachel = { item, klick, merken, fokus ->
+				PosterKachel(item, klick, breite = 120.dp, merken = merken, onFokus = fokus, onMenue = { vm.menue = item }, aufklappen = true) }) }
 		} }
 	}
 }
@@ -249,6 +254,25 @@ fun MehrKnopf(onClick: () -> Unit) {
 	Waehlbar(onClick = onClick, vergroessern = false, shape = androidx.compose.foundation.shape.CircleShape) { fokussiert ->
 		Box(Modifier.size(44.dp).background(if (fokussiert) Farben.Text else Farben.Flaeche), contentAlignment = Alignment.Center) {
 			Text("⋮", style = Schrift.Titel.copy(color = if (fokussiert) androidx.compose.ui.graphics.Color.Black else Farben.Text))
+		}
+	}
+}
+
+/** Kleiner runder Trailer-Knopf (nur wenn ein Trailer auf dem Server liegt): spielt ihn mit Ton im Vollbild. */
+@Composable
+fun TrailerKnopf(item: BaseItemDto) {
+	val api = koinInject<org.jellyfin.sdk.api.client.ApiClient>()
+	val abspielen = koinInject<Abspielen>()
+	val context = androidx.compose.ui.platform.LocalContext.current
+	var trailer by remember(item.id) { mutableStateOf<BaseItemDto?>(null) }
+	LaunchedEffect(item.id) { trailer = Trailer.eintrag(api, item) }
+	val t = trailer ?: return
+	Waehlbar(onClick = { abspielen.video(context, t) }, vergroessern = false, shape = androidx.compose.foundation.shape.CircleShape) { fokussiert ->
+		Box(Modifier.size(44.dp).background(if (fokussiert) Farben.Text else Farben.Flaeche), contentAlignment = Alignment.Center) {
+			androidx.compose.foundation.Image(
+				painter = androidx.compose.ui.res.painterResource(org.jellyfin.androidtv.R.drawable.ic_trailer), contentDescription = "Trailer",
+				colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(if (fokussiert) androidx.compose.ui.graphics.Color.Black else Farben.Text),
+				modifier = Modifier.size(22.dp))
 		}
 	}
 }

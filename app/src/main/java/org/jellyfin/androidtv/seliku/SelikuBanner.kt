@@ -91,7 +91,7 @@ fun Banner(
 		Bild(bilder.hintergrund(item, 1280), Modifier.matchParentSize())
 		trailer?.let { url ->
 			key(url) {
-				TrailerVideo(url, Modifier.matchParentSize().graphicsLayer { alpha = trailerSicht }, onBereit = { trailerBereit = true },
+				TrailerVideo(url, Modifier.matchParentSize().graphicsLayer { alpha = trailerSicht }, mitTon = true, onBereit = { trailerBereit = true },
 					onEnde = { trailer = null; trailerBereit = false; if (items.size > 1) nr = (nr + 1) % items.size })
 			}
 		}

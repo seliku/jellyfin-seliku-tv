@@ -152,6 +152,7 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 	var trailerBanner by remember { mutableStateOf(SelikuEinstellungen.trailerImBanner(context)) }
 	var zufall by remember { mutableStateOf(SelikuEinstellungen.zufallKnopf(context)) }
 	var netflix by remember { mutableStateOf(SelikuEinstellungen.netflixKacheln(context)) }
+	var musik by remember { mutableStateOf(SelikuEinstellungen.titelmusik(context)) }
 	val punkte = listOf(
 		Punkt("Zurück-Taste: " + (if (doppel) "zweimal drücken beendet die App" else "beendet die App nie"),
 			"Aus: Zurück springt nach oben, dann in die Leiste, dann zur Startseite – wie bei Netflix. An: zusätzlich zweimal Zurück auf der Startseite zum Beenden") {
@@ -162,8 +163,12 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 			schlank = !schlank; SelikuEinstellungen.schlankerPlayer(context, schlank)
 		},
 		Punkt("Trailer im Banner und in Kacheln: " + (if (trailerBanner) "an" else "aus"),
-			"Nach ein paar Sekunden läuft im grossen Banner oben stumm der Trailer – wie bei Netflix") {
+			"Nach ein paar Sekunden läuft im Banner und in der gewählten Kachel der Trailer, mit Ton (stumm, wenn Musik läuft)") {
 			trailerBanner = !trailerBanner; SelikuEinstellungen.trailerImBanner(context, trailerBanner)
+		},
+		Punkt("Titelmusik bei Serien: " + (if (musik) "an" else "aus"),
+			"Beim Öffnen einer Serie läuft leise ihre Titelmusik – wie bei Plex (nicht, wenn gerade Musik läuft)") {
+			musik = !musik; SelikuEinstellungen.titelmusik(context, musik)
 		},
 		Punkt("Kacheln aufklappen: " + (if (netflix) "an" else "aus"),
 			"Die gewählte Kachel zeigt nach kurzem Verweilen Hintergrund und Infos, nach ein paar Sekunden den Trailer – wie bei Netflix") {

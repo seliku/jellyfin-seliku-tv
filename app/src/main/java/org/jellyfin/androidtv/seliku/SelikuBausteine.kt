@@ -256,7 +256,7 @@ private fun AufgeklappteKachel(item: BaseItemDto) {
 	Box(Modifier.fillMaxSize().background(Farben.Flaeche)) {
 		Bild(bilder.hintergrund(item, 780) ?: bilder.poster(item, 300), Modifier.fillMaxSize(), grund = Farben.Flaeche)
 		trailer?.let { url ->
-			TrailerVideo(url, Modifier.fillMaxSize().graphicsLayer { alpha = sicht }, onBereit = { bereit = true }, onEnde = { trailer = null; bereit = false })
+			TrailerVideo(url, Modifier.fillMaxSize().graphicsLayer { alpha = sicht }, mitTon = true, onBereit = { bereit = true }, onEnde = { trailer = null; bereit = false })
 		}
 		Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color(0x22000000), Color(0xE0000000)))))
 		Column(Modifier.align(Alignment.BottomStart).padding(10.dp).graphicsLayer { alpha = 1f - sicht * 0.6f }) {
