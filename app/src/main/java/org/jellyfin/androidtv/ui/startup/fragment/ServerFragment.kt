@@ -36,7 +36,6 @@ import org.jellyfin.androidtv.auth.repository.ServerRepository
 import org.jellyfin.androidtv.auth.repository.ServerUserRepository
 import org.jellyfin.androidtv.data.service.BackgroundService
 import org.jellyfin.androidtv.databinding.FragmentServerBinding
-import org.jellyfin.androidtv.ui.ServerButtonView
 import org.jellyfin.androidtv.ui.card.UserCardView
 import org.jellyfin.androidtv.ui.startup.StartupViewModel
 import org.jellyfin.androidtv.util.ListAdapter
@@ -139,12 +138,8 @@ class ServerFragment : Fragment() {
 	private fun onServerChange(server: Server) {
 		binding.loginDisclaimer.text = server.loginDisclaimer?.let { markdownRenderer.toMarkdownSpanned(it) }
 
-		binding.serverButton.apply {
-			state = ServerButtonView.State.EDIT
-			name = server.name
-			address = server.address
-			version = server.version
-		}
+		// Seliku: Server als kleiner Textlink im Fuss
+		binding.serverButton.text = "Server: " + server.name + " · ändern"
 
 		binding.addUserButton.setOnClickListener {
 			navigateFragment<UserLoginFragment>(
