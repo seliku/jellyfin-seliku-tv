@@ -35,9 +35,11 @@ import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.CollectionType
 import org.koin.compose.koinInject
 import timber.log.Timber
+import androidx.compose.ui.res.stringResource
+import org.jellyfin.androidtv.R
 
 /** Eine Reihe auf einer Bibliotheks-Startseite. */
-data class BibReihe(val titel: String, val items: List<BaseItemDto>)
+data class BibReihe(val titel: String, val items: List<BaseItemDto>, val weiterschauen: Boolean = false)
 
 /** Typen, die eine Bibliothek in Raster und Reihen zeigt. */
 fun typenFuer(bib: BaseItemDto): Set<BaseItemKind> = when (bib.collectionType) {
@@ -48,7 +50,7 @@ fun typenFuer(bib: BaseItemDto): Set<BaseItemKind> = when (bib.collectionType) {
 }
 
 /** Lädt die Reihen der Bibliotheks-Startseite (auch fürs Vorladen im Hintergrund). */
-suspend fun bibliothekReihenLaden(daten: SelikuDaten, bib: BaseItemDto): List<BibReihe> = coroutineScope {
+suspend fun bibliothekReihenLaden(context: android.content.Context, daten: SelikuDaten, bib: BaseItemDto): List<BibReihe> = coroutineScope {
 	val serien = bib.collectionType == CollectionType.TVSHOWS
 	val typen = typenFuer(bib)
 	val weiter = async { runCatching { daten.weiterschauenIn(bib) }.getOrDefault(emptyList()) }
@@ -63,13 +65,13 @@ suspend fun bibliothekReihenLaden(daten: SelikuDaten, bib: BaseItemDto): List<Bi
 	buildList {
 		val w = weiter.await()
 		val n = naechstes.await().filter { e -> w.none { it.seriesId == e.seriesId } }
-		add(BibReihe("Weiterschauen", w + n))
-		add(BibReihe("Neu hinzugefügt", neu.await()))
-		weil.await()?.let { (t, l) -> add(BibReihe(t, l)) }
-		add(BibReihe(if (serien) "Top-Serien, noch nicht gesehen" else "Top-Filme, noch nicht gesehen", top.await()))
+		add(BibReihe(context.getString(R.string.seliku_continue_watching), w + n, weiterschauen = true))
+		add(BibReihe(context.getString(R.string.seliku_recently_added), neu.await()))
+		weil.await()?.let { (name, l) -> add(BibReihe(context.getString(R.string.seliku_because_you_watched, name), l)) }
+		add(BibReihe(context.getString(if (serien) R.string.seliku_top_series_unwatched else R.string.seliku_top_movies_unwatched), top.await()))
 		genreReihen.forEach { add(it.await()) }
-		add(BibReihe("Zuletzt gesehen", zuletzt.await()))
-		add(BibReihe("Wiederentdecken", wieder.await()))
+		add(BibReihe(context.getString(R.string.seliku_recently_watched), zuletzt.await()))
+		add(BibReihe(context.getString(R.string.seliku_rediscover), wieder.await()))
 	}.filter { it.items.isNotEmpty() }
 }
 
@@ -90,8 +92,8 @@ fun BibliothekRahmen(vm: SelikuViewModel, seite: Seite.Bibliothek, oeffnen: (Bas
 			horizontalArrangement = Arrangement.spacedBy(12.dp)) {
 			Text(seite.ansicht.name.orEmpty(), style = Schrift.Titel)
 			Spacer(Modifier.width(12.dp))
-			Knopf("Empfohlen", onClick = { reiter = 0; vm.wahl["${seite.schluessel}|reiter"] = 0 }, aktiv = reiter == 0, modifier = if (reiter == 0) Modifier.focusRequester(vm.reiter(seite)) else Modifier)
-			Knopf("Bibliothek", onClick = { reiter = 1; vm.wahl["${seite.schluessel}|reiter"] = 1 }, aktiv = reiter == 1, modifier = if (reiter == 1) Modifier.focusRequester(vm.reiter(seite)) else Modifier)
+			Knopf(stringResource(R.string.seliku_recommended), onClick = { reiter = 0; vm.wahl["${seite.schluessel}|reiter"] = 0 }, aktiv = reiter == 0, modifier = if (reiter == 0) Modifier.focusRequester(vm.reiter(seite)) else Modifier)
+			Knopf(stringResource(R.string.seliku_library), onClick = { reiter = 1; vm.wahl["${seite.schluessel}|reiter"] = 1 }, aktiv = reiter == 1, modifier = if (reiter == 1) Modifier.focusRequester(vm.reiter(seite)) else Modifier)
 		}
 		Box(Modifier.weight(1f)) {
 			if (reiter == 0) BibliothekEmpfohlen(vm, seite, oeffnen) { hero = it }
@@ -112,7 +114,7 @@ private fun BibliothekEmpfohlen(vm: SelikuViewModel, seite: Seite.Bibliothek, oe
 	LaunchedEffect(seite.ansicht.id, vm.datenStand) {
 		// Vorgeladenes sofort zeigen, danach still auffrischen
 		if (reihen != null) delay(1500)
-		runCatching { bibliothekReihenLaden(daten, seite.ansicht) }
+		runCatching { bibliothekReihenLaden(context, daten, seite.ansicht) }
 			.onSuccess { reihen = it; vm.wahl[schluessel] = it }
 			.onFailure { Timber.w(it, "Bibliothek-Startseite") }
 	}
@@ -124,8 +126,8 @@ private fun BibliothekEmpfohlen(vm: SelikuViewModel, seite: Seite.Bibliothek, oe
 		runCatching { daten.bannerEmpfehlungen(seite.ansicht) }.onSuccess { if (it.isNotEmpty()) { banner = it; vm.wahl["${seite.schluessel}|banner"] = it } }
 	}
 	val r = reihen
-	if (r == null) { Hinweis("Wird geladen …"); return }
-	if (r.isEmpty() && banner.isEmpty()) { Hinweis("Noch nichts da."); return }
+	if (r == null) { Hinweis(stringResource(R.string.seliku_loading)); return }
+	if (r.isEmpty() && banner.isEmpty()) { Hinweis(stringResource(R.string.seliku_nothing_yet)); return }
 	val unterSeite = Seite.Ordner(seite.ansicht.id, "empfohlen-" + seite.ansicht.name)
 	val bannerAnfrage = remember { androidx.compose.ui.focus.FocusRequester() }
 	val rollScope = androidx.compose.runtime.rememberCoroutineScope()
@@ -153,14 +155,14 @@ private fun BibliothekEmpfohlen(vm: SelikuViewModel, seite: Seite.Bibliothek, oe
 					true
 				}) else null, onClick = { item ->
 					when {
-						reihe.titel == "Weiterschauen" -> abspielen.video(context, item)
+						reihe.weiterschauen -> abspielen.video(context, item)
 						item.type == BaseItemKind.EPISODE -> abspielen.video(context, item)
 						else -> oeffnen(item)
 					}
 				}, onFokus = setzeHero, kachel = { item, klick, merken, fokus -> PosterKachel(item, klick, breite = 120.dp, merken = merken, onFokus = fokus, onMenue = { vm.menue = item }, aufklappen = true) })
 			}
 			// Nach den eigenen Reihen: was beliebt ist, aber fehlt
-			if (fehlend.isNotEmpty()) item(key = "seerr") { SeerrReihe(if (seerrTyp == "movie") "Beliebte Filme – noch nicht da" else "Beliebte Serien – noch nicht da", fehlend, vm, unterSeite) }
+			if (fehlend.isNotEmpty()) item(key = "seerr") { SeerrReihe(stringResource(if (seerrTyp == "movie") R.string.seliku_seerr_popular_movies_missing else R.string.seliku_seerr_popular_series_missing), fehlend, vm, unterSeite) }
 		}
 	}
 	}

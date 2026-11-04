@@ -31,8 +31,13 @@ import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.koin.compose.koinInject
 import timber.log.Timber
+import androidx.compose.ui.res.stringResource
+import org.jellyfin.androidtv.R
 
-private data class StartReihe(val titel: String, val items: List<BaseItemDto>, val loeschdatum: Map<java.util.UUID, String> = emptyMap())
+/** Art der Startseiten-Reihe (die Überschrift ist übersetzt und taugt nicht als Unterscheidung). */
+private enum class StartArt { WEITER, TV, NEU, ANDERE }
+
+private data class StartReihe(val titel: String, val items: List<BaseItemDto>, val loeschdatum: Map<java.util.UUID, String> = emptyMap(), val art: StartArt = StartArt.ANDERE)
 
 /** Startseite: oben das gewählte Element gross, darunter Weiterschauen, Live-TV und «Neu in …» je Bibliothek. */
 @Composable
@@ -65,12 +70,12 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 		val neu = runCatching {
 			val bibs = daten.bibliotheken()
 			buildList {
-				add(StartReihe("Weiterschauen", daten.weiterschauen()))
-				if (bibs.any { it.istLiveTv() }) add(StartReihe("Jetzt im TV", daten.sender().filter { it.currentProgram != null }.take(20)))
+				add(StartReihe(context.getString(R.string.seliku_continue_watching), daten.weiterschauen(), art = StartArt.WEITER))
+				if (bibs.any { it.istLiveTv() }) add(StartReihe(context.getString(R.string.seliku_on_tv_now), daten.sender().filter { it.currentProgram != null }.take(20), art = StartArt.TV))
 				// Sonderreihen wie «Diese Filme werden bald gelöscht» (Maintainerr, gespiegelt als Jellyfin-Sammlung)
 				runCatching { daten.startseitenSammlungen() }.getOrDefault(emptyList()).forEach { (name, items, datum) -> add(StartReihe(name, items, datum)) }
 				bibs.filter { !it.istLiveTv() }.forEach { bib ->
-					add(StartReihe("Neu in ${bib.name}", runCatching { daten.neuIn(bib) }.getOrDefault(emptyList())))
+					add(StartReihe(context.getString(R.string.seliku_new_in, bib.name.orEmpty()), runCatching { daten.neuIn(bib) }.getOrDefault(emptyList()), art = StartArt.NEU))
 				}
 			}.filter { it.items.isNotEmpty() }
 		}.onFailure { Timber.w(it, "Startseite laden") }.getOrNull()
@@ -78,7 +83,7 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 			reihen = neu
 			vm.wahl["start-reihen"] = neu
 			// Hintergründe für die Anmeldeseite merken (neu hinzugefügte zuerst)
-			Kulissen.merken(context, neu.filter { it.titel.startsWith("Neu in") || it.titel == "Weiterschauen" }
+			Kulissen.merken(context, neu.filter { it.art == StartArt.NEU || it.art == StartArt.WEITER }
 				.flatMap { r -> r.items.mapNotNull { bilder.hintergrund(it, 1280) } })
 		}
 	}
@@ -91,8 +96,8 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 	Box(Modifier.fillMaxSize()) {
 		Kulisse(hero?.let { if (it.type == BaseItemKind.TV_CHANNEL) bilder.sendung(it, 1280) else bilder.hintergrund(it) })
 		val r = reihen
-		if (r == null) { Hinweis("Wird geladen …"); return@Box }
-		if (r.isEmpty()) { Hinweis("Noch nichts da."); return@Box }
+		if (r == null) { Hinweis(stringResource(R.string.seliku_loading)); return@Box }
+		if (r.isEmpty()) { Hinweis(stringResource(R.string.seliku_nothing_yet)); return@Box }
 
 		Column(Modifier.fillMaxSize()) {
 			// Banner oben bleibt sichtbar, solange die gewählte Reihe ganz auf den Bildschirm passt
@@ -131,21 +136,21 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 						},
 						onClick = { item ->
 							when {
-								reihe.titel == "Jetzt im TV" -> abspielen.sender(context, item)
-								reihe.titel == "Weiterschauen" -> abspielen.video(context, item)
+								reihe.art == StartArt.TV -> abspielen.sender(context, item)
+								reihe.art == StartArt.WEITER -> abspielen.video(context, item)
 								item.type == BaseItemKind.EPISODE -> abspielen.video(context, item)
 								else -> oeffnen(item)
 							}
 						},
-						kachel = if (reihe.titel == "Weiterschauen") { item, klick, merken, fokus ->
+						kachel = if (reihe.art == StartArt.WEITER) { item, klick, merken, fokus ->
 							PosterKachel(item, klick, breite = 120.dp, merken = merken, onFokus = fokus, onMenue = { vm.menue = item }, aufklappen = true)
-						} else if (reihe.titel == "Jetzt im TV") { item, klick, merken, fokus ->
+						} else if (reihe.art == StartArt.TV) { item, klick, merken, fokus ->
 							SenderKachel(item, klick, merken = merken, onFokus = fokus)
 						} else if (reihe.loeschdatum.isNotEmpty()) { item, klick, merken, fokus ->
 							val tag = reihe.loeschdatum[item.id]?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() }
-							val wann = tag?.let { "Wird am " + it.format(java.time.format.DateTimeFormatter.ofPattern("d.M.")) + " gelöscht" } ?: "Wird bald gelöscht"
+							val wann = tag?.let { stringResource(R.string.seliku_deleted_on, it.format(java.time.format.DateTimeFormatter.ofPattern(stringResource(R.string.seliku_date_short_pattern)))) } ?: stringResource(R.string.seliku_deleted_soon)
 							QuerKachel(item, klick, merken = merken, onFokus = fokus, zeilen = item.name.orEmpty() to wann)
-						} else if (reihe.titel.startsWith("Neu in") && reihe.items.none { it.type == BaseItemKind.MUSIC_ALBUM || it.type == BaseItemKind.AUDIO }) { item, klick, merken, fokus ->
+						} else if (reihe.art == StartArt.NEU && reihe.items.none { it.type == BaseItemKind.MUSIC_ALBUM || it.type == BaseItemKind.AUDIO }) { item, klick, merken, fokus ->
 							PosterKachel(item, klick, breite = 120.dp, merken = merken, onFokus = fokus, onMenue = { vm.menue = item }, aufklappen = true)
 						} else null,
 					)

@@ -80,6 +80,7 @@ import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.koin.compose.koinInject
 import timber.log.Timber
+import androidx.compose.ui.res.stringResource
 
 /** Hauptbildschirm der Seliku-Oberfläche: Seitenleiste links, Inhalt rechts, Mini-Player unten. */
 class SelikuFragment : Fragment() {
@@ -163,7 +164,7 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 				when (val ziel = seiteFuerBibliothek(bib)) {
 					is Seite.Bibliothek -> {
 						val k = ziel.schluessel
-						if (vm.wahl["$k|start-reihen"] == null) vm.wahl["$k|start-reihen"] = bibliothekReihenLaden(daten, bib)
+						if (vm.wahl["$k|start-reihen"] == null) vm.wahl["$k|start-reihen"] = bibliothekReihenLaden(context, daten, bib)
 						if (vm.wahl["$k|banner"] == null) vm.wahl["$k|banner"] = daten.bannerEmpfehlungen(bib)
 						if (vm.wahl["$k|items|${Sortierung.NEU}|false|null"] == null)
 							vm.wahl["$k|items|${Sortierung.NEU}|false|null"] = daten.inhalt(bib, typenFuer(bib), Sortierung.NEU, false, 0, 60).items
@@ -205,29 +206,30 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 	var updateEintrag: Eintrag? = null
 	var einstellungenEintrag: Eintrag? = null
 	val eintraege = buildList {
-		add(Eintrag(R.drawable.ic_house, "Startseite", Seite.Start))
+		add(Eintrag(R.drawable.ic_house, stringResource(R.string.seliku_home), Seite.Start))
 		// Seerr verbunden: «Entdecken» gleich nach der Startseite
-		if (seerrDa) add(Eintrag(R.drawable.seliku_entdecken, "Entdecken", Seite.Entdecken))
+		if (seerrDa) add(Eintrag(R.drawable.seliku_entdecken, stringResource(R.string.seliku_discover), Seite.Entdecken))
 		// Feste Reihenfolge wie gewohnt: Filme, Serien, Live-TV, Musik, dann alles andere
 		val rang = { b: BaseItemDto -> when (b.collectionType?.serialName) { "movies" -> 0; "tvshows" -> 1; "livetv" -> 2; "music" -> 3; else -> 4 } }
 		bibliotheken.filter { it.collectionType?.serialName != "playlists" }.sortedBy(rang).forEach { bib -> add(Eintrag(symbolFuer(bib), bib.name.orEmpty(), seiteFuerBibliothek(bib))) }
+		val updateTitel = update?.let { stringResource(R.string.seliku_update_version, it.name) }
 		updateEintrag = update?.let { v ->
-			(Eintrag(R.drawable.seliku_update, updateText ?: "Update ${v.name}", null, hervor = true) {
+			(Eintrag(R.drawable.seliku_update, updateText ?: updateTitel.orEmpty(), null, hervor = true) {
 				when {
-					updateText != null && updateText!!.startsWith("Lädt") -> Unit
+					updateText != null && updateText!!.startsWith(context.getString(R.string.seliku_update_downloading)) -> Unit
 					!SelikuUpdate.darfInstallieren(context) -> {
-						updateText = "Erlauben, dann nochmals"
+						updateText = context.getString(R.string.seliku_update_allow)
 						SelikuUpdate.erlaubnisOeffnen(context)
 					}
 					else -> scope.launch {
-						updateText = "Lädt …"
-						val r = SelikuUpdate.installieren(context, v) { anteil -> updateText = "Lädt … ${(anteil * 100).toInt()} %" }
-						updateText = if (r.isSuccess) "Installieren bestätigen" else "Update fehlgeschlagen"
+						updateText = context.getString(R.string.seliku_update_downloading)
+						val r = SelikuUpdate.installieren(context, v) { anteil -> updateText = context.getString(R.string.seliku_update_progress, (anteil * 100).toInt()) }
+						updateText = context.getString(if (r.isSuccess) R.string.seliku_update_confirm else R.string.seliku_update_failed)
 					}
 				}
 			})
 		}
-		einstellungenEintrag = Eintrag(R.drawable.ic_settings, "Einstellungen", Seite.Einstellungen)
+		einstellungenEintrag = Eintrag(R.drawable.ic_settings, stringResource(R.string.seliku_settings), Seite.Einstellungen)
 	}
 
 	// Beim Start und nach jedem Seitenwechsel steht der Fokus im Inhalt, nicht in der Seitenleiste
@@ -277,7 +279,7 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 			SelikuEinstellungen.doppelZurueck(context) -> {
 				val jetzt = System.currentTimeMillis()
 				if (jetzt - letztesZurueck < 2000) (context as? android.app.Activity)?.finish()
-				else { letztesZurueck = jetzt; android.widget.Toast.makeText(context, "Nochmals Zurück zum Beenden", android.widget.Toast.LENGTH_SHORT).show() }
+				else { letztesZurueck = jetzt; android.widget.Toast.makeText(context, context.getString(R.string.seliku_back_again_to_exit), android.widget.Toast.LENGTH_SHORT).show() }
 			}
 			else -> zurueckInDenInhalt()
 		}
@@ -405,6 +407,7 @@ private fun Seitenleiste(
 	val aktivAnfrage = remember { FocusRequester() }
 	// Von der ersten Bibliothek nach oben landet man immer zuerst bei der Suche (ganz links)
 	val sucheAnfrage = remember { FocusRequester() }
+	val sucheTitel = stringResource(R.string.seliku_search)
 
 	Column(
 		modifier
@@ -429,12 +432,12 @@ private fun Seitenleiste(
 			val sucheAktiv = aktiv.schluessel == Seite.Suche.schluessel
 			// Erster Platz oben: zugeklappt das Profilbild, aufgeklappt die Suche. Derselbe Baustein in beiden Zuständen –
 			// wechselt hier die Struktur, verliert die Leiste beim Aufklappen den Fokus (Fokus war danach nirgends).
-			Waehlbar(onClick = { if (offen) waehlen(Eintrag(R.drawable.ic_search, "Suche", Seite.Suche)) }, vergroessern = false, shape = CircleShape,
+			Waehlbar(onClick = { if (offen) waehlen(Eintrag(R.drawable.ic_search, sucheTitel, Seite.Suche)) }, vergroessern = false, shape = CircleShape,
 				modifier = Modifier.focusRequester(sucheAnfrage).focusProperties { canFocus = offen }) { fokussiert ->
 				Box(Modifier.size(44.dp).background(when { fokussiert -> Farben.Text; offen && sucheAktiv -> Farben.FlaecheHell; else -> Color.Transparent }),
 					contentAlignment = Alignment.Center) {
 					if (offen) androidx.compose.foundation.Image(
-						painter = androidx.compose.ui.res.painterResource(R.drawable.ic_search), contentDescription = "Suche",
+						painter = androidx.compose.ui.res.painterResource(R.drawable.ic_search), contentDescription = sucheTitel,
 						colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(when { fokussiert -> Color.Black; sucheAktiv -> Farben.Akzent; else -> Farben.TextLeise }),
 						modifier = Modifier.size(24.dp),
 					) else Avatar(benutzer?.primaryImage?.getUrl(api), benutzer?.name, Modifier.fillMaxSize().padding(3.dp))
@@ -511,7 +514,7 @@ private fun LaeuftEintrag(offen: Boolean, anteil: Float) {
 				Bild(r.logo, Modifier.size(44.dp).clip(RoundedCornerShape(6.dp)), androidx.compose.ui.layout.ContentScale.Fit, ersatz = "♫")
 				if (offen) Column(Modifier.weight(1f).graphicsLayer { alpha = anteil }) {
 					Text(r.name, style = Schrift.Normal.copy(fontWeight = FontWeight.Bold, color = if (fokussiert) Color.Black else Farben.Text), maxLines = 1, overflow = TextOverflow.Ellipsis)
-					Text("Radio" + if (radioSpielt) " · läuft" else " · angehalten", style = Schrift.Klein, maxLines = 1)
+					Text(stringResource(if (radioSpielt) R.string.seliku_radio_playing else R.string.seliku_radio_paused), style = Schrift.Klein, maxLines = 1)
 				}
 				if (offen) Text(if (radioSpielt) "❚❚" else "▶", style = Schrift.Titel.copy(color = Farben.Akzent))
 			}

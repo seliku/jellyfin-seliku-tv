@@ -57,6 +57,8 @@ import timber.log.Timber
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import androidx.compose.ui.res.stringResource
+import org.jellyfin.androidtv.R
 
 /** Ein Radiosender aus dem freien Verzeichnis radio-browser.info. */
 data class RadioSender(val id: String, val name: String, val url: String, val logo: String?, val land: String, val tags: String) {
@@ -173,15 +175,15 @@ fun RadioReiter(vm: SelikuViewModel) {
 	var suchtext by remember { mutableStateOf("") }
 	var suchen by remember { mutableStateOf(false) }
 	var treffer by remember { mutableStateOf<List<RadioSender>>(emptyList()) }
-	val genres = listOf("pop" to "Pop", "rock" to "Rock", "dance" to "Dance", "schlager" to "Schlager", "classical" to "Klassik", "jazz" to "Jazz", "news" to "Nachrichten")
+	val genres = listOf("pop" to "Pop", "rock" to "Rock", "dance" to "Dance", "schlager" to "Schlager", "classical" to stringResource(R.string.seliku_radio_genre_classical), "jazz" to "Jazz", "news" to stringResource(R.string.seliku_radio_genre_news))
 
 	LaunchedEffect(Unit) {
 		favoriten = daten.favoriten()
 		if (reihen.isEmpty()) {
 			val neu = buildList {
-				runCatching { daten.beliebtIn("CH") }.getOrNull()?.let { add("Beliebt in der Schweiz" to it) }
-				runCatching { daten.beliebtIn("XK") + daten.beliebtIn("AL", 20) }.getOrNull()?.let { add("Kosovo und Albanien" to it) }
-				runCatching { daten.beliebtIn("DE", 30) }.getOrNull()?.let { add("Beliebt in Deutschland" to it) }
+				runCatching { daten.beliebtIn("CH") }.getOrNull()?.let { add(context.getString(R.string.seliku_radio_popular_ch) to it) }
+				runCatching { daten.beliebtIn("XK") + daten.beliebtIn("AL", 20) }.getOrNull()?.let { add(context.getString(R.string.seliku_radio_kosovo_albania) to it) }
+				runCatching { daten.beliebtIn("DE", 30) }.getOrNull()?.let { add(context.getString(R.string.seliku_radio_popular_de) to it) }
 				genres.forEach { (tag, name) -> runCatching { daten.nachGenre(tag) }.getOrNull()?.let { add(name to it) } }
 			}.filter { it.second.isNotEmpty() }
 			reihen = neu; vm.wahl["radio-reihen"] = neu
@@ -204,7 +206,7 @@ fun RadioReiter(vm: SelikuViewModel) {
 		val neu = if (favoriten.any { it.id == s.id }) favoriten.filter { it.id != s.id } else favoriten + s
 		favoriten = neu
 		scope.launch { runCatching { daten.favoritenSetzen(neu) }.onFailure { Timber.w(it, "Radio-Favoriten speichern") } }
-		android.widget.Toast.makeText(context, if (neu.any { it.id == s.id }) "${s.name} zu Favoriten" else "${s.name} aus Favoriten entfernt", android.widget.Toast.LENGTH_SHORT).show()
+		android.widget.Toast.makeText(context, context.getString(if (neu.any { it.id == s.id }) R.string.seliku_radio_favorite_added else R.string.seliku_radio_favorite_removed, s.name), android.widget.Toast.LENGTH_SHORT).show()
 	}
 	val seite = Seite.Ordner(java.util.UUID.nameUUIDFromBytes("radio".toByteArray()), "radio")
 
@@ -213,20 +215,20 @@ fun RadioReiter(vm: SelikuViewModel) {
 			item(key = "laeuft") { LaeuftKarte(laeuftKarte) }
 			// Suchfeld erst auf Knopfdruck: ein Textfeld holt sich auf dem TV sonst beim Vorbeiscrollen die Bildschirmtastatur
 			item {
-				if (!suchen && suchtext.isEmpty()) Knopf("Sender suchen", symbol = "⌕", modifier = Modifier.padding(start = 48.dp, bottom = 12.dp), onClick = { suchen = true })
+				if (!suchen && suchtext.isEmpty()) Knopf(stringResource(R.string.seliku_radio_search), symbol = "⌕", modifier = Modifier.padding(start = 48.dp, bottom = 12.dp), onClick = { suchen = true })
 				else Box(Modifier.padding(start = 48.dp, bottom = 12.dp).width(520.dp).background(Farben.Flaeche, RoundedCornerShape(10.dp)).padding(horizontal = 16.dp, vertical = 12.dp)) {
 					val feld = remember { androidx.compose.ui.focus.FocusRequester() }
 					LaunchedEffect(Unit) { if (suchen) runCatching { feld.requestFocus() } }
-					if (suchtext.isEmpty()) Text("Sender suchen, z. B. SRF 3 oder Radio Kosova …", style = Schrift.Leise)
+					if (suchtext.isEmpty()) Text(stringResource(R.string.seliku_radio_search_hint), style = Schrift.Leise)
 					androidx.compose.foundation.text.BasicTextField(value = suchtext, onValueChange = { suchtext = it }, singleLine = true, textStyle = Schrift.Normal,
 						cursorBrush = androidx.compose.ui.graphics.SolidColor(Farben.Akzent),
 						modifier = Modifier.fillMaxWidth().focusRequester(feld).onFocusChanged { if (!it.isFocused && suchtext.isEmpty()) suchen = false })
 				}
 			}
-			if (treffer.isNotEmpty()) item { SenderReihe("Treffer", treffer, favoriten, vm, seite, spielen, favoritUmschalten) }
-			if (favoriten.isNotEmpty()) item { SenderReihe("Deine Favoriten", favoriten, favoriten, vm, seite, spielen, favoritUmschalten) }
+			if (treffer.isNotEmpty()) item { SenderReihe(stringResource(R.string.seliku_results), treffer, favoriten, vm, seite, spielen, favoritUmschalten) }
+			if (favoriten.isNotEmpty()) item { SenderReihe(stringResource(R.string.seliku_your_favorites), favoriten, favoriten, vm, seite, spielen, favoritUmschalten) }
 			items(reihen, key = { it.first }) { (titel, liste) -> SenderReihe(titel, liste, favoriten, vm, seite, spielen, favoritUmschalten) }
-			if (reihen.isEmpty()) item { Text("Sender werden geladen …", style = Schrift.Leise, modifier = Modifier.padding(start = 48.dp)) }
+			if (reihen.isEmpty()) item { Text(stringResource(R.string.seliku_radio_loading), style = Schrift.Leise, modifier = Modifier.padding(start = 48.dp)) }
 		}
 	}
 }
@@ -286,9 +288,9 @@ private fun LaeuftKarteInnen(anfrage: androidx.compose.ui.focus.FocusRequester) 
 				else Text(initialen(s.name), style = Schrift.Titel.copy(color = Farben.TextLeise))
 			}
 			Column(Modifier.weight(1f)) {
-				Text(if (spielt) "Läuft gerade" else "Angehalten", style = Schrift.Klein.copy(color = Farben.Akzent))
+				Text(stringResource(if (spielt) R.string.seliku_now_playing else R.string.seliku_paused), style = Schrift.Klein.copy(color = Farben.Akzent))
 				Text(s.name, style = Schrift.Titel, maxLines = 1, overflow = TextOverflow.Ellipsis)
-				Text(if (fokussiert) "◀ ▶ anderer Sender aus «${RadioSpieler.listenName}» · OK " + (if (spielt) "anhalten" else "weiter")
+				Text(if (fokussiert) stringResource(if (spielt) R.string.seliku_radio_hint_pause else R.string.seliku_radio_hint_resume, RadioSpieler.listenName)
 					else RadioSpieler.listenName, style = Schrift.Klein, maxLines = 1)
 			}
 			Text("›", style = Schrift.Riesig.copy(color = if (fokussiert) Farben.Akzent else Farben.TextLeise))
@@ -296,5 +298,5 @@ private fun LaeuftKarteInnen(anfrage: androidx.compose.ui.focus.FocusRequester) 
 	}
 	// Was der Bildschirm zeigt, wenn eine Weile niemand drückt (gleiche Wahl wie im Musikplayer)
 	var modus by remember { mutableStateOf(SelikuMusikBildschirm.aktuell(context)) }
-	Knopf(modus.titel, symbol = "☾", modifier = Modifier.padding(start = 48.dp, bottom = 16.dp), onClick = { modus = SelikuMusikBildschirm.weiter(context) })
+	Knopf(stringResource(modus.titel), symbol = "☾", modifier = Modifier.padding(start = 48.dp, bottom = 16.dp), onClick = { modus = SelikuMusikBildschirm.weiter(context) })
 }

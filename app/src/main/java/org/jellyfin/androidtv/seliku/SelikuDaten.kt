@@ -26,6 +26,7 @@ import org.jellyfin.sdk.model.api.ItemSortBy
 import org.jellyfin.sdk.model.api.MediaType
 import org.jellyfin.sdk.model.api.SortOrder
 import java.util.UUID
+import org.jellyfin.androidtv.R
 
 /** Farben der Seliku-Oberfläche: eigene Gestaltung, warm – dunkles Braunschwarz, Akzent Bernstein bis Koralle. */
 object Farben {
@@ -41,12 +42,12 @@ object Farben {
 }
 
 /** Sortierungen der Bibliotheksansicht. */
-enum class Sortierung(val titel: String, val nach: List<ItemSortBy>, val reihenfolge: SortOrder) {
-	NEU("Neu hinzugefügt", listOf(ItemSortBy.DATE_CREATED, ItemSortBy.SORT_NAME), SortOrder.DESCENDING),
-	NAME("A–Z", listOf(ItemSortBy.SORT_NAME), SortOrder.ASCENDING),
-	JAHR("Erscheinungsjahr", listOf(ItemSortBy.PRODUCTION_YEAR, ItemSortBy.SORT_NAME), SortOrder.DESCENDING),
-	BEWERTUNG("Bewertung", listOf(ItemSortBy.COMMUNITY_RATING, ItemSortBy.SORT_NAME), SortOrder.DESCENDING),
-	ZULETZT("Zuletzt gesehen", listOf(ItemSortBy.DATE_PLAYED, ItemSortBy.SORT_NAME), SortOrder.DESCENDING),
+enum class Sortierung(@androidx.annotation.StringRes val titel: Int, val nach: List<ItemSortBy>, val reihenfolge: SortOrder) {
+	NEU(R.string.seliku_sort_recently_added, listOf(ItemSortBy.DATE_CREATED, ItemSortBy.SORT_NAME), SortOrder.DESCENDING),
+	NAME(R.string.seliku_sort_name, listOf(ItemSortBy.SORT_NAME), SortOrder.ASCENDING),
+	JAHR(R.string.seliku_sort_year, listOf(ItemSortBy.PRODUCTION_YEAR, ItemSortBy.SORT_NAME), SortOrder.DESCENDING),
+	BEWERTUNG(R.string.seliku_sort_rating, listOf(ItemSortBy.COMMUNITY_RATING, ItemSortBy.SORT_NAME), SortOrder.DESCENDING),
+	ZULETZT(R.string.seliku_sort_last_watched, listOf(ItemSortBy.DATE_PLAYED, ItemSortBy.SORT_NAME), SortOrder.DESCENDING),
 }
 
 /** Alle Serverabfragen der Seliku-Oberfläche an einer Stelle. */
@@ -254,13 +255,13 @@ class SelikuDaten(private val api: ApiClient) {
 		else liste(bib, setOf(BaseItemKind.MOVIE), listOf(ItemSortBy.DATE_PLAYED), true, setOf(ItemFilter.IS_PLAYED))
 	}
 
-	/** «Weil du X geschaut hast»: Ähnliches zum zuletzt Gesehenen der Bibliothek. */
+	/** «Weil du X geschaut hast»: Ähnliches zum zuletzt Gesehenen der Bibliothek. Liefert den Namen von X (die Überschrift setzt der Aufrufer). */
 	suspend fun weilDuGeschaut(bib: BaseItemDto, serien: Boolean): Pair<String, List<BaseItemDto>>? = io {
 		val zuletzt = zuletztGesehen(bib, serien).firstOrNull() ?: return@io null
 		val basis = if (serien) zuletzt.seriesId ?: return@io null else zuletzt.id
 		val name = if (serien) zuletzt.seriesName.orEmpty() else zuletzt.name.orEmpty()
 		val treffer = api.libraryApi.getSimilarItems(itemId = basis, limit = 20, fields = felder).content.items
-		if (treffer.isEmpty()) null else "Weil du «$name» geschaut hast" to treffer
+		if (treffer.isEmpty()) null else name to treffer
 	}
 
 	// --- Empfehlungen für den grossen Banner ---

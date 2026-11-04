@@ -38,11 +38,11 @@ import org.jellyfin.androidtv.ui.playback.MediaManager
 import org.koin.compose.koinInject
 
 /** Was der Bildschirm zeigt, während Musik läuft und niemand drückt. */
-enum class MusikBildschirm(val titel: String) {
-	NORMAL("Bildschirm normal"),
-	DUNKEL("Bildschirm abdunkeln"),
-	HINTERGRUENDE("Filmhintergründe zeigen"),
-	TRAILER("Trailer zeigen (stumm)"),
+enum class MusikBildschirm(@androidx.annotation.StringRes val titel: Int) {
+	NORMAL(R.string.seliku_screen_normal),
+	DUNKEL(R.string.seliku_screen_dim),
+	HINTERGRUENDE(R.string.seliku_screen_backdrops),
+	TRAILER(R.string.seliku_screen_trailers),
 }
 
 /**
@@ -59,7 +59,7 @@ object SelikuMusikBildschirm {
 	fun weiter(c: android.content.Context): MusikBildschirm {
 		val m = MusikBildschirm.entries[(aktuell(c).ordinal + 1) % MusikBildschirm.entries.size]
 		zustand.value = m; modus(c, m)
-		Toast.makeText(c, m.titel + if (m != MusikBildschirm.NORMAL) " (nach 20 Sekunden ohne Tastendruck)" else "", Toast.LENGTH_SHORT).show()
+		Toast.makeText(c, if (m != MusikBildschirm.NORMAL) c.getString(R.string.seliku_screen_after_idle, c.getString(m.titel)) else c.getString(m.titel), Toast.LENGTH_SHORT).show()
 		return m
 	}
 	const val WARTEZEIT_MS = 20_000L
@@ -81,7 +81,7 @@ object SelikuMusikBildschirm {
 		val knopf = ImageButton(context, null, 0, R.style.Button_Icon).apply {
 			layoutParams = vorlage.layoutParams
 			setImageResource(R.drawable.seliku_bildschirm)
-			contentDescription = "Bildschirm"
+			contentDescription = context.getString(R.string.seliku_screen)
 			onFocusChangeListener = vorlage.onFocusChangeListener
 			setOnClickListener { modus = weiter(context) }
 		}

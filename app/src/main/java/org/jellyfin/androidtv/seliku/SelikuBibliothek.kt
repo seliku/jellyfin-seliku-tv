@@ -36,6 +36,9 @@ import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.CollectionType
 import org.koin.compose.koinInject
 import timber.log.Timber
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import org.jellyfin.androidtv.R
 
 private const val SEITENGROESSE = 60
 
@@ -101,24 +104,24 @@ fun BibliothekSeite(vm: SelikuViewModel, seite: Seite.Bibliothek, oeffnen: (Base
 		) {
 			Text(bib.name.orEmpty(), style = Schrift.Titel)
 			Spacer(Modifier.width(16.dp))
-			Text(gesamt?.let { "$it Titel" }.orEmpty(), style = Schrift.Leise)
+			Text(gesamt?.let { pluralStringResource(R.plurals.seliku_title_count, it, it) }.orEmpty(), style = Schrift.Leise)
 		}
 		LazyRow(
 			contentPadding = PaddingValues(horizontal = 48.dp, vertical = 6.dp),
 			horizontalArrangement = Arrangement.spacedBy(10.dp),
 		) {
 			items(Sortierung.entries) { s ->
-				Knopf(s.titel, onClick = {
+				Knopf(stringResource(s.titel), onClick = {
 					if (sortierung != s) { sortierung = s; vm.wahl["${seite.schluessel}|sort"] = s; scope.launch { raster.scrollToItem(0) } }
 				}, aktiv = s == sortierung)
 			}
 			item {
-				Knopf(if (ungesehen) "Nur ungesehene" else "Alle", onClick = {
+				Knopf(stringResource(if (ungesehen) R.string.seliku_unwatched_only else R.string.seliku_all), onClick = {
 					ungesehen = !ungesehen; vm.wahl["${seite.schluessel}|ungesehen"] = ungesehen; scope.launch { raster.scrollToItem(0) }
 				}, aktiv = ungesehen, symbol = "◐")
 			}
 			item {
-				Knopf("Zufällig", onClick = {
+				Knopf(stringResource(R.string.seliku_shuffle), onClick = {
 					items.randomOrNull()?.let { if (it.type == BaseItemKind.SERIES) abspielen.zufall(context, it) else abspielen.video(context, it, vonVorn = true) }
 				}, symbol = "⤨")
 			}
@@ -138,7 +141,7 @@ fun BibliothekSeite(vm: SelikuViewModel, seite: Seite.Bibliothek, oeffnen: (Base
 			}
 		}
 		Box(Modifier.fillMaxSize()) {
-			if (items.isEmpty()) Hinweis(if (laedt || gesamt == null) "Wird geladen …" else "Keine Titel.")
+			if (items.isEmpty()) Hinweis(stringResource(if (laedt || gesamt == null) R.string.seliku_loading else R.string.seliku_no_titles))
 			LazyVerticalGrid(
 				state = raster,
 				columns = GridCells.Adaptive(118.dp),

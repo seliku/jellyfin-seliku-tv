@@ -39,6 +39,8 @@ import org.jellyfin.androidtv.ui.base.Text
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.koin.compose.koinInject
+import androidx.compose.ui.res.stringResource
+import org.jellyfin.androidtv.R
 
 /**
  * Grosser Banner oben (wie bei den Bezahldiensten): persönliche Empfehlungen, die man noch nicht gesehen hat.
@@ -110,7 +112,7 @@ fun Banner(
 		// anwählbar – unsichtbar, und der Fokus verschwindet darin (passierte beim Linksdrücken vom ersten Poster)
 		Row(Modifier.wrapContentWidth(androidx.compose.ui.Alignment.Start, unbounded = true),
 			horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-			Knopf("Abspielen", symbol = "▶", hervorgehoben = true,
+			Knopf(stringResource(R.string.seliku_play), symbol = "▶", hervorgehoben = true,
 				modifier = if (fokus != null) Modifier.focusRequester(fokus) else Modifier, onClick = {
 				// Serie: nächste ungesehene Folge
 				if (item.type == BaseItemKind.SERIES) scope.launch {
@@ -118,7 +120,7 @@ fun Banner(
 					if (folge != null) abspielen.video(context, folge) else abspielen.zufall(context, item)
 				} else abspielen.video(context, item)
 			})
-			Knopf("Mehr Infos", symbol = "ⓘ", onClick = { oeffnen(item) })
+			Knopf(stringResource(R.string.seliku_more_info), symbol = "ⓘ", onClick = { oeffnen(item) })
 			Spacer(Modifier.width(12.dp))
 			// Punkte: welche Empfehlung gerade läuft – anwählbar, Links/Rechts blättert durch die Empfehlungen
 			items.indices.forEach { i ->

@@ -47,6 +47,8 @@ import org.koin.compose.koinInject
 import timber.log.Timber
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import androidx.compose.ui.res.stringResource
+import org.jellyfin.androidtv.R
 
 /** Suche: Eingabefeld oben, Treffer nach Art in Reihen. */
 @Composable
@@ -85,19 +87,19 @@ fun SuchSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 	}
 
 	val gruppen = listOf(
-		"Filme" to setOf(BaseItemKind.MOVIE),
-		"Serien" to setOf(BaseItemKind.SERIES),
-		"Folgen" to setOf(BaseItemKind.EPISODE),
-		"Sender" to setOf(BaseItemKind.TV_CHANNEL),
-		"Interpreten" to setOf(BaseItemKind.MUSIC_ARTIST),
-		"Alben" to setOf(BaseItemKind.MUSIC_ALBUM),
-		"Titel" to setOf(BaseItemKind.AUDIO),
+		stringResource(R.string.seliku_movies) to setOf(BaseItemKind.MOVIE),
+		stringResource(R.string.seliku_series_plural) to setOf(BaseItemKind.SERIES),
+		stringResource(R.string.seliku_episodes) to setOf(BaseItemKind.EPISODE),
+		stringResource(R.string.seliku_channels) to setOf(BaseItemKind.TV_CHANNEL),
+		stringResource(R.string.seliku_music_artists) to setOf(BaseItemKind.MUSIC_ARTIST),
+		stringResource(R.string.seliku_music_albums) to setOf(BaseItemKind.MUSIC_ALBUM),
+		stringResource(R.string.seliku_tracks) to setOf(BaseItemKind.AUDIO),
 	)
 
 	LazyColumn(state = vm.liste(seite), contentPadding = PaddingValues(bottom = 40.dp), modifier = Modifier.fillMaxSize().background(Farben.Hintergrund)) {
 		item {
 			Column(Modifier.padding(start = 48.dp, top = 32.dp, end = 48.dp, bottom = 20.dp)) {
-				Text("Suche", style = Schrift.Titel)
+				Text(stringResource(R.string.seliku_search), style = Schrift.Titel)
 				Spacer(Modifier.height(14.dp))
 				Box(
 					Modifier.width(620.dp)
@@ -105,7 +107,7 @@ fun SuchSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 						.background(Farben.Flaeche, RoundedCornerShape(10.dp))
 						.padding(horizontal = 18.dp, vertical = 14.dp)
 				) {
-					if (text.isEmpty()) Text("Filme, Serien, Musik, Sender …", style = Schrift.Leise)
+					if (text.isEmpty()) Text(stringResource(R.string.seliku_search_hint), style = Schrift.Leise)
 					BasicTextField(
 						value = text,
 						onValueChange = { text = it },
@@ -117,8 +119,8 @@ fun SuchSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 						modifier = Modifier.fillMaxWidth().focusRequester(feld).onFocusChanged { feldFokus = it.isFocused },
 					)
 				}
-				if (sucht) { Spacer(Modifier.height(8.dp)); Text("Suche läuft …", style = Schrift.Leise) }
-				else if (text.trim().length >= 2 && treffer.isEmpty() && seerrTreffer.isEmpty()) { Spacer(Modifier.height(8.dp)); Text("Nichts gefunden.", style = Schrift.Leise) }
+				if (sucht) { Spacer(Modifier.height(8.dp)); Text(stringResource(R.string.seliku_searching), style = Schrift.Leise) }
+				else if (text.trim().length >= 2 && treffer.isEmpty() && seerrTreffer.isEmpty()) { Spacer(Modifier.height(8.dp)); Text(stringResource(R.string.seliku_nothing_found), style = Schrift.Leise) }
 			}
 		}
 		// Was schon da ist, steht oben unter Filme/Serien; hier nur, was fehlt oder unterwegs ist
@@ -129,7 +131,7 @@ fun SuchSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 				Reihe(titel, liste, vm, seite, onClick = { item -> oeffnen(item) })
 			}
 		}
-		if (fehlend.isNotEmpty()) item(key = "seerr") { SeerrReihe("Noch nicht da – anfragen", fehlend, vm, seite) }
+		if (fehlend.isNotEmpty()) item(key = "seerr") { SeerrReihe(stringResource(R.string.seliku_seerr_missing_request), fehlend, vm, seite) }
 		gruppen.drop(2).forEach { (titel, typen) ->
 			val liste = treffer.filter { it.type in typen }
 			if (liste.isNotEmpty()) item(key = titel) {
@@ -169,13 +171,13 @@ fun LiveTvSeite(vm: SelikuViewModel) {
 
 	Column(Modifier.fillMaxSize().background(Farben.Hintergrund)) {
 		Row(Modifier.padding(start = 48.dp, top = 28.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-			Text("Live-TV", style = Schrift.Titel)
+			Text(stringResource(R.string.seliku_live_tv), style = Schrift.Titel)
 			Spacer(Modifier.width(12.dp))
-			Knopf("Programmführer", symbol = "▦", onClick = { abspielen.programmfuehrer() })
-			Knopf("Aufnahmen", symbol = "●", onClick = { abspielen.aufnahmen() })
+			Knopf(stringResource(R.string.seliku_guide), symbol = "▦", onClick = { abspielen.programmfuehrer() })
+			Knopf(stringResource(R.string.seliku_recordings), symbol = "●", onClick = { abspielen.aufnahmen() })
 		}
 		val s = sender
-		if (s == null) { Hinweis("Wird geladen …"); return@Column }
+		if (s == null) { Hinweis(stringResource(R.string.seliku_loading)); return@Column }
 		LazyColumn(state = vm.liste(seite), contentPadding = PaddingValues(start = 40.dp, end = 48.dp, bottom = 40.dp), modifier = Modifier.fillMaxSize()) {
 			items(s, key = { it.id }) { k ->
 				val p = k.currentProgram
@@ -190,10 +192,10 @@ fun LiveTvSeite(vm: SelikuViewModel) {
 						Bild(bilder.sendung(k, 300), Modifier.width(120.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(6.dp)))
 						Column(Modifier.width(200.dp)) {
 							Text(k.name.orEmpty(), style = Schrift.Normal.copy(fontWeight = FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
-							k.channelNumber?.let { Text("Kanal $it", style = Schrift.Klein) }
+							k.channelNumber?.let { Text(stringResource(R.string.seliku_channel_number, it), style = Schrift.Klein) }
 						}
 						Column(Modifier.weight(1f)) {
-							Text(p?.name ?: "Kein Programm", style = Schrift.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
+							Text(p?.name ?: stringResource(R.string.seliku_no_program), style = Schrift.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
 							if (p?.startDate != null && p.endDate != null) {
 								val jetzt = LocalDateTime.now()
 								val gesamt = java.time.Duration.between(p.startDate, p.endDate).seconds.coerceAtLeast(1)

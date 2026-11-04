@@ -50,6 +50,9 @@ import org.jellyfin.sdk.model.api.ItemFilter
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.koin.compose.koinInject
 import timber.log.Timber
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import org.jellyfin.androidtv.R
 
 /** Musikbibliothek: Reiter «Interpreten» und «Alben». */
 @Composable
@@ -73,7 +76,7 @@ fun MusikSeite(vm: SelikuViewModel, seite: Seite.Musik, oeffnen: (BaseItemDto) -
 		Row(Modifier.padding(start = 48.dp, top = 28.dp, bottom = 8.dp).onFocusChanged { vm.reiterFokus = it.hasFocus }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
 			Text(seite.ansicht.name.orEmpty(), style = Schrift.Titel)
 			Spacer(Modifier.width(12.dp))
-			listOf("Übersicht", "Playlists", "Interpreten", "Alben", "Radio").forEachIndexed { n, t -> Knopf(t, onClick = { reiter = n }, aktiv = reiter == n, modifier = if (reiter == n) Modifier.focusRequester(vm.reiter(seite)) else Modifier) }
+			listOf(stringResource(R.string.seliku_music_overview), stringResource(R.string.seliku_music_playlists), stringResource(R.string.seliku_music_artists), stringResource(R.string.seliku_music_albums), stringResource(R.string.seliku_music_radio)).forEachIndexed { n, t -> Knopf(t, onClick = { reiter = n }, aktiv = reiter == n, modifier = if (reiter == n) Modifier.focusRequester(vm.reiter(seite)) else Modifier) }
 		}
 		when (reiter) {
 			0 -> { MusikUebersicht(vm, seite, oeffnen); return@Column }
@@ -81,7 +84,7 @@ fun MusikSeite(vm: SelikuViewModel, seite: Seite.Musik, oeffnen: (BaseItemDto) -
 			4 -> { RadioReiter(vm); return@Column }
 		}
 		val l = liste
-		if (l == null) { Hinweis("Wird geladen …"); return@Column }
+		if (l == null) { Hinweis(stringResource(R.string.seliku_loading)); return@Column }
 		val schluessel = Seite.Ordner(seite.ansicht.id, "musik-$reiter")
 		val raster = vm.raster(schluessel)
 		Row(Modifier.fillMaxSize()) {
@@ -127,12 +130,12 @@ private fun MusikUebersicht(vm: SelikuViewModel, seite: Seite.Musik, oeffnen: (B
 	SenkrechtRollen {
 		LazyColumn(state = vm.liste(unterSeite), contentPadding = PaddingValues(top = 8.dp, bottom = 48.dp), modifier = Modifier.fillMaxSize()) {
 			if (zuletzt.isNotEmpty()) item {
-				Reihe("Zuletzt gehört", zuletzt, vm, unterSeite, onClick = { t -> abspielen.musik(context, zuletzt, zuletzt.indexOf(t).coerceAtLeast(0)) },
+				Reihe(stringResource(R.string.seliku_music_recently_played), zuletzt, vm, unterSeite, onClick = { t -> abspielen.musik(context, zuletzt, zuletzt.indexOf(t).coerceAtLeast(0)) },
 					kachel = { item, klick, merken, fokus -> QuadratKachel(item, klick, merken = merken, onFokus = fokus) })
 			}
-			if (neu.isNotEmpty()) item { Reihe("Neu hinzugefügt", neu, vm, unterSeite, onClick = oeffnen) }
+			if (neu.isNotEmpty()) item { Reihe(stringResource(R.string.seliku_recently_added), neu, vm, unterSeite, onClick = oeffnen) }
 			item {
-				Text("Automatische Mixe", style = Schrift.Reihe, modifier = Modifier.padding(start = 48.dp, top = 6.dp, bottom = 8.dp))
+				Text(stringResource(R.string.seliku_music_auto_mixes), style = Schrift.Reihe, modifier = Modifier.padding(start = 48.dp, top = 6.dp, bottom = 8.dp))
 				androidx.compose.foundation.lazy.LazyRow(contentPadding = PaddingValues(horizontal = 48.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
 					itemsIndexed(mixe, key = { _, m -> m.name }) { n, m ->
 						MixKachel(m.name, m.unter, n, merken = vm to (unterSeite.schluessel to "mix|" + m.name)) {
@@ -142,7 +145,7 @@ private fun MusikUebersicht(vm: SelikuViewModel, seite: Seite.Musik, oeffnen: (B
 				}
 			}
 			if (eigene.isNotEmpty()) item {
-				Reihe("Deine Playlists", eigene.take(20), vm, unterSeite, onClick = { p ->
+				Reihe(stringResource(R.string.seliku_music_your_playlists), eigene.take(20), vm, unterSeite, onClick = { p ->
 					scope.launch { abspielen.musik(context, runCatching { daten.playlistTitel(p.id) }.getOrDefault(emptyList())) }
 				}, kachel = { item, klick, merken, fokus -> QuadratKachel(item, klick, merken = merken, onFokus = fokus) })
 			}
@@ -154,11 +157,12 @@ private fun MusikUebersicht(vm: SelikuViewModel, seite: Seite.Musik, oeffnen: (B
 private class PlaylistEintrag(val name: String, val unter: String, val eigen: BaseItemDto?, val mix: Mix?)
 
 /** Die festen automatischen Mixe (ohne Genre-Mixe). */
+@Composable
 private fun grundMixe(daten: SelikuDaten, bib: BaseItemDto) = listOf(
-	Mix("Zufallsmix", "Querbeet durch alles") { daten.musikTitel(bib, ItemSortBy.RANDOM, true) },
-	Mix("Neu hinzugefügt", "Die neuesten Titel") { daten.musikTitel(bib, ItemSortBy.DATE_CREATED, true) },
-	Mix("Meistgehört", "Deine Lieblinge") { daten.musikTitel(bib, ItemSortBy.PLAY_COUNT, true, setOf(ItemFilter.IS_PLAYED)) },
-	Mix("Lange nicht gehört", "Wiederentdecken") { daten.musikTitel(bib, ItemSortBy.DATE_PLAYED, false, setOf(ItemFilter.IS_PLAYED)) },
+	Mix(stringResource(R.string.seliku_mix_random), stringResource(R.string.seliku_mix_random_sub)) { daten.musikTitel(bib, ItemSortBy.RANDOM, true) },
+	Mix(stringResource(R.string.seliku_recently_added), stringResource(R.string.seliku_mix_new_sub)) { daten.musikTitel(bib, ItemSortBy.DATE_CREATED, true) },
+	Mix(stringResource(R.string.seliku_mix_most_played), stringResource(R.string.seliku_mix_most_played_sub)) { daten.musikTitel(bib, ItemSortBy.PLAY_COUNT, true, setOf(ItemFilter.IS_PLAYED)) },
+	Mix(stringResource(R.string.seliku_mix_not_heard), stringResource(R.string.seliku_rediscover)) { daten.musikTitel(bib, ItemSortBy.DATE_PLAYED, false, setOf(ItemFilter.IS_PLAYED)) },
 )
 
 /** Alle Playlists: eigene und automatische (auch alle Genre-Mixe), nach Name, mit Buchstabenleiste. */
@@ -178,13 +182,13 @@ private fun AllePlaylists(vm: SelikuViewModel, seite: Seite.Musik) {
 		runCatching { daten.genres(bib, setOf(BaseItemKind.MUSIC_ALBUM, BaseItemKind.AUDIO)) }.onSuccess { genres = it; vm.wahl["${seite.schluessel}|alle-genres"] = it }
 	}
 	// Eigene Playlists und Mixe gemeinsam alphabetisch
-	val alle = (eigene.map { PlaylistEintrag(it.name.orEmpty(), "Playlist", it, null) } +
+	val alle = (eigene.map { PlaylistEintrag(it.name.orEmpty(), stringResource(R.string.seliku_music_playlist), it, null) } +
 		grundMixe(daten, bib).map { PlaylistEintrag(it.name, it.unter, null, it) } +
-		genres.map { g -> PlaylistEintrag("$g-Mix", "Automatisch nach Genre", null, Mix("$g-Mix", "") { daten.genreMix(g) }) })
+		genres.map { g -> stringResource(R.string.seliku_mix_genre, g).let { name -> PlaylistEintrag(name, stringResource(R.string.seliku_mix_genre_sub), null, Mix(name, "") { daten.genreMix(g) }) } })
 		.sortedBy { it.name.lowercase() }
 	val schluessel = Seite.Ordner(bib.id, "musik-alle-playlists")
 	val raster = vm.raster(schluessel)
-	if (alle.isEmpty()) { Hinweis("Wird geladen …"); return }
+	if (alle.isEmpty()) { Hinweis(stringResource(R.string.seliku_loading)); return }
 	Row(Modifier.fillMaxSize()) {
 		LazyVerticalGrid(
 			state = raster,
@@ -289,7 +293,7 @@ fun InterpretSeite(vm: SelikuViewModel, seite: Seite.Interpret, oeffnen: (BaseIt
 	Box(Modifier.fillMaxSize()) {
 		Kulisse(bilder.hintergrund(i))
 		if (fehltInterpret) { NichtMehrDa(vm); return@Box }
-		if (i == null) { Hinweis("Wird geladen …"); return@Box }
+		if (i == null) { Hinweis(stringResource(R.string.seliku_loading)); return@Box }
 		SenkrechtRollen { LazyColumn(state = vm.liste(seite), contentPadding = PaddingValues(bottom = 48.dp), modifier = Modifier.fillMaxSize()) {
 			item {
 				Row(Modifier.padding(start = 48.dp, top = 40.dp, end = 48.dp), horizontalArrangement = Arrangement.spacedBy(32.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -297,15 +301,15 @@ fun InterpretSeite(vm: SelikuViewModel, seite: Seite.Interpret, oeffnen: (BaseIt
 					Column(Modifier.weight(1f).padding(end = 200.dp)) {
 						Text(i.name.orEmpty(), style = Schrift.Riesig)
 						Spacer(Modifier.height(6.dp))
-						Text(listOfNotNull(if (alben.isNotEmpty()) "${alben.size} Alben" else null, i.genres?.take(3)?.joinToString(", ")).joinToString("   ·   "), style = Schrift.Leise)
+						Text(listOfNotNull(if (alben.isNotEmpty()) pluralStringResource(R.plurals.seliku_album_count, alben.size, alben.size) else null, i.genres?.take(3)?.joinToString(", ")).joinToString("   ·   "), style = Schrift.Leise)
 						Spacer(Modifier.height(10.dp))
 						Text(i.overview.orEmpty(), style = Schrift.Normal, maxLines = 3, overflow = TextOverflow.Ellipsis)
 						Spacer(Modifier.height(18.dp))
 						Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-							Knopf("Abspielen", symbol = "▶", hervorgehoben = true, modifier = Modifier.focusRequester(start), onClick = {
+							Knopf(stringResource(R.string.seliku_play), symbol = "▶", hervorgehoben = true, modifier = Modifier.focusRequester(start), onClick = {
 								scope.launch { abspielen.musik(context, daten.titelVon(seite.id, beliebteste = false)) }
 							})
-							Knopf("Zufällig", symbol = "⤨", onClick = {
+							Knopf(stringResource(R.string.seliku_shuffle), symbol = "⤨", onClick = {
 								scope.launch { abspielen.musik(context, daten.titelVon(seite.id, beliebteste = false), zufall = true) }
 							})
 						}
@@ -314,13 +318,13 @@ fun InterpretSeite(vm: SelikuViewModel, seite: Seite.Interpret, oeffnen: (BaseIt
 				Spacer(Modifier.height(28.dp))
 			}
 			if (beliebt.isNotEmpty()) {
-				item { Text("Beliebte Titel", style = Schrift.Reihe, modifier = Modifier.padding(start = 48.dp, bottom = 8.dp)) }
+				item { Text(stringResource(R.string.seliku_music_popular_tracks), style = Schrift.Reihe, modifier = Modifier.padding(start = 48.dp, bottom = 8.dp)) }
 				itemsIndexed(beliebt, key = { _, it -> "b" + it.id }) { index, t ->
 					TitelZeile(t, nummer = index + 1, mitAlbum = true, onClick = { abspielen.musik(context, beliebt, index) })
 				}
 				item { Spacer(Modifier.height(24.dp)) }
 			}
-			item { Reihe("Alben", alben, vm, seite, onClick = oeffnen) }
+			item { Reihe(stringResource(R.string.seliku_music_albums), alben, vm, seite, onClick = oeffnen) }
 		} }
 	}
 }
@@ -348,23 +352,23 @@ fun AlbumSeite(vm: SelikuViewModel, seite: Seite.Album, oeffnen: (BaseItemDto) -
 	val a = album
 	Box(Modifier.fillMaxSize().background(Farben.Hintergrund)) {
 		if (fehltAlbum) { NichtMehrDa(vm); return@Box }
-		if (a == null) { Hinweis("Wird geladen …"); return@Box }
+		if (a == null) { Hinweis(stringResource(R.string.seliku_loading)); return@Box }
 		Row(Modifier.fillMaxSize().padding(start = 48.dp, top = 40.dp, end = 48.dp), horizontalArrangement = Arrangement.spacedBy(40.dp)) {
 			Column(Modifier.width(300.dp)) {
 				Bild(bilder.eigenesBild(a, 500), Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(8.dp)))
 				Spacer(Modifier.height(16.dp))
 				Text(a.name.orEmpty(), style = Schrift.Titel, maxLines = 2, overflow = TextOverflow.Ellipsis)
 				Spacer(Modifier.height(4.dp))
-				Text(listOfNotNull(a.albumArtist, a.productionYear?.toString(), "${titel.size} Titel", laufzeit(a.runTimeTicks)).joinToString("  ·  "), style = Schrift.Leise)
+				Text(listOfNotNull(a.albumArtist, a.productionYear?.toString(), pluralStringResource(R.plurals.seliku_track_count, titel.size, titel.size), laufzeit(a.runTimeTicks)).joinToString("  ·  "), style = Schrift.Leise)
 				Spacer(Modifier.height(16.dp))
 				Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-					Knopf("Abspielen", symbol = "▶", hervorgehoben = true, modifier = Modifier.focusRequester(start), onClick = { abspielen.musik(context, titel) })
-					Knopf("Zufällig", symbol = "⤨", onClick = { abspielen.musik(context, titel, zufall = true) })
+					Knopf(stringResource(R.string.seliku_play), symbol = "▶", hervorgehoben = true, modifier = Modifier.focusRequester(start), onClick = { abspielen.musik(context, titel) })
+					Knopf(stringResource(R.string.seliku_shuffle), symbol = "⤨", onClick = { abspielen.musik(context, titel, zufall = true) })
 				}
 				val interpretId = a.albumArtists?.firstOrNull()?.id
 				if (interpretId != null) {
 					Spacer(Modifier.height(10.dp))
-					Knopf("Zum Interpreten", symbol = "›", onClick = { vm.zu(Seite.Interpret(interpretId)) })
+					Knopf(stringResource(R.string.seliku_go_to_artist), symbol = "›", onClick = { vm.zu(Seite.Interpret(interpretId)) })
 				}
 			}
 			LazyColumn(state = vm.liste(seite), contentPadding = PaddingValues(bottom = 48.dp), modifier = Modifier.weight(1f)) {

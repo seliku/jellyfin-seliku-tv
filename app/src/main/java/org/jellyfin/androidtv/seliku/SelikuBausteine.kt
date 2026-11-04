@@ -62,6 +62,9 @@ import org.jellyfin.androidtv.ui.base.Text
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.koin.compose.koinInject
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import org.jellyfin.androidtv.R
 
 /** Schriften der Oberfläche. */
 object Schrift {
@@ -186,14 +189,15 @@ fun Abzeichen(item: BaseItemDto, modifier: Modifier = Modifier) {
 }
 
 /** Untertitel einer Kachel: Jahr, bei Folgen «S1 · F3», bei Musik der Interpret. */
+@Composable
 fun BaseItemDto.unterzeile(): String = when (type) {
 	BaseItemKind.EPISODE -> listOfNotNull(
-		parentIndexNumber?.let { "S$it" }, indexNumber?.let { "F$it" }
+		parentIndexNumber?.let { stringResource(R.string.seliku_season_short, it) }, indexNumber?.let { stringResource(R.string.seliku_episode_short, it) }
 	).joinToString(" · ").let { if (name != null) "$it  $name" else it }
 	BaseItemKind.MUSIC_ALBUM -> albumArtist ?: productionYear?.toString().orEmpty()
 	BaseItemKind.AUDIO -> (artists?.joinToString(", ") ?: albumArtist).orEmpty()
 	BaseItemKind.SEASON -> name.orEmpty()
-	BaseItemKind.SERIES -> listOfNotNull(productionYear?.toString(), childCount?.let { if (it == 1) "1 Staffel" else "$it Staffeln" }).joinToString(" · ")
+	BaseItemKind.SERIES -> listOfNotNull(productionYear?.toString(), childCount?.let { pluralStringResource(R.plurals.seliku_seasons, it, it) }).joinToString(" · ")
 	BaseItemKind.TV_CHANNEL -> currentProgram?.name.orEmpty()
 	else -> productionYear?.toString().orEmpty()
 }
@@ -437,11 +441,13 @@ fun Hinweis(text: String) {
 	Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(text, style = Schrift.Leise) }
 }
 
+@Composable
 fun laufzeit(ticks: Long?): String? = ticks?.let {
 	val min = (it / 600_000_000L).toInt()
-	if (min <= 0) null else if (min >= 60) "${min / 60} Std. ${min % 60} Min." else "$min Min."
+	if (min <= 0) null else if (min >= 60) stringResource(R.string.seliku_runtime_hours, min / 60, min % 60) else stringResource(R.string.seliku_runtime_minutes, min)
 }
 
+@Composable
 fun BaseItemDto.metazeile(): String = listOfNotNull(
 	productionYear?.toString(),
 	officialRating,
@@ -493,13 +499,14 @@ fun SeitlichRollen(rand: Dp = 120.dp, content: @Composable () -> Unit) {
 }
 
 /** Staffelname auf Deutsch; «Season Unknown» (Folgen ohne Staffel) heisst einfach «Folgen». */
+@Composable
 fun staffelName(s: BaseItemDto?): String {
 	val n = s?.name.orEmpty()
 	return when {
-		s == null -> "Folgen"
-		n.startsWith("Season Unknown", true) -> "Folgen"
+		s == null -> stringResource(R.string.seliku_episodes)
+		n.startsWith("Season Unknown", true) -> stringResource(R.string.seliku_episodes)
 		n.equals("Specials", true) -> "Specials"
-		n.startsWith("Season ", true) -> "Staffel " + n.substring(7)
+		n.startsWith("Season ", true) -> stringResource(R.string.seliku_season_name, n.substring(7))
 		else -> n
 	}
 }
@@ -513,7 +520,7 @@ fun istWeg(e: Throwable): Boolean = (e as? org.jellyfin.sdk.api.client.exception
 /** Kurz «Nicht mehr vorhanden» zeigen und eine Seite zurück, statt hängen zu bleiben. */
 @Composable
 fun NichtMehrDa(vm: SelikuViewModel) {
-	Hinweis("Dieser Titel ist nicht mehr vorhanden.")
+	Hinweis(stringResource(R.string.seliku_title_gone))
 	LaunchedEffect(Unit) { kotlinx.coroutines.delay(2000); vm.zurueck() }
 }
 

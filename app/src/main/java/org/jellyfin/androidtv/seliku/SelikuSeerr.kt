@@ -36,6 +36,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -51,6 +52,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.jellyfin.androidtv.R
 import org.jellyfin.androidtv.ui.base.Text
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.itemsApi
@@ -101,13 +103,13 @@ object SeerrVerbindung {
 // ───────────────────────── Daten ─────────────────────────
 
 /** Was der Nutzer sieht: wenig Status, keine Restzeit (stimmt meistens nicht). */
-enum class SeerrZustand(val abzeichen: String?) {
+enum class SeerrZustand(@androidx.annotation.StringRes val abzeichen: Int?) {
 	ANFRAGEN(null),
-	ANGEFRAGT("Angefragt"),          // wartet auf Freigabe
-	WIRD_GESUCHT("Angefragt"),       // freigegeben, Radarr/Sonarr sucht
-	NOCH_NICHT("Angefragt"),         // gesucht, aber (noch) nichts gefunden
-	GLEICH("Gleich verfügbar"),      // gefunden, lädt
-	ANSEHEN("Jetzt ansehen"),
+	ANGEFRAGT(R.string.seliku_seerr_requested),          // wartet auf Freigabe
+	WIRD_GESUCHT(R.string.seliku_seerr_requested),       // freigegeben, Radarr/Sonarr sucht
+	NOCH_NICHT(R.string.seliku_seerr_requested),         // gesucht, aber (noch) nichts gefunden
+	GLEICH(R.string.seliku_seerr_available_soon),      // gefunden, lädt
+	ANSEHEN(R.string.seliku_seerr_watch_now),
 }
 
 data class SeerrTitel(
@@ -313,7 +315,7 @@ class SeerrDaten(private val context: Context, private val api: ApiClient) {
 
 @Composable
 fun SeerrAbzeichen(z: SeerrZustand, modifier: Modifier = Modifier) {
-	val text = z.abzeichen ?: return
+	val text = stringResource(z.abzeichen ?: return)
 	val grund = when (z) { SeerrZustand.ANSEHEN -> Farben.Akzent; SeerrZustand.GLEICH -> Color(0xFF7FB069); else -> Color(0xE0221A16) }
 	Box(modifier.padding(6.dp).background(grund, RoundedCornerShape(8.dp)).padding(horizontal = 7.dp, vertical = 3.dp)) {
 		Text(text, style = Schrift.Klein.copy(color = if (z == SeerrZustand.ANSEHEN || z == SeerrZustand.GLEICH) Color.Black else Farben.Text, fontWeight = FontWeight.Bold))
@@ -331,7 +333,7 @@ fun SeerrKachel(t: SeerrTitel, onClick: () -> Unit, breite: Dp = 120.dp, merken:
 		}
 		Spacer(Modifier.height(6.dp))
 		Text(t.titel, style = Schrift.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
-		Text(listOf(t.jahr, if (t.typ == "tv") "Serie" else "Film").filter { it.isNotBlank() }.joinToString(" · "), style = Schrift.Klein, maxLines = 1)
+		Text(listOf(t.jahr, stringResource(if (t.typ == "tv") R.string.seliku_series else R.string.seliku_movie)).filter { it.isNotBlank() }.joinToString(" · "), style = Schrift.Klein, maxLines = 1)
 	}
 }
 
@@ -355,6 +357,7 @@ fun SeerrReihe(titel: String, liste: List<SeerrTitel>, vm: SelikuViewModel, seit
 /** «Entdecken»: blättern wie bei einem Bezahldienst, auch durch Titel, die noch fehlen. */
 @Composable
 fun EntdeckenSeite(vm: SelikuViewModel) {
+	val context = LocalContext.current
 	val daten = koinInject<SeerrDaten>()
 	val seite = Seite.Entdecken
 	@Suppress("UNCHECKED_CAST")
@@ -370,25 +373,25 @@ fun EntdeckenSeite(vm: SelikuViewModel) {
 				val serien = async { daten.beliebteSerien() }
 				val bald = async { runCatching { daten.baldImKino() }.getOrDefault(emptyList()) }
 				listOf(
-					"Deine Anfragen" to anfragen.await().filter { it.zustand != SeerrZustand.ANSEHEN },
-					"Im Trend" to trend.await(),
-					"Beliebte Filme" to filme.await(),
-					"Beliebte Serien" to serien.await(),
-					"Bald im Kino" to bald.await(),
+					context.getString(R.string.seliku_seerr_your_requests) to anfragen.await().filter { it.zustand != SeerrZustand.ANSEHEN },
+					context.getString(R.string.seliku_seerr_trending) to trend.await(),
+					context.getString(R.string.seliku_seerr_popular_movies) to filme.await(),
+					context.getString(R.string.seliku_seerr_popular_series) to serien.await(),
+					context.getString(R.string.seliku_seerr_coming_soon) to bald.await(),
 				).filter { it.second.isNotEmpty() }
 			}
 		}.onSuccess { reihen = it; vm.wahl["entdecken"] = it }
-			.onFailure { Timber.w(it, "Entdecken"); fehler = if (it is SeerrFehler && it.code == 403 || it is SeerrFehler && it.code == 401) "Die Anmeldung bei Seerr ist abgelaufen – unter Einstellungen neu verbinden." else "Seerr ist gerade nicht erreichbar." }
+			.onFailure { Timber.w(it, "Entdecken"); fehler = if (it is SeerrFehler && it.code == 403 || it is SeerrFehler && it.code == 401) context.getString(R.string.seliku_seerr_session_expired) else context.getString(R.string.seliku_seerr_unreachable) }
 	}
 	Box(Modifier.fillMaxSize()) {
 		Kulisse(hero?.hintergrund)
 		val r = reihen
 		when {
 			r == null && fehler != null -> Hinweis(fehler!!)
-			r == null -> Hinweis("Wird geladen …")
+			r == null -> Hinweis(stringResource(R.string.seliku_loading))
 			else -> SenkrechtRollen {
 				LazyColumn(state = vm.liste(seite), contentPadding = PaddingValues(top = 28.dp, bottom = 48.dp), modifier = Modifier.fillMaxSize()) {
-					item { Text("Entdecken", style = Schrift.Titel, modifier = Modifier.padding(start = 48.dp, bottom = 16.dp)) }
+					item { Text(stringResource(R.string.seliku_discover), style = Schrift.Titel, modifier = Modifier.padding(start = 48.dp, bottom = 16.dp)) }
 					items(r, key = { it.first }) { (titel, liste) -> SeerrReihe(titel, liste, vm, seite) { hero = it } }
 				}
 			}
@@ -399,6 +402,7 @@ fun EntdeckenSeite(vm: SelikuViewModel) {
 /** Detailseite eines Seerr-Titels mit dem Knopf, der dem Stand folgt: Anfragen → Wird gesucht → Gleich verfügbar / Noch nicht verfügbar → Ansehen. */
 @Composable
 fun SeerrDetailSeite(vm: SelikuViewModel, seite: Seite.SeerrDetail, oeffnen: (BaseItemDto) -> Unit) {
+	val context = LocalContext.current
 	val daten = koinInject<SeerrDaten>()
 	val scope = rememberCoroutineScope()
 	var t by remember { mutableStateOf<SeerrTitel?>(null) }
@@ -407,7 +411,7 @@ fun SeerrDetailSeite(vm: SelikuViewModel, seite: Seite.SeerrDetail, oeffnen: (Ba
 	var arbeitet by remember { mutableStateOf(false) }
 	val erster = remember { FocusRequester() }
 	LaunchedEffect(seite.tmdb, neu) {
-		runCatching { daten.titel(seite.typ, seite.tmdb) }.onSuccess { t = it }.onFailure { Timber.w(it, "Seerr-Titel"); meldung = "Seerr ist gerade nicht erreichbar." }
+		runCatching { daten.titel(seite.typ, seite.tmdb) }.onSuccess { t = it }.onFailure { Timber.w(it, "Seerr-Titel"); meldung = context.getString(R.string.seliku_seerr_unreachable) }
 	}
 	// Solange gesucht/geladen wird, still nachsehen, ob sich etwas tut
 	LaunchedEffect(t?.zustand) {
@@ -417,7 +421,7 @@ fun SeerrDetailSeite(vm: SelikuViewModel, seite: Seite.SeerrDetail, oeffnen: (Ba
 	val x = t
 	Box(Modifier.fillMaxSize()) {
 		Kulisse(x?.hintergrund)
-		if (x == null) { Hinweis(meldung ?: "Wird geladen …"); return@Box }
+		if (x == null) { Hinweis(meldung ?: stringResource(R.string.seliku_loading)); return@Box }
 		LaunchedEffect(x.tmdb) { delay(150); runCatching { erster.requestFocus() } }
 		// Wechselt der Stand (Anfragen → Angefragt …), ist es ein anderer Knopf: Fokus gleich wieder darauf setzen
 		var letzterZustand by remember { mutableStateOf(x.zustand) }
@@ -429,39 +433,39 @@ fun SeerrDetailSeite(vm: SelikuViewModel, seite: Seite.SeerrDetail, oeffnen: (Ba
 			Column(Modifier.weight(1f)) {
 				Text(x.titel, style = Schrift.Riesig, maxLines = 2, overflow = TextOverflow.Ellipsis)
 				Spacer(Modifier.height(6.dp))
-				Text(listOf(x.jahr, if (x.typ == "tv") "Serie" else "Film").filter { it.isNotBlank() }.joinToString(" · "), style = Schrift.Leise)
+				Text(listOf(x.jahr, stringResource(if (x.typ == "tv") R.string.seliku_series else R.string.seliku_movie)).filter { it.isNotBlank() }.joinToString(" · "), style = Schrift.Leise)
 				Spacer(Modifier.height(14.dp))
 				Text(x.text, style = Schrift.Normal, maxLines = 7, overflow = TextOverflow.Ellipsis)
 				Spacer(Modifier.height(22.dp))
 				val tun: (suspend () -> Unit) -> Unit = { aktion ->
 					if (!arbeitet) scope.launch {
 						arbeitet = true
-						runCatching { aktion() }.onFailure { meldung = if (it is SeerrFehler && it.code == 403) "Dafür fehlt in Seerr die Berechtigung." else "Hat nicht geklappt: ${it.message?.take(80)}" }
+						runCatching { aktion() }.onFailure { meldung = if (it is SeerrFehler && it.code == 403) context.getString(R.string.seliku_seerr_no_permission) else context.getString(R.string.seliku_failed, it.message?.take(80).toString()) }
 						arbeitet = false; neu++
 					}
 				}
 				Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
 					val m = Modifier.focusRequester(erster)
 					when (x.zustand) {
-						SeerrZustand.ANFRAGEN -> Knopf(if (arbeitet) "Wird angefragt …" else "Anfragen", symbol = "+", hervorgehoben = true, modifier = m, onClick = { tun { daten.anfragen(x) } })
-						SeerrZustand.ANGEFRAGT -> Knopf("Angefragt – wartet auf Freigabe", symbol = "⏳", modifier = m, onClick = { neu++ })
-						SeerrZustand.WIRD_GESUCHT -> Knopf("Wird gesucht", symbol = "⌕", modifier = m, onClick = { neu++ })
-						SeerrZustand.NOCH_NICHT -> Knopf("Noch nicht verfügbar", symbol = "…", modifier = m, onClick = { neu++ })
-						SeerrZustand.GLEICH -> Knopf("Gleich verfügbar", symbol = "↓", hervorgehoben = true, modifier = m, onClick = { neu++ })
-						SeerrZustand.ANSEHEN -> Knopf("Ansehen", symbol = "▶", hervorgehoben = true, modifier = m, onClick = {
+						SeerrZustand.ANFRAGEN -> Knopf(stringResource(if (arbeitet) R.string.seliku_seerr_requesting else R.string.seliku_seerr_request), symbol = "+", hervorgehoben = true, modifier = m, onClick = { tun { daten.anfragen(x) } })
+						SeerrZustand.ANGEFRAGT -> Knopf(stringResource(R.string.seliku_seerr_awaiting_approval), symbol = "⏳", modifier = m, onClick = { neu++ })
+						SeerrZustand.WIRD_GESUCHT -> Knopf(stringResource(R.string.seliku_seerr_searching), symbol = "⌕", modifier = m, onClick = { neu++ })
+						SeerrZustand.NOCH_NICHT -> Knopf(stringResource(R.string.seliku_seerr_not_yet_available), symbol = "…", modifier = m, onClick = { neu++ })
+						SeerrZustand.GLEICH -> Knopf(stringResource(R.string.seliku_seerr_available_soon), symbol = "↓", hervorgehoben = true, modifier = m, onClick = { neu++ })
+						SeerrZustand.ANSEHEN -> Knopf(stringResource(R.string.seliku_watch), symbol = "▶", hervorgehoben = true, modifier = m, onClick = {
 							tun {
 								val item = daten.inJellyfin(x)
-								if (item != null) oeffnen(item) else meldung = "In Jellyfin noch nicht gefunden – die Bibliothek liest es gleich ein."
+								if (item != null) oeffnen(item) else meldung = context.getString(R.string.seliku_seerr_not_in_jellyfin)
 							}
 						})
 					}
 					if (x.anfrageVonMir && x.zustand in setOf(SeerrZustand.ANGEFRAGT, SeerrZustand.WIRD_GESUCHT, SeerrZustand.NOCH_NICHT))
-						Knopf("Anfrage zurücknehmen", symbol = "✕", onClick = { tun { daten.zuruecknehmen(x) } })
+						Knopf(stringResource(R.string.seliku_seerr_withdraw), symbol = "✕", onClick = { tun { daten.zuruecknehmen(x) } })
 				}
 				meldung?.let { Spacer(Modifier.height(14.dp)); Text(it, style = Schrift.Leise) }
 				if (x.zustand == SeerrZustand.NOCH_NICHT) {
 					Spacer(Modifier.height(10.dp))
-					Text("Bisher hat sich keine passende Quelle gefunden. Die Anfrage bleibt bestehen und wird weiter gesucht.", style = Schrift.Klein)
+					Text(stringResource(R.string.seliku_seerr_no_source_yet), style = Schrift.Klein)
 				}
 			}
 		}
@@ -488,23 +492,23 @@ fun SeerrVerbindenSeite(vm: SelikuViewModel) {
 
 	Column(Modifier.fillMaxSize().background(Farben.Hintergrund).padding(start = 48.dp, top = 28.dp, end = 48.dp)) {
 		Text("Seerr", style = Schrift.Titel)
-		Text("Mit Seerr blätterst du auch durch Filme und Serien, die noch fehlen, und fragst sie mit einem Klick an. Verbinde dein eigenes Seerr.",
+		Text(stringResource(R.string.seliku_seerr_intro),
 			style = Schrift.Leise, modifier = Modifier.padding(top = 6.dp, bottom = 18.dp, end = 200.dp))
 		if (verbunden) {
-			Text("Verbunden mit $url" + if (name.isNotBlank()) " als $name" else "", style = Schrift.Normal)
+			Text(if (name.isNotBlank()) stringResource(R.string.seliku_seerr_connected_as, url, name) else stringResource(R.string.seliku_seerr_connected, url), style = Schrift.Normal)
 			Spacer(Modifier.height(14.dp))
 			Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-				Knopf("Entdecken öffnen", symbol = "›", hervorgehoben = true, onClick = { vm.wurzel(Seite.Entdecken) })
-				Knopf("Trennen", symbol = "✕", onClick = { SeerrVerbindung.trennen(context); verbunden = false; name = "" })
+				Knopf(stringResource(R.string.seliku_seerr_open_discover), symbol = "›", hervorgehoben = true, onClick = { vm.wurzel(Seite.Entdecken) })
+				Knopf(stringResource(R.string.seliku_disconnect), symbol = "✕", onClick = { SeerrVerbindung.trennen(context); verbunden = false; name = "" })
 			}
 			return@Column
 		}
-		Eingabe("Adresse, z. B. wunsch.example.ch", adresse, { adresse = it; meldung = null }, KeyboardType.Uri)
+		Eingabe(stringResource(R.string.seliku_seerr_address_hint), adresse, { adresse = it; meldung = null }, KeyboardType.Uri)
 		Spacer(Modifier.height(14.dp))
 		when (weg) {
 			0 -> Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-				Knopf("Mit Plex anmelden", symbol = "▶", hervorgehoben = true, onClick = {
-					if (adresse.isBlank()) { meldung = "Zuerst die Adresse eingeben."; return@Knopf }
+				Knopf(stringResource(R.string.seliku_seerr_sign_in_plex), symbol = "▶", hervorgehoben = true, onClick = {
+					if (adresse.isBlank()) { meldung = context.getString(R.string.seliku_seerr_enter_address_first); return@Knopf }
 					scope.launch {
 						runCatching { daten.plexCode() }.onSuccess { (pin, code) ->
 							plexCode = code; weg = 1
@@ -512,37 +516,37 @@ fun SeerrVerbindenSeite(vm: SelikuViewModel) {
 							repeat(200) {
 								delay(3_000)
 								if (weg != 1) return@launch
-								val n = runCatching { daten.plexPruefen(url, pin) }.onFailure { e -> meldung = "Seerr lehnt die Anmeldung ab: ${e.message?.take(80)}"; weg = 0; return@launch }.getOrNull()
+								val n = runCatching { daten.plexPruefen(url, pin) }.onFailure { e -> meldung = context.getString(R.string.seliku_seerr_sign_in_refused, e.message?.take(80).toString()); weg = 0; return@launch }.getOrNull()
 								if (n != null) { fertig(n); return@launch }
 							}
-							meldung = "Der Code ist abgelaufen. Nochmals versuchen."; weg = 0
-						}.onFailure { meldung = "plex.tv nicht erreichbar." }
+							meldung = context.getString(R.string.seliku_seerr_code_expired); weg = 0
+						}.onFailure { meldung = context.getString(R.string.seliku_seerr_plex_unreachable) }
 					}
 				})
-				Knopf("Mit Benutzer und Passwort", symbol = "›", onClick = { if (adresse.isBlank()) meldung = "Zuerst die Adresse eingeben." else weg = 2 })
+				Knopf(stringResource(R.string.seliku_seerr_sign_in_password), symbol = "›", onClick = { if (adresse.isBlank()) meldung = context.getString(R.string.seliku_seerr_enter_address_first) else weg = 2 })
 			}
 			1 -> Column {
-				Text("Auf dem Handy oder Computer plex.tv/link öffnen und diesen Code eingeben:", style = Schrift.Normal)
+				Text(stringResource(R.string.seliku_seerr_plex_link), style = Schrift.Normal)
 				Spacer(Modifier.height(10.dp))
 				Text(plexCode.orEmpty(), style = Schrift.Riesig.copy(color = Farben.Akzent, letterSpacing = 8.sp))
 				Spacer(Modifier.height(10.dp))
-				Text("Die App wartet und verbindet sich von selbst.", style = Schrift.Leise)
+				Text(stringResource(R.string.seliku_seerr_plex_waiting), style = Schrift.Leise)
 				Spacer(Modifier.height(14.dp))
-				Knopf("Abbrechen", symbol = "✕", onClick = { weg = 0; plexCode = null })
+				Knopf(stringResource(R.string.seliku_cancel), symbol = "✕", onClick = { weg = 0; plexCode = null })
 			}
 			2 -> Column {
-				Eingabe("Benutzername oder E-Mail", benutzer, { benutzer = it }, KeyboardType.Email)
+				Eingabe(stringResource(R.string.seliku_seerr_username_hint), benutzer, { benutzer = it }, KeyboardType.Email)
 				Spacer(Modifier.height(10.dp))
-				Eingabe("Passwort", passwort, { passwort = it }, KeyboardType.Password, geheim = true)
+				Eingabe(stringResource(R.string.seliku_password), passwort, { passwort = it }, KeyboardType.Password, geheim = true)
 				Spacer(Modifier.height(14.dp))
 				Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-					Knopf("Anmelden", symbol = "›", hervorgehoben = true, onClick = {
+					Knopf(stringResource(R.string.seliku_sign_in), symbol = "›", hervorgehoben = true, onClick = {
 						scope.launch {
 							runCatching { daten.anmeldenMitPasswort(url, benutzer.trim(), passwort) }
-								.onSuccess { fertig(it) }.onFailure { meldung = "Anmeldung abgelehnt. Benutzer, Passwort und Adresse prüfen." }
+								.onSuccess { fertig(it) }.onFailure { meldung = context.getString(R.string.seliku_seerr_sign_in_failed) }
 						}
 					})
-					Knopf("Zurück", symbol = "‹", onClick = { weg = 0 })
+					Knopf(stringResource(R.string.seliku_back), symbol = "‹", onClick = { weg = 0 })
 				}
 			}
 		}

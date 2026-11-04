@@ -34,6 +34,8 @@ import org.jellyfin.androidtv.ui.base.Text
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.koin.compose.koinInject
+import androidx.compose.ui.res.stringResource
+import org.jellyfin.androidtv.R
 
 /** Eigene Schalter der Seliku-Oberfläche, auf dem Gerät gespeichert. */
 object SelikuEinstellungen {
@@ -93,21 +95,21 @@ fun TitelMenue(vm: SelikuViewModel, item: BaseItemDto, geaendert: () -> Unit) {
 	data class Punkt(val text: String, val symbol: String, val aktion: () -> Unit)
 	val punkte = buildList {
 		// Bei Folgen steht «Zur Serie» zuoberst
-		item.seriesId?.let { sid -> add(Punkt("Zur Serie", "›") { schliessen(); vm.zu(Seite.Serie(sid)) }) }
-		if (spielbar) add(Punkt(if (angefangen) fortsetzenText(item) ?: "Abspielen" else "Abspielen", "▶") { abspielen.video(context, item); schliessen() })
-		if (spielbar && angefangen) add(Punkt("Von vorn", "↺") { abspielen.video(context, item, vonVorn = true); schliessen() })
+		item.seriesId?.let { sid -> add(Punkt(stringResource(R.string.seliku_go_to_series), "›") { schliessen(); vm.zu(Seite.Serie(sid)) }) }
+		if (spielbar) add(Punkt(if (angefangen) fortsetzenText(item) ?: stringResource(R.string.seliku_play) else stringResource(R.string.seliku_play), "▶") { abspielen.video(context, item); schliessen() })
+		if (spielbar && angefangen) add(Punkt(stringResource(R.string.seliku_from_start), "↺") { abspielen.video(context, item, vonVorn = true); schliessen() })
 		// Serie bzw. Film aus «Weiterschauen» nehmen (auch «Als Nächstes»-Folgen); kommt beim nächsten Abspielen von selbst zurück
-		if (item.type == BaseItemKind.EPISODE || (item.type == BaseItemKind.MOVIE && angefangen)) add(Punkt("Aus Weiterschauen entfernen", "✕") {
+		if (item.type == BaseItemKind.EPISODE || (item.type == BaseItemKind.MOVIE && angefangen)) add(Punkt(stringResource(R.string.seliku_remove_continue_watching), "✕") {
 			scope.launch { runCatching { daten.ausWeiterschauen(item) }; schliessen(); geaendert() }
 		})
-		if (item.type == BaseItemKind.SERIES || item.type == BaseItemKind.SEASON) add(Punkt("Zufällige Folge", "⤨") { abspielen.zufall(context, item); schliessen() })
-		add(Punkt(if (gesehen) "Als ungesehen markieren" else "Als gesehen markieren", if (gesehen) "○" else "✓") {
+		if (item.type == BaseItemKind.SERIES || item.type == BaseItemKind.SEASON) add(Punkt(stringResource(R.string.seliku_random_episode), "⤨") { abspielen.zufall(context, item); schliessen() })
+		add(Punkt(stringResource(if (gesehen) R.string.seliku_mark_as_unwatched else R.string.seliku_mark_as_watched), if (gesehen) "○" else "✓") {
 			scope.launch { runCatching { daten.gesehen(item.id, !gesehen) }; schliessen(); geaendert() }
 		})
-		add(Punkt(if (favorit) "Aus Favoriten entfernen" else "Zu Favoriten", if (favorit) "☆" else "★") {
+		add(Punkt(stringResource(if (favorit) R.string.seliku_remove_favorite else R.string.seliku_add_favorite), if (favorit) "☆" else "★") {
 			scope.launch { runCatching { daten.favorit(item.id, !favorit) }; schliessen(); geaendert() }
 		})
-		seiteFuer(item)?.let { s -> add(Punkt("Details", "ⓘ") { schliessen(); vm.zu(s) }) }
+		seiteFuer(item)?.let { s -> add(Punkt(stringResource(R.string.seliku_details), "ⓘ") { schliessen(); vm.zu(s) }) }
 	}
 
 	// Das Menü geht auf, während OK noch gedrückt ist. Das Loslassen dieser Taste darf nicht den ersten Punkt

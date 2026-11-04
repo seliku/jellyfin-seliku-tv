@@ -35,6 +35,8 @@ import org.jellyfin.sdk.model.api.BaseItemKind
 import org.koin.compose.koinInject
 import timber.log.Timber
 import java.util.UUID
+import androidx.compose.ui.res.stringResource
+import org.jellyfin.androidtv.R
 
 /**
  * Ordneransicht für Bibliotheken ohne feste Ordnung (Hörbücher, eigene Videos): oben die Unterordner,
@@ -55,20 +57,20 @@ fun OrdnerSeite(vm: SelikuViewModel, seite: Seite.Ordner, oeffnen: (BaseItemDto)
 	val alle = inhalt
 	Column(Modifier.fillMaxSize().background(Farben.Hintergrund)) {
 		Text(titel, style = Schrift.Titel, modifier = Modifier.padding(start = 48.dp, top = 28.dp, bottom = 12.dp))
-		if (alle == null) { Hinweis("Wird geladen …"); return@Column }
-		if (alle.isEmpty()) { Hinweis("Dieser Ordner ist leer."); return@Column }
+		if (alle == null) { Hinweis(stringResource(R.string.seliku_loading)); return@Column }
+		if (alle.isEmpty()) { Hinweis(stringResource(R.string.seliku_folder_empty)); return@Column }
 		val ordner = alle.filter { it.isFolder == true && it.type != BaseItemKind.MUSIC_ALBUM }
 		val dateien = alle.filter { it !in ordner }
 		val audio = dateien.filter { it.type == BaseItemKind.AUDIO_BOOK || it.type == BaseItemKind.AUDIO }
 		LazyColumn(state = vm.liste(seite), contentPadding = PaddingValues(bottom = 48.dp), modifier = Modifier.fillMaxSize()) {
 			if (ordner.isNotEmpty()) item {
-				Reihe("Ordner", ordner, vm, seite, onClick = { oeffnen(it) }, kachel = { item, klick, merken, fokus ->
+				Reihe(stringResource(R.string.seliku_folders), ordner, vm, seite, onClick = { oeffnen(it) }, kachel = { item, klick, merken, fokus ->
 					QuadratKachel(item, klick, merken = merken, onFokus = fokus)
 				})
 			}
 			if (audio.isNotEmpty()) item {
 				Row(Modifier.padding(start = 48.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-					Knopf("Alles abspielen", symbol = "▶", hervorgehoben = true, onClick = { abspielen.musik(context, audio) })
+					Knopf(stringResource(R.string.seliku_play_all), symbol = "▶", hervorgehoben = true, onClick = { abspielen.musik(context, audio) })
 				}
 			}
 			itemsIndexed(dateien, key = { _, it -> it.id }) { index, d ->
@@ -105,11 +107,11 @@ fun BibliothekenSeite(vm: SelikuViewModel, oeffnenBibliothek: (BaseItemDto) -> U
 	}
 
 	Column(Modifier.fillMaxSize().background(Farben.Hintergrund)) {
-		Text("Bibliotheken", style = Schrift.Titel, modifier = Modifier.padding(start = 48.dp, top = 28.dp))
-		Text("Ausgeblendete Bibliotheken erscheinen nicht in der Leiste und nicht auf der Startseite, sind aber hier erreichbar.",
+		Text(stringResource(R.string.seliku_libraries), style = Schrift.Titel, modifier = Modifier.padding(start = 48.dp, top = 28.dp))
+		Text(stringResource(R.string.seliku_libraries_intro),
 			style = Schrift.Leise, modifier = Modifier.padding(start = 48.dp, top = 6.dp, end = 200.dp, bottom = 16.dp))
 		val l = alle
-		if (l == null) { Hinweis("Wird geladen …"); return@Column }
+		if (l == null) { Hinweis(stringResource(R.string.seliku_loading)); return@Column }
 		LazyColumn(state = vm.liste(Seite.Bibliotheken), contentPadding = PaddingValues(start = 40.dp, end = 48.dp, bottom = 40.dp)) {
 			items(l, key = { it.id }) { b ->
 				val aus = b.id in versteckt
@@ -121,10 +123,10 @@ fun BibliothekenSeite(vm: SelikuViewModel, oeffnenBibliothek: (BaseItemDto) -> U
 				) {
 					Column(Modifier.weight(1f)) {
 						Text(b.name.orEmpty(), style = Schrift.Normal.copy(fontWeight = FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
-						Text(if (aus) "ausgeblendet" else "sichtbar", style = Schrift.Klein)
+						Text(stringResource(if (aus) R.string.seliku_hidden else R.string.seliku_visible), style = Schrift.Klein)
 					}
-					Knopf("Öffnen", symbol = "›", onClick = { oeffnenBibliothek(b) })
-					Knopf(if (aus) "Einblenden" else "Ausblenden", symbol = if (aus) "◉" else "○", aktiv = !aus, onClick = {
+					Knopf(stringResource(R.string.seliku_open), symbol = "›", onClick = { oeffnenBibliothek(b) })
+					Knopf(stringResource(if (aus) R.string.seliku_show else R.string.seliku_hide), symbol = if (aus) "◉" else "○", aktiv = !aus, onClick = {
 						val neu = if (aus) versteckt - b.id else versteckt + b.id
 						versteckt = neu
 						scope.launch {
@@ -157,58 +159,58 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 	var bitrate by remember { mutableStateOf(userPrefs[org.jellyfin.androidtv.preference.UserPreferences.maxBitrate]) }
 	val bitrateStufen = listOf("100", "40", "20", "10", "5")
 	val seerr = when {
-		SeerrVerbindung.vermittelt.value -> "über Jellyfin"
-		SeerrVerbindung.verbunden(context) -> "verbunden" + SeerrVerbindung.name(context).let { if (it.isBlank()) "" else " als $it" }
-		else -> "nicht verbunden"
+		SeerrVerbindung.vermittelt.value -> stringResource(R.string.seliku_seerr_via_jellyfin)
+		SeerrVerbindung.verbunden(context) -> SeerrVerbindung.name(context).let { if (it.isBlank()) stringResource(R.string.seliku_seerr_state_connected) else stringResource(R.string.seliku_seerr_state_connected_as, it) }
+		else -> stringResource(R.string.seliku_seerr_state_not_connected)
 	}
 
 	val eintraege = listOf(
-		EinstellungsEintrag.Gruppe("Startseite & Navigation"),
-		EinstellungsEintrag.Schalter("kacheln", "Kacheln aufklappen", "Gewählte Kachel zeigt nach kurzem Verweilen Bild und Infos", netflix) {
+		EinstellungsEintrag.Gruppe(stringResource(R.string.seliku_set_group_home)),
+		EinstellungsEintrag.Schalter("kacheln", stringResource(R.string.seliku_set_tiles), stringResource(R.string.seliku_set_tiles_desc), netflix) {
 			netflix = !netflix; SelikuEinstellungen.netflixKacheln(context, netflix)
 		},
-		EinstellungsEintrag.Schalter("trailer", "Trailer im Banner und in Kacheln", "Läuft nach ein paar Sekunden, stumm wenn Musik läuft", trailerBanner) {
+		EinstellungsEintrag.Schalter("trailer", stringResource(R.string.seliku_set_trailer), stringResource(R.string.seliku_set_trailer_desc), trailerBanner) {
 			trailerBanner = !trailerBanner; SelikuEinstellungen.trailerImBanner(context, trailerBanner)
 		},
-		EinstellungsEintrag.Schalter("leiste", "Seitenleiste auch mit Links öffnen", "Sonst geht die Leiste nur mit Zurück auf", links) {
+		EinstellungsEintrag.Schalter("leiste", stringResource(R.string.seliku_set_sidebar_left), stringResource(R.string.seliku_set_sidebar_left_desc), links) {
 			links = !links; SelikuEinstellungen.leisteMitLinks(context, links)
 		},
-		EinstellungsEintrag.Schalter("zurueck", "Zweimal Zurück beendet die App", "Aus: Zurück beendet die App nie – wie bei Netflix", doppel) {
+		EinstellungsEintrag.Schalter("zurueck", stringResource(R.string.seliku_set_double_back), stringResource(R.string.seliku_set_double_back_desc), doppel) {
 			doppel = !doppel; SelikuEinstellungen.doppelZurueck(context, doppel)
 		},
 
-		EinstellungsEintrag.Gruppe("Wiedergabe"),
-		EinstellungsEintrag.Schalter("player", "Schlanke Player-Bedienung", "OK pausiert, Links/Rechts spult, Bedienleiste mit «hoch»", schlank) {
+		EinstellungsEintrag.Gruppe(stringResource(R.string.seliku_set_group_playback)),
+		EinstellungsEintrag.Schalter("player", stringResource(R.string.seliku_set_slim_player), stringResource(R.string.seliku_set_slim_player_desc), schlank) {
 			schlank = !schlank; SelikuEinstellungen.schlankerPlayer(context, schlank)
 		},
-		EinstellungsEintrag.Auswahl("bitrate", "Max. Streaming-Bitrate", "Tiefer bei langsamem Internet – weniger Unterbrüche. Nur dieses Gerät", "$bitrate Mbit/s") {
+		EinstellungsEintrag.Auswahl("bitrate", stringResource(R.string.seliku_set_bitrate), stringResource(R.string.seliku_set_bitrate_desc), stringResource(R.string.seliku_set_bitrate_value, bitrate)) {
 			bitrate = bitrateStufen[(bitrateStufen.indexOf(bitrate) + 1) % bitrateStufen.size]
 			userPrefs[org.jellyfin.androidtv.preference.UserPreferences.maxBitrate] = bitrate
 		},
-		EinstellungsEintrag.Schalter("untertitel", "Untertitel nachladen", "Filme starten sofort, Untertitel kommen nach", nachladen) {
+		EinstellungsEintrag.Schalter("untertitel", stringResource(R.string.seliku_set_subtitles_later), stringResource(R.string.seliku_set_subtitles_later_desc), nachladen) {
 			nachladen = !nachladen; SelikuEinstellungen.untertitelNachladen(context, nachladen)
 		},
 
-		EinstellungsEintrag.Gruppe("Serien"),
-		EinstellungsEintrag.Schalter("titelmusik", "Titelmusik", "Läuft leise beim Öffnen einer Serie – wie bei Plex", musik) {
+		EinstellungsEintrag.Gruppe(stringResource(R.string.seliku_set_group_series)),
+		EinstellungsEintrag.Schalter("titelmusik", stringResource(R.string.seliku_set_theme_music), stringResource(R.string.seliku_set_theme_music_desc), musik) {
 			musik = !musik; SelikuEinstellungen.titelmusik(context, musik)
 		},
-		EinstellungsEintrag.Schalter("zufall", "Knopf «Zufällig»", "Zufällige Folge direkt auf der Serienseite, sonst im Menü «⋯»", zufall) {
+		EinstellungsEintrag.Schalter("zufall", stringResource(R.string.seliku_set_shuffle_button), stringResource(R.string.seliku_set_shuffle_button_desc), zufall) {
 			zufall = !zufall; SelikuEinstellungen.zufallKnopf(context, zufall)
 		},
 
-		EinstellungsEintrag.Gruppe("Inhalte & Dienste"),
-		EinstellungsEintrag.Verweis("bibliotheken", "Bibliotheken", "Welche in der Leiste und auf der Startseite erscheinen") { vm.zu(Seite.Bibliotheken) },
-		EinstellungsEintrag.Verweis("seerr", "Seerr", "Fehlende Filme und Serien entdecken und anfragen", seerr) {
+		EinstellungsEintrag.Gruppe(stringResource(R.string.seliku_set_group_content)),
+		EinstellungsEintrag.Verweis("bibliotheken", stringResource(R.string.seliku_libraries), stringResource(R.string.seliku_set_libraries_desc)) { vm.zu(Seite.Bibliotheken) },
+		EinstellungsEintrag.Verweis("seerr", "Seerr", stringResource(R.string.seliku_set_seerr_desc), seerr) {
 			if (SeerrVerbindung.vermittelt.value) vm.wurzel(Seite.Entdecken) else vm.zu(Seite.SeerrVerbinden)
 		},
 
-		EinstellungsEintrag.Gruppe("Weiteres"),
-		EinstellungsEintrag.Verweis("jellyfin", "Jellyfin-Einstellungen", "Untertitel-Aussehen, Live-TV, Konten und mehr") { jellyfinEinstellungen() },
+		EinstellungsEintrag.Gruppe(stringResource(R.string.seliku_set_group_more)),
+		EinstellungsEintrag.Verweis("jellyfin", stringResource(R.string.seliku_set_jellyfin), stringResource(R.string.seliku_set_jellyfin_desc)) { jellyfinEinstellungen() },
 	)
 
 	Column(Modifier.fillMaxSize().background(Farben.Hintergrund)) {
-		Text("Einstellungen", style = Schrift.Titel, modifier = Modifier.padding(start = 48.dp, top = 28.dp, bottom = 8.dp))
+		Text(stringResource(R.string.seliku_settings), style = Schrift.Titel, modifier = Modifier.padding(start = 48.dp, top = 28.dp, bottom = 8.dp))
 		LazyColumn(state = vm.liste(Seite.Einstellungen), contentPadding = PaddingValues(start = 40.dp, end = 48.dp, bottom = 40.dp)) {
 			items(eintraege, key = { it.id }) { e ->
 				when (e) {
@@ -236,7 +238,7 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 				}
 			}
 			item(key = "version") {
-				Text("Version ${org.jellyfin.androidtv.BuildConfig.VERSION_NAME}", style = Schrift.Klein,
+				Text(stringResource(R.string.seliku_version, org.jellyfin.androidtv.BuildConfig.VERSION_NAME), style = Schrift.Klein,
 					modifier = Modifier.padding(start = 8.dp, top = 24.dp))
 			}
 		}

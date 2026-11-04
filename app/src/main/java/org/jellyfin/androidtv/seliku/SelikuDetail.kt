@@ -46,6 +46,8 @@ import org.jellyfin.sdk.model.api.BaseItemDto
 import org.koin.compose.koinInject
 import timber.log.Timber
 import java.util.UUID
+import androidx.compose.ui.res.stringResource
+import org.jellyfin.androidtv.R
 
 /** Kopfbereich einer Detailseite: Logo oder Titel, Infozeile, Beschreibung, Knöpfe. */
 @Composable
@@ -80,11 +82,12 @@ private fun Kopf(
 	}
 }
 
+@Composable
 fun fortsetzenText(item: BaseItemDto): String? {
 	val ticks = item.userData?.playbackPositionTicks ?: 0L
 	if (ticks <= 0L) return null
 	val s = ticks / 10_000_000L
-	return "Fortsetzen ab " + if (s >= 3600) "%d:%02d:%02d".format(s / 3600, (s % 3600) / 60, s % 60) else "%d:%02d".format(s / 60, s % 60)
+	return stringResource(R.string.seliku_resume_from, if (s >= 3600) "%d:%02d:%02d".format(s / 3600, (s % 3600) / 60, s % 60) else "%d:%02d".format(s / 60, s % 60))
 }
 
 /** Serie: Kopf mit «Abspielen/Fortsetzen» der nächsten Folge, Staffelwahl, Folgenreihe, Ähnliches. Klick auf eine Folge spielt sie ab. */
@@ -129,23 +132,23 @@ fun SerienSeite(vm: SelikuViewModel, seite: Seite.Serie, oeffnen: (BaseItemDto) 
 	Box(Modifier.fillMaxSize()) {
 		Kulisse(bilder.hintergrund(sr))
 		if (fehltSerie) { NichtMehrDa(vm); return@Box }
-		if (sr == null) { Hinweis("Wird geladen …"); return@Box }
+		if (sr == null) { Hinweis(stringResource(R.string.seliku_loading)); return@Box }
 		SenkrechtRollen { LazyColumn(state = vm.liste(seite), contentPadding = PaddingValues(bottom = 48.dp), modifier = Modifier.fillMaxSize()) {
 			item {
 				val n = naechste
-				val zusatz = n?.let { "Als Nächstes: " + it.unterzeile() }
+				val zusatz = n?.let { stringResource(R.string.seliku_up_next, it.unterzeile()) }
 				Kopf(sr, zusatz, liste = vm.liste(seite)) {
 					Knopf(
-						text = n?.let { fortsetzenText(it) ?: "Abspielen  ${it.parentIndexNumber?.let { s -> "S$s" } ?: ""} ${it.indexNumber?.let { f -> "F$f" } ?: ""}".trimEnd() } ?: "Abspielen",
+						text = n?.let { fortsetzenText(it) ?: "${stringResource(R.string.seliku_play)}  ${it.parentIndexNumber?.let { s -> stringResource(R.string.seliku_season_short, s) } ?: ""} ${it.indexNumber?.let { f -> stringResource(R.string.seliku_episode_short, f) } ?: ""}".trimEnd() } ?: stringResource(R.string.seliku_play),
 						symbol = "▶",
 						hervorgehoben = true,
 						modifier = Modifier.focusRequester(start),
 						onClick = { n?.let { abspielen.video(context, it) } ?: abspielen.zufall(context, sr) },
 					)
 					// «Zufällig» nur auf Wunsch (Einstellung); sonst steht es im Menü «⋯ Mehr»
-					if (SelikuEinstellungen.zufallKnopf(context)) Knopf("Zufällig", onClick = { abspielen.zufall(context, sr) }, symbol = "⤨")
+					if (SelikuEinstellungen.zufallKnopf(context)) Knopf(stringResource(R.string.seliku_shuffle), onClick = { abspielen.zufall(context, sr) }, symbol = "⤨")
 					val gesehen = sr.userData?.played == true
-					Knopf(if (gesehen) "Ungesehen" else "Gesehen", symbol = if (gesehen) "○" else "✓", onClick = {
+					Knopf(stringResource(if (gesehen) R.string.seliku_mark_unwatched else R.string.seliku_mark_watched), symbol = if (gesehen) "○" else "✓", onClick = {
 						scope.launch { runCatching { daten.gesehen(sr.id, !gesehen) }; neuLaden++ }
 					})
 					TrailerKnopf(sr)
@@ -163,7 +166,7 @@ fun SerienSeite(vm: SelikuViewModel, seite: Seite.Serie, oeffnen: (BaseItemDto) 
 			}
 			item {
 				val f = folgen
-				if (f == null) Text("Folgen werden geladen …", style = Schrift.Leise, modifier = Modifier.padding(start = 48.dp))
+				if (f == null) Text(stringResource(R.string.seliku_episodes_loading), style = Schrift.Leise, modifier = Modifier.padding(start = 48.dp))
 				else {
 					Reihe(
 						titel = staffelName(staffeln.firstOrNull { it.id == staffel }),
@@ -174,7 +177,7 @@ fun SerienSeite(vm: SelikuViewModel, seite: Seite.Serie, oeffnen: (BaseItemDto) 
 						onFokus = { gewaehlteFolge = it },
 						kachel = { item, klick, merken, fokus ->
 							QuerKachel(item, klick, breite = 270.dp, merken = merken, onFokus = fokus,
-								zeilen = folgenTitel(item) to listOfNotNull(laufzeit(item.runTimeTicks), if (item.userData?.played == true) "gesehen" else null).joinToString(" · "))
+								zeilen = folgenTitel(item) to listOfNotNull(laufzeit(item.runTimeTicks), if (item.userData?.played == true) stringResource(R.string.seliku_watched_lower) else null).joinToString(" · "))
 						},
 					)
 					val g = gewaehlteFolge
@@ -184,7 +187,7 @@ fun SerienSeite(vm: SelikuViewModel, seite: Seite.Serie, oeffnen: (BaseItemDto) 
 					)
 				}
 			}
-			item { Spacer(Modifier.height(12.dp)); Reihe("Ähnliche Serien", aehnlich, vm, seite, onClick = oeffnen, kachel = { item, klick, merken, fokus ->
+			item { Spacer(Modifier.height(12.dp)); Reihe(stringResource(R.string.seliku_similar_series), aehnlich, vm, seite, onClick = oeffnen, kachel = { item, klick, merken, fokus ->
 				PosterKachel(item, klick, breite = 120.dp, merken = merken, onFokus = fokus, onMenue = { vm.menue = item }, aufklappen = true) }) }
 		} }
 	}
@@ -218,15 +221,15 @@ fun TitelSeite(vm: SelikuViewModel, seite: Seite.Titel, oeffnen: (BaseItemDto) -
 	Box(Modifier.fillMaxSize()) {
 		Kulisse(bilder.hintergrund(t))
 		if (fehltTitel) { NichtMehrDa(vm); return@Box }
-		if (t == null) { Hinweis("Wird geladen …"); return@Box }
+		if (t == null) { Hinweis(stringResource(R.string.seliku_loading)); return@Box }
 		SenkrechtRollen { LazyColumn(state = vm.liste(seite), contentPadding = PaddingValues(bottom = 48.dp), modifier = Modifier.fillMaxSize()) {
 			item {
 				val fortsetzen = fortsetzenText(t)
-				Kopf(t, zusatz = t.people?.filter { it.type?.name == "DIRECTOR" }?.take(2)?.joinToString(", ") { it.name.orEmpty() }?.takeIf { it.isNotBlank() }?.let { "Regie: $it" }, liste = vm.liste(seite)) {
-					Knopf(fortsetzen ?: "Abspielen", symbol = "▶", hervorgehoben = true, modifier = Modifier.focusRequester(start), onClick = { abspielen.video(context, t) })
-					if (fortsetzen != null) Knopf("Von vorn", symbol = "↺", onClick = { abspielen.video(context, t, vonVorn = true) })
+				Kopf(t, zusatz = t.people?.filter { it.type?.name == "DIRECTOR" }?.take(2)?.joinToString(", ") { it.name.orEmpty() }?.takeIf { it.isNotBlank() }?.let { stringResource(R.string.seliku_director, it) }, liste = vm.liste(seite)) {
+					Knopf(fortsetzen ?: stringResource(R.string.seliku_play), symbol = "▶", hervorgehoben = true, modifier = Modifier.focusRequester(start), onClick = { abspielen.video(context, t) })
+					if (fortsetzen != null) Knopf(stringResource(R.string.seliku_from_start), symbol = "↺", onClick = { abspielen.video(context, t, vonVorn = true) })
 					val gesehen = t.userData?.played == true
-					Knopf(if (gesehen) "Ungesehen" else "Gesehen", symbol = if (gesehen) "○" else "✓", onClick = {
+					Knopf(stringResource(if (gesehen) R.string.seliku_mark_unwatched else R.string.seliku_mark_watched), symbol = if (gesehen) "○" else "✓", onClick = {
 						scope.launch { runCatching { daten.gesehen(t.id, !gesehen) }; neuLaden++ }
 					})
 					TrailerKnopf(t)
@@ -234,7 +237,7 @@ fun TitelSeite(vm: SelikuViewModel, seite: Seite.Titel, oeffnen: (BaseItemDto) -
 				}
 				Spacer(Modifier.height(32.dp))
 			}
-			item { Reihe("Ähnliche Titel", aehnlich, vm, seite, onClick = oeffnen, kachel = { item, klick, merken, fokus ->
+			item { Reihe(stringResource(R.string.seliku_similar_titles), aehnlich, vm, seite, onClick = oeffnen, kachel = { item, klick, merken, fokus ->
 				PosterKachel(item, klick, breite = 120.dp, merken = merken, onFokus = fokus, onMenue = { vm.menue = item }, aufklappen = true) }) }
 		} }
 	}
@@ -270,7 +273,7 @@ fun TrailerKnopf(item: BaseItemDto) {
 	Waehlbar(onClick = { abspielen.video(context, t) }, vergroessern = false, shape = androidx.compose.foundation.shape.CircleShape) { fokussiert ->
 		Box(Modifier.size(44.dp).background(if (fokussiert) Farben.Text else Farben.Flaeche), contentAlignment = Alignment.Center) {
 			androidx.compose.foundation.Image(
-				painter = androidx.compose.ui.res.painterResource(org.jellyfin.androidtv.R.drawable.ic_trailer), contentDescription = "Trailer",
+				painter = androidx.compose.ui.res.painterResource(org.jellyfin.androidtv.R.drawable.ic_trailer), contentDescription = stringResource(R.string.seliku_trailer),
 				colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(if (fokussiert) androidx.compose.ui.graphics.Color.Black else Farben.Text),
 				modifier = Modifier.size(22.dp))
 		}
