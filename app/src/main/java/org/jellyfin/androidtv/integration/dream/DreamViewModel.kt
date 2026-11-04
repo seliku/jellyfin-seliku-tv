@@ -35,6 +35,7 @@ import org.jellyfin.sdk.api.client.extensions.itemsApi
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.ImageType
+import org.jellyfin.sdk.model.api.ItemFilter
 import org.jellyfin.sdk.model.api.ItemSortBy
 import timber.log.Timber
 import kotlin.time.Duration
@@ -107,6 +108,8 @@ class DreamViewModel(
 						sortBy = listOf(ItemSortBy.RANDOM),
 						limit = batchSize,
 						imageTypes = listOf(ImageType.BACKDROP),
+						// Seliku: nur Titel, die man noch nicht gesehen hat – als Anregung, nicht als Rückblick
+						filters = listOf(ItemFilter.IS_UNPLAYED),
 						maxOfficialRating = if (maxParentalRating == -1) null else maxParentalRating.toString(),
 						hasParentalRating = if (requireParentalRating) true else null,
 					)

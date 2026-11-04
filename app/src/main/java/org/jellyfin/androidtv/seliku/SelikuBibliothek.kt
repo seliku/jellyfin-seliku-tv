@@ -41,7 +41,7 @@ private const val SEITENGROESSE = 60
 
 /** Bibliothek (Filme oder Serien): Raster mit Sortierung und Filter «Ungesehen», lädt beim Scrollen nach. */
 @Composable
-fun BibliothekSeite(vm: SelikuViewModel, seite: Seite.Bibliothek, oeffnen: (BaseItemDto) -> Unit) {
+fun BibliothekSeite(vm: SelikuViewModel, seite: Seite.Bibliothek, oeffnen: (BaseItemDto) -> Unit, mitKopf: Boolean = true) {
 	val daten = koinInject<SelikuDaten>()
 	val abspielen = koinInject<Abspielen>()
 	val context = LocalContext.current
@@ -95,7 +95,7 @@ fun BibliothekSeite(vm: SelikuViewModel, seite: Seite.Bibliothek, oeffnen: (Base
 	}
 
 	Column(Modifier.fillMaxSize()) {
-		Row(
+		if (mitKopf) Row(
 			Modifier.fillMaxWidth().padding(start = 48.dp, top = 28.dp, end = 48.dp, bottom = 8.dp),
 			verticalAlignment = Alignment.CenterVertically,
 		) {
@@ -154,6 +154,7 @@ fun BibliothekSeite(vm: SelikuViewModel, seite: Seite.Bibliothek, oeffnen: (Base
 						erster = if (index == 0) erstes else null,
 						onClick = { oeffnen(item) },
 						merken = vm to (seite.schluessel to item.id.toString()),
+						onMenue = { vm.menue = item },
 					)
 				}
 			}

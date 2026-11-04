@@ -3,7 +3,9 @@ package org.jellyfin.androidtv.seliku
 import android.content.Context
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import org.jellyfin.androidtv.ui.navigation.Destinations
 import org.jellyfin.androidtv.ui.navigation.NavigationRepository
@@ -54,6 +56,18 @@ class SelikuViewModel : ViewModel() {
 	val fokus = mutableMapOf<String, String>()
 	val wahl = mutableMapOf<String, Any>()
 
+	/** Titel, zu dem gerade das Titelmenü (langes Drücken) offen ist. */
+	var menue by androidx.compose.runtime.mutableStateOf<BaseItemDto?>(null)
+
+	/** Erste Kachel je Seite: «Zurück» springt dorthin, bevor die Leiste aufgeht. */
+	val ersterSchluessel = mutableMapOf<String, String>()
+	private val ersteAnfragen = mutableMapOf<String, androidx.compose.ui.focus.FocusRequester>()
+	fun ersteAnfrageFuer(seite: String, kachel: String): androidx.compose.ui.focus.FocusRequester {
+		val erster = ersterSchluessel.getOrPut(seite) { kachel }
+		return if (erster == kachel) ersteAnfragen.getOrPut(seite) { androidx.compose.ui.focus.FocusRequester() } else androidx.compose.ui.focus.FocusRequester()
+	}
+	fun ersteAnfrage(seite: String) = ersteAnfragen[seite]
+
 	val aktuell get() = stapel.last()
 
 	fun zu(seite: Seite) {
@@ -70,6 +84,7 @@ class SelikuViewModel : ViewModel() {
 		val weg = stapel.removeAt(stapel.lastIndex)
 		if (weg !in stapel) {
 			listen.remove(weg.schluessel); raster.remove(weg.schluessel); fokus.remove(weg.schluessel)
+			ersterSchluessel.remove(weg.schluessel); ersteAnfragen.remove(weg.schluessel)
 		}
 		return true
 	}

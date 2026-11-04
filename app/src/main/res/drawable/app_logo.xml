@@ -2,7 +2,7 @@
 <!-- Seliku: Logo oben in der Leiste/Anmeldung – nur das eigene Play-Zeichen -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:aapt="http://schemas.android.com/aapt"
     android:width="252dp" android:height="72dp" android:viewportWidth="252" android:viewportHeight="72">
-    <group android:translateX="-22" android:translateY="-18">
+    <group android:translateX="65" android:translateY="-18">
         <path android:pathData="M44,31.5Q38,28 38,35L38,73Q38,80 44,76.5L78.5,57.5Q84,54 78.5,50.5Z"><aapt:attr name="android:fillColor"><gradient android:type="linear" android:startX="38" android:startY="30" android:endX="84" android:endY="78"><item android:offset="0" android:color="#FFFFB347"/><item android:offset="1" android:color="#FFFF6B4A"/></gradient></aapt:attr></path>
     </group>
 </vector>

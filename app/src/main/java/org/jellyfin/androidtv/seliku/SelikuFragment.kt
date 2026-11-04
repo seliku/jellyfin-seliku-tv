@@ -39,6 +39,7 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -117,6 +118,33 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 		vm.wahl.remove("start-reihen")
 	}
 
+	// Vorladen: Startseite zuerst, danach mit kurzer Verzögerung die anderen Bibliotheken im Hintergrund,
+	// damit beim Wechsel kein «Wird geladen» kommt (die Seiten lesen dieselben Zwischenspeicher-Schlüssel)
+	LaunchedEffect(bibliotheken) {
+		if (bibliotheken.isEmpty()) return@LaunchedEffect
+		kotlinx.coroutines.delay(4_000)
+		bibliotheken.forEach { bib ->
+			runCatching {
+				when (val ziel = seiteFuerBibliothek(bib)) {
+					is Seite.Bibliothek -> {
+						val k = ziel.schluessel
+						if (vm.wahl["$k|start-reihen"] == null) vm.wahl["$k|start-reihen"] = bibliothekReihenLaden(daten, bib)
+						if (vm.wahl["$k|banner"] == null) vm.wahl["$k|banner"] = daten.bannerEmpfehlungen(bib)
+						if (vm.wahl["$k|items|${Sortierung.NEU}|false|null"] == null)
+							vm.wahl["$k|items|${Sortierung.NEU}|false|null"] = daten.inhalt(bib, typenFuer(bib), Sortierung.NEU, false, 0, 60).items
+					}
+					is Seite.Musik -> {
+						if (vm.wahl["musik-playlists"] == null) vm.wahl["musik-playlists"] = daten.playlists()
+						if (vm.wahl["${ziel.schluessel}|liste|1"] == null) vm.wahl["${ziel.schluessel}|liste|1"] = daten.interpreten(bib)
+					}
+					Seite.LiveTv -> if (vm.wahl["livetv|sender"] == null) vm.wahl["livetv|sender"] = daten.sender()
+					else -> Unit
+				}
+			}.onFailure { Timber.w(it, "Vorladen %s", bib.name) }
+			kotlinx.coroutines.delay(500)
+		}
+	}
+
 	// Selbst-Update: beim Start und danach alle 6 Stunden nachsehen, ob es eine neuere Version gibt
 	val scope = androidx.compose.runtime.rememberCoroutineScope()
 	var update by remember { mutableStateOf<SelikuUpdate.Version?>(null) }
@@ -138,7 +166,7 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 		add(Eintrag(R.drawable.ic_house, "Startseite", Seite.Start))
 		// Feste Reihenfolge wie gewohnt: Filme, Serien, Live-TV, Musik, dann alles andere
 		val rang = { b: BaseItemDto -> when (b.collectionType?.serialName) { "movies" -> 0; "tvshows" -> 1; "livetv" -> 2; "music" -> 3; else -> 4 } }
-		bibliotheken.sortedBy(rang).forEach { bib -> add(Eintrag(symbolFuer(bib), bib.name.orEmpty(), seiteFuerBibliothek(bib))) }
+		bibliotheken.filter { it.collectionType?.serialName != "playlists" }.sortedBy(rang).forEach { bib -> add(Eintrag(symbolFuer(bib), bib.name.orEmpty(), seiteFuerBibliothek(bib))) }
 		updateEintrag = update?.let { v ->
 			(Eintrag(R.drawable.seliku_update, updateText ?: "Update ${v.name}", null, hervor = true) {
 				when {
@@ -170,16 +198,39 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 		repeat(60) { i ->
 			kotlinx.coroutines.delay(150)
 			if (inhaltHatFokus || tasteGedrueckt) return@LaunchedEffect
-			if ((!gemerkt || i >= 5) && runCatching { inhalt.requestFocus() }.getOrDefault(false) && inhaltHatFokus) return@LaunchedEffect
+			// Erste Kachel der Seite (auf der Startseite: erster Titel unter «Weiterschauen», nicht der Banner)
+			val erste = vm.ersteAnfrage(vm.aktuell.schluessel)
+			if ((!gemerkt || i >= 5) && erste != null && runCatching { erste.requestFocus() }.getOrDefault(false) && inhaltHatFokus) return@LaunchedEffect
+			if ((!gemerkt || i >= 5) && i >= 8 && runCatching { inhalt.requestFocus() }.getOrDefault(false) && inhaltHatFokus) return@LaunchedEffect
 		}
 	}
 
-	// Zurück: erst eine Seite zurück, auf einer Hauptseite in die Seitenleiste, aus der Seitenleiste beendet die App.
-	BackHandler(enabled = vm.stapel.size > 1 || !leisteOffen) {
-		if (!vm.zurueck()) runCatching { leiste.requestFocus() }
+	// Zurück wie bei Netflix: Unterseite → eine Seite zurück; im Inhalt erst zur ersten Kachel oben, dann in die Leiste;
+	// in der Leiste zur Startseite. Beenden nur, wenn in den Einstellungen «zweimal Zurück» an ist.
+	var letztesZurueck by remember { mutableStateOf(0L) }
+	BackHandler(enabled = true) {
+		val seite = vm.aktuell
+		when {
+			vm.zurueck() -> Unit
+			!leisteOffen && vm.fokus[seite.schluessel] != null && vm.fokus[seite.schluessel] != vm.ersterSchluessel[seite.schluessel] -> scope.launch {
+				runCatching { vm.listen[seite.schluessel]?.scrollToItem(0) }
+				runCatching { vm.raster[seite.schluessel]?.scrollToItem(0) }
+				kotlinx.coroutines.delay(80)
+				if (vm.ersteAnfrage(seite.schluessel)?.let { runCatching { it.requestFocus() }.getOrDefault(false) } != true) runCatching { leiste.requestFocus() }
+			}
+			!leisteOffen -> runCatching { leiste.requestFocus() }
+			seite != Seite.Start -> { vm.wurzel(Seite.Start); runCatching { inhalt.requestFocus() } }
+			SelikuEinstellungen.doppelZurueck(context) -> {
+				val jetzt = System.currentTimeMillis()
+				if (jetzt - letztesZurueck < 2000) (context as? android.app.Activity)?.finish()
+				else { letztesZurueck = jetzt; android.widget.Toast.makeText(context, "Nochmals Zurück zum Beenden", android.widget.Toast.LENGTH_SHORT).show() }
+			}
+			else -> runCatching { inhalt.requestFocus() }
+		}
 	}
 
-	Box(Modifier.fillMaxSize().background(Farben.Hintergrund).onPreviewKeyEvent { tasteGedrueckt = true; false }) {
+
+	Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Farben.HintergrundOben, Farben.Hintergrund), end = androidx.compose.ui.geometry.Offset(1400f, 1100f))).onPreviewKeyEvent { tasteGedrueckt = true; false }) {
 		Box(Modifier.fillMaxSize()) {
 			// Inhalt beginnt neben der schmalen Leiste; die offene Leiste legt sich als Insel darüber, ohne den Inhalt zu verschieben
 			Box(Modifier.fillMaxSize().padding(start = 76.dp).focusRequester(inhalt).onFocusChanged { inhaltHatFokus = it.hasFocus }.focusRestorer().focusGroup()) {
@@ -190,7 +241,7 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 						Seite.Start -> StartSeite(vm, oeffnen)
 						Seite.Suche -> SuchSeite(vm, oeffnen)
 						Seite.LiveTv -> LiveTvSeite(vm)
-						is Seite.Bibliothek -> BibliothekSeite(vm, seite, oeffnen)
+						is Seite.Bibliothek -> BibliothekRahmen(vm, seite, oeffnen)
 						is Seite.Musik -> MusikSeite(vm, seite, oeffnen)
 						is Seite.Serie -> SerienSeite(vm, seite, oeffnen)
 						is Seite.Titel -> TitelSeite(vm, seite, oeffnen)
@@ -218,6 +269,7 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 			)
 		}
 		MiniPlayer(Modifier.align(Alignment.BottomEnd).padding(end = 32.dp, bottom = 24.dp))
+		vm.menue?.let { item -> TitelMenue(vm, item) { vm.wahl.keys.removeAll { it.endsWith("start-reihen") || it == "start-reihen" }; neuLaden++ } }
 	}
 }
 
@@ -264,8 +316,12 @@ private fun Seitenleiste(
 		Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
 			horizontalArrangement = if (offen) Arrangement.spacedBy(6.dp) else Arrangement.Center) {
 			val sucheAktiv = aktiv.schluessel == Seite.Suche.schluessel
-			SymbolKnopf(R.drawable.ic_search, "Suche", aktiv = sucheAktiv, modifier = Modifier.focusRequester(sucheAnfrage)) { waehlen(Eintrag(R.drawable.ic_search, "Suche", Seite.Suche)) }
+			// Zugeklappt steht oben nur das Profilbild; aufgeklappt die Symbolreihe
+			if (!offen) Box(Modifier.size(44.dp).padding(3.dp)) {
+				Avatar(benutzer?.primaryImage?.getUrl(api), benutzer?.name, Modifier.fillMaxSize())
+			}
 			if (offen) {
+				SymbolKnopf(R.drawable.ic_search, "Suche", aktiv = sucheAktiv, modifier = Modifier.focusRequester(sucheAnfrage)) { waehlen(Eintrag(R.drawable.ic_search, "Suche", Seite.Suche)) }
 				oben.forEach { e -> SymbolKnopf(e.symbol, e.titel, hervor = e.hervor) { waehlen(e) } }
 				Spacer(Modifier.weight(1f))
 				Waehlbar(onClick = {

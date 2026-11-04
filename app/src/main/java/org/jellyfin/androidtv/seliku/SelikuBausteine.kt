@@ -3,6 +3,7 @@ package org.jellyfin.androidtv.seliku
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -84,7 +85,7 @@ fun Waehlbar(
 	content: @Composable (fokussiert: Boolean) -> Unit,
 ) {
 	var fokussiert by remember { mutableStateOf(false) }
-	val anfrage = remember { FocusRequester() }
+	val anfrage = remember(merken?.second) { merken?.let { (vm, wo) -> vm.ersteAnfrageFuer(wo.first, wo.second) } ?: FocusRequester() }
 	if (merken != null) {
 		val (vm, wo) = merken
 		LaunchedEffect(Unit) {
@@ -110,7 +111,8 @@ fun Waehlbar(
 			}
 			.clip(shape)
 			.border(if (fokussiert) 3.dp else 0.dp, if (fokussiert) Farben.Akzent else Color.Transparent, shape)
-			.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+			// Langes Drücken (OK halten) oder Menütaste öffnet das Titelmenü
+			.combinedClickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick, onLongClick = onMenue)
 	) {
 		content(fokussiert)
 	}
@@ -285,7 +287,7 @@ fun Reihe(
 			itemsIndexed(items, key = { _, it -> it.id }) { _, item ->
 				val merken = vm to (seite.schluessel to "$titel|${item.id}")
 				if (kachel != null) kachel(item, { onClick(item) }, merken) { onFokus(item) }
-				else Kachel(item, { onClick(item) }, merken = merken, onFokus = { onFokus(item) }, onMenue = onMenue?.let { m -> { m(item) } })
+				else Kachel(item, { onClick(item) }, merken = merken, onFokus = { onFokus(item) }, onMenue = onMenue?.let { m -> { m(item) } } ?: { vm.menue = item })
 			}
 		} }
 	}
@@ -300,6 +302,7 @@ fun Knopf(
 	aktiv: Boolean = false,
 	hervorgehoben: Boolean = false,
 	symbol: String? = null,
+	breit: Boolean = false,
 	onFokus: () -> Unit = {},
 ) {
 	Waehlbar(onClick = onClick, modifier = modifier, shape = RoundedCornerShape(22.dp), vergroessern = false, onFokus = onFokus) { fokussiert ->
@@ -311,7 +314,7 @@ fun Knopf(
 		}
 		val schrift = if (fokussiert || hervorgehoben) Color.Black else Farben.Text
 		Row(
-			Modifier.background(grund).padding(start = 20.dp, end = 24.dp, top = 10.dp, bottom = 10.dp),
+			(if (breit) Modifier.fillMaxWidth() else Modifier).background(grund).padding(start = 20.dp, end = 24.dp, top = 10.dp, bottom = 10.dp),
 			verticalAlignment = Alignment.CenterVertically,
 			horizontalArrangement = Arrangement.spacedBy(8.dp),
 		) {
@@ -324,7 +327,8 @@ fun Knopf(
 /** Hintergrundbild mit Verlauf nach links und unten. */
 @Composable
 fun Kulisse(url: String?, modifier: Modifier = Modifier) {
-	Box(modifier.fillMaxSize().background(Farben.Hintergrund)) {
+	// Grundton mit warmem Verlauf (oben links heller), darüber das Hintergrundbild
+	Box(modifier.fillMaxSize().background(Brush.linearGradient(listOf(Farben.HintergrundOben, Farben.Hintergrund), end = androidx.compose.ui.geometry.Offset(1400f, 1100f)))) {
 		if (url != null) AsyncImage(
 			model = url,
 			contentDescription = null,

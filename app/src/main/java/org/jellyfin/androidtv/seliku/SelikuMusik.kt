@@ -41,6 +41,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.jellyfin.androidtv.ui.base.Text
 import org.jellyfin.sdk.model.api.BaseItemDto
+import org.jellyfin.sdk.model.api.ItemSortBy
+import org.jellyfin.sdk.model.api.ItemFilter
+import org.jellyfin.sdk.model.api.BaseItemKind
 import org.koin.compose.koinInject
 import timber.log.Timber
 
@@ -48,29 +51,32 @@ import timber.log.Timber
 @Composable
 fun MusikSeite(vm: SelikuViewModel, seite: Seite.Musik, oeffnen: (BaseItemDto) -> Unit) {
 	val daten = koinInject<SelikuDaten>()
+	// Reiter: 0 Playlists (mit automatischen Mixen), 1 Interpreten, 2 Alben
 	var reiter by remember { mutableStateOf(vm.wahl["${seite.schluessel}|reiter"] as? Int ?: 0) }
 	@Suppress("UNCHECKED_CAST")
 	var liste by remember(reiter) { mutableStateOf(vm.wahl["${seite.schluessel}|liste|$reiter"] as? List<BaseItemDto>) }
 
 	LaunchedEffect(reiter) {
 		vm.wahl["${seite.schluessel}|reiter"] = reiter
-		val neu = runCatching { if (reiter == 0) daten.interpreten(seite.ansicht) else daten.alben(seite.ansicht, null) }
+		if (reiter == 0) return@LaunchedEffect
+		val neu = runCatching { if (reiter == 1) daten.interpreten(seite.ansicht) else daten.alben(seite.ansicht, null) }
 			.onFailure { Timber.w(it, "Musik laden") }.getOrNull()
 		if (neu != null) { liste = neu; vm.wahl["${seite.schluessel}|liste|$reiter"] = neu }
-		// Ohne erkannte Interpreten gleich die Alben zeigen statt einer leeren Seite
-		if (neu != null && neu.isEmpty() && reiter == 0) reiter = 1
+		if (neu != null && neu.isEmpty() && reiter == 1) reiter = 2
 	}
 
 	Column(Modifier.fillMaxSize()) {
 		Row(Modifier.padding(start = 48.dp, top = 28.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
 			Text(seite.ansicht.name.orEmpty(), style = Schrift.Titel)
 			Spacer(Modifier.width(12.dp))
-			Knopf("Interpreten", onClick = { reiter = 0 }, aktiv = reiter == 0)
-			Knopf("Alben", onClick = { reiter = 1 }, aktiv = reiter == 1)
+			Knopf("Playlists", onClick = { reiter = 0 }, aktiv = reiter == 0)
+			Knopf("Interpreten", onClick = { reiter = 1 }, aktiv = reiter == 1)
+			Knopf("Alben", onClick = { reiter = 2 }, aktiv = reiter == 2)
 		}
+		if (reiter == 0) { PlaylistsReiter(vm, seite); return@Column }
 		val l = liste
 		if (l == null) { Hinweis("Wird geladen …"); return@Column }
-		val schluessel = Seite.Musik(seite.ansicht).let { if (reiter == 0) it else Seite.Bibliothek(seite.ansicht) }
+		val schluessel = Seite.Ordner(seite.ansicht.id, "musik-$reiter")
 		LazyVerticalGrid(
 			state = vm.raster(schluessel),
 			columns = GridCells.Adaptive(150.dp),
@@ -80,7 +86,80 @@ fun MusikSeite(vm: SelikuViewModel, seite: Seite.Musik, oeffnen: (BaseItemDto) -
 			modifier = Modifier.fillMaxSize(),
 		) {
 			items(l, key = { it.id }) { item ->
-				QuadratKachel(item, onClick = { oeffnen(item) }, rund = reiter == 0, merken = vm to (schluessel.schluessel to item.id.toString()))
+				QuadratKachel(item, onClick = { oeffnen(item) }, rund = reiter == 1, merken = vm to (schluessel.schluessel to item.id.toString()))
+			}
+		}
+	}
+}
+
+/** Ein automatischer Mix: Name, Untertitel und wie er seine Titel holt. */
+private class Mix(val name: String, val unter: String, val laden: suspend () -> List<BaseItemDto>)
+
+/** Playlists-Reiter: eigene Playlists, darunter automatische Mixe (je Genre, neu, meistgehört, lange nicht gehört, Zufall). */
+@Composable
+private fun PlaylistsReiter(vm: SelikuViewModel, seite: Seite.Musik) {
+	val daten = koinInject<SelikuDaten>()
+	val abspielen = koinInject<Abspielen>()
+	val context = LocalContext.current
+	val scope = rememberCoroutineScope()
+	@Suppress("UNCHECKED_CAST")
+	var eigene by remember { mutableStateOf(vm.wahl["musik-playlists"] as? List<BaseItemDto> ?: emptyList()) }
+	@Suppress("UNCHECKED_CAST")
+	var genres by remember { mutableStateOf(vm.wahl["${seite.schluessel}|genres"] as? List<String> ?: emptyList()) }
+	LaunchedEffect(Unit) {
+		runCatching { daten.playlists() }.onSuccess { eigene = it; vm.wahl["musik-playlists"] = it }
+		runCatching { daten.genres(seite.ansicht, setOf(BaseItemKind.MUSIC_ALBUM, BaseItemKind.AUDIO)) }
+			.onSuccess { genres = it.take(8); vm.wahl["${seite.schluessel}|genres"] = genres }
+	}
+	val bib = seite.ansicht
+	val mixe = listOf(
+		Mix("Zufallsmix", "Querbeet durch alles") { daten.musikTitel(bib, ItemSortBy.RANDOM, true) },
+		Mix("Neu hinzugefügt", "Die neuesten Titel") { daten.musikTitel(bib, ItemSortBy.DATE_CREATED, true) },
+		Mix("Meistgehört", "Deine Lieblinge") { daten.musikTitel(bib, ItemSortBy.PLAY_COUNT, true, setOf(ItemFilter.IS_PLAYED)) },
+		Mix("Lange nicht gehört", "Wiederentdecken") { daten.musikTitel(bib, ItemSortBy.DATE_PLAYED, false, setOf(ItemFilter.IS_PLAYED)) },
+	) + genres.map { g -> Mix("$g-Mix", "Automatisch nach Genre") { daten.genreMix(g) } }
+	val unterSeite = Seite.Ordner(seite.ansicht.id, "musik-playlists")
+	SenkrechtRollen {
+		LazyColumn(state = vm.liste(unterSeite), contentPadding = PaddingValues(top = 8.dp, bottom = 48.dp), modifier = Modifier.fillMaxSize()) {
+			if (eigene.isNotEmpty()) item {
+				Reihe("Deine Playlists", eigene, vm, unterSeite, onClick = { p ->
+					scope.launch { abspielen.musik(context, runCatching { daten.playlistTitel(p.id) }.getOrDefault(emptyList())) }
+				}, kachel = { item, klick, merken, fokus -> QuadratKachel(item, klick, merken = merken, onFokus = fokus) })
+			}
+			item {
+				Text("Automatische Mixe", style = Schrift.Reihe, modifier = Modifier.padding(start = 48.dp, top = 6.dp, bottom = 8.dp))
+				androidx.compose.foundation.lazy.LazyRow(
+					contentPadding = PaddingValues(horizontal = 48.dp, vertical = 8.dp),
+					horizontalArrangement = Arrangement.spacedBy(18.dp),
+				) {
+					itemsIndexed(mixe, key = { _, m -> m.name }) { i, m ->
+						MixKachel(m.name, m.unter, i, merken = vm to (unterSeite.schluessel to "mix|" + m.name)) {
+							scope.launch { abspielen.musik(context, runCatching { m.laden() }.getOrDefault(emptyList())) }
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+/** Quadratische Mix-Kachel mit warmem Verlauf (je Nummer ein anderer Farbton) und Namen darauf. */
+@Composable
+private fun MixKachel(name: String, unter: String, nr: Int, merken: Pair<SelikuViewModel, Pair<String, String>>, onClick: () -> Unit) {
+	val toene = listOf(
+		androidx.compose.ui.graphics.Color(0xFFF08A4B) to androidx.compose.ui.graphics.Color(0xFF8E3B2E),
+		androidx.compose.ui.graphics.Color(0xFFE9B44C) to androidx.compose.ui.graphics.Color(0xFF9B4F1F),
+		androidx.compose.ui.graphics.Color(0xFFD9605A) to androidx.compose.ui.graphics.Color(0xFF5E2433),
+		androidx.compose.ui.graphics.Color(0xFF7FA37A) to androidx.compose.ui.graphics.Color(0xFF2F4A3A),
+		androidx.compose.ui.graphics.Color(0xFFB07AA1) to androidx.compose.ui.graphics.Color(0xFF4A2E4F),
+		androidx.compose.ui.graphics.Color(0xFF5FA8B8) to androidx.compose.ui.graphics.Color(0xFF243E52),
+	)
+	val (hell, dunkel) = toene[nr % toene.size]
+	Waehlbar(onClick = onClick, merken = merken, modifier = Modifier.width(150.dp)) {
+		Box(Modifier.fillMaxWidth().aspectRatio(1f).background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(hell, dunkel)))) {
+			Column(Modifier.align(Alignment.BottomStart).padding(12.dp)) {
+				Text(name, style = Schrift.Reihe, maxLines = 2, overflow = TextOverflow.Ellipsis)
+				Text(unter, style = Schrift.Klein.copy(color = Farben.Text.copy(alpha = 0.8f)), maxLines = 1)
 			}
 		}
 	}

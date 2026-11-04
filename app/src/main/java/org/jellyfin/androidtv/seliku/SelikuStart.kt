@@ -19,6 +19,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
@@ -45,6 +46,12 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 	var reihen by remember { mutableStateOf(vm.wahl["start-reihen"] as? List<StartReihe>) }
 	var gewaehlt by remember { mutableStateOf<BaseItemDto?>(null) }
 	var hero by remember { mutableStateOf<BaseItemDto?>(null) }
+	var bannerFokus by remember { mutableStateOf(false) }
+	@Suppress("UNCHECKED_CAST")
+	var banner by remember { mutableStateOf(vm.wahl["start-banner"] as? List<BaseItemDto> ?: emptyList()) }
+	LaunchedEffect(Unit) {
+		runCatching { daten.bannerEmpfehlungen() }.onSuccess { if (it.isNotEmpty()) { banner = it; vm.wahl["start-banner"] = it } }
+	}
 
 	LaunchedEffect(Unit) {
 		// Immer frisch laden (Fortschritt ändert sich nach dem Schauen), alte Reihen bis dahin stehen lassen
@@ -81,25 +88,16 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 		if (r.isEmpty()) { Hinweis("Noch nichts da."); return@Box }
 
 		Column(Modifier.fillMaxSize()) {
-			// Kopf: Titel, Infos, Beschreibung des gewählten Elements
-			Column(Modifier.fillMaxWidth().heightIn(min = 190.dp).padding(start = 48.dp, top = 36.dp, end = 360.dp)) {
-				val h = hero
-				val logo = bilder.logo(h)
-				if (logo != null) Bild(logo, Modifier.height(70.dp).width(300.dp), ContentScale.Fit, grund = androidx.compose.ui.graphics.Color.Transparent)
-				else Text(h?.hauptzeile().orEmpty(), style = Schrift.Riesig, maxLines = 1, overflow = TextOverflow.Ellipsis)
-				Spacer(Modifier.height(8.dp))
-				if (h != null) {
-					val zeile = if (h.type == BaseItemKind.EPISODE) h.unterzeile() else h.metazeile()
-					Text(zeile, style = Schrift.Leise, maxLines = 1)
-					Spacer(Modifier.height(8.dp))
-					Text((h.currentProgram?.overview ?: h.overview).orEmpty().takeUnless { it.trimStart().startsWith("http") }.orEmpty(), style = Schrift.Normal, maxLines = 3, overflow = TextOverflow.Ellipsis)
-				}
-			}
-			SenkrechtRollen { LazyColumn(
+			// Banner oben bleibt sichtbar, solange die gewählte Reihe ganz auf den Bildschirm passt
+			SeitlichRollen(rand = 24.dp) { LazyColumn(
 				state = vm.liste(seite),
 				contentPadding = PaddingValues(bottom = 40.dp),
 				modifier = Modifier.fillMaxSize(),
 			) {
+				item(key = "banner") {
+					Banner(banner, oeffnen = { b -> seiteFuer(b)?.let(vm::zu) }, zeigt = { b -> if (gewaehlt == null || bannerFokus) hero = b },
+						modifier = Modifier.onFocusChanged { bannerFokus = it.hasFocus; if (it.hasFocus) gewaehlt = null })
+				}
 				items(r, key = { it.titel }) { reihe ->
 					Reihe(
 						titel = reihe.titel,
@@ -116,7 +114,7 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 							}
 						},
 						kachel = if (reihe.titel == "Weiterschauen") { item, klick, merken, fokus ->
-							QuerKachel(item, klick, merken = merken, onFokus = fokus, breite = 280.dp)
+							PosterKachel(item, klick, breite = 120.dp, merken = merken, onFokus = fokus, onMenue = { vm.menue = item })
 						} else if (reihe.titel == "Jetzt im TV") { item, klick, merken, fokus ->
 							SenderKachel(item, klick, merken = merken, onFokus = fokus)
 						} else if (reihe.loeschdatum.isNotEmpty()) { item, klick, merken, fokus ->
@@ -124,7 +122,7 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 							val wann = tag?.let { "Wird am " + it.format(java.time.format.DateTimeFormatter.ofPattern("d.M.")) + " gelöscht" } ?: "Wird bald gelöscht"
 							QuerKachel(item, klick, merken = merken, onFokus = fokus, zeilen = item.name.orEmpty() to wann)
 						} else if (reihe.titel.startsWith("Neu in") && reihe.items.none { it.type == BaseItemKind.MUSIC_ALBUM || it.type == BaseItemKind.AUDIO }) { item, klick, merken, fokus ->
-							PosterKachel(item, klick, merken = merken, onFokus = fokus)
+							PosterKachel(item, klick, breite = 120.dp, merken = merken, onFokus = fokus, onMenue = { vm.menue = item })
 						} else null,
 					)
 				}

@@ -6,6 +6,8 @@ import kotlinx.coroutines.withContext
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.artistsApi
 import org.jellyfin.sdk.api.client.extensions.genresApi
+import org.jellyfin.sdk.api.client.extensions.instantMixApi
+import org.jellyfin.sdk.api.client.extensions.playlistsApi
 import org.jellyfin.sdk.api.client.extensions.itemsApi
 import org.jellyfin.sdk.api.client.extensions.libraryApi
 import org.jellyfin.sdk.api.client.extensions.liveTvApi
@@ -24,16 +26,17 @@ import org.jellyfin.sdk.model.api.MediaType
 import org.jellyfin.sdk.model.api.SortOrder
 import java.util.UUID
 
-/** Farben der Seliku-Oberfläche: eigene Gestaltung, dunkel, Akzent Petrol. */
+/** Farben der Seliku-Oberfläche: eigene Gestaltung, warm – dunkles Braunschwarz, Akzent Bernstein bis Koralle. */
 object Farben {
-	val Hintergrund = Color(0xFF0E1116)
-	val Flaeche = Color(0xFF1A1F27)
-	val FlaecheHell = Color(0xFF2A313C)
-	val Akzent = Color(0xFF4FB3BF)
-	val AkzentDunkel = Color(0xFF2E7F89)
-	val Text = Color(0xFFF2F4F7)
-	val TextLeise = Color(0xFFA3ACB9)
-	val Schatten = Color(0xCC0E1116)
+	val Hintergrund = Color(0xFF14100E)
+	val HintergrundOben = Color(0xFF2A1C15)
+	val Flaeche = Color(0xFF221A16)
+	val FlaecheHell = Color(0xFF342821)
+	val Akzent = Color(0xFFF08A4B)
+	val AkzentDunkel = Color(0xFFA9552C)
+	val Text = Color(0xFFF7F2EE)
+	val TextLeise = Color(0xFFB8AAA0)
+	val Schatten = Color(0xCC14100E)
 }
 
 /** Sortierungen der Bibliotheksansicht. */
@@ -173,6 +176,112 @@ class SelikuDaten(private val api: ApiClient) {
 	/** Genres einer Bibliothek, nach Name. */
 	suspend fun genres(bibliothek: BaseItemDto, typen: Set<BaseItemKind>): List<String> = io {
 		api.genresApi.getGenres(parentId = bibliothek.id, includeItemTypes = typen, sortBy = listOf(ItemSortBy.SORT_NAME)).content.items.mapNotNull { it.name }
+	}
+
+	// --- Startseiten der Bibliotheken ---
+
+	suspend fun weiterschauenIn(bib: BaseItemDto): List<BaseItemDto> = io {
+		api.itemsApi.getResumeItems(parentId = bib.id, limit = 24, mediaTypes = setOf(MediaType.VIDEO), fields = felder, enableUserData = true).content.items
+	}
+
+	suspend fun alsNaechstesIn(bib: BaseItemDto): List<BaseItemDto> = io {
+		api.tvShowsApi.getNextUp(parentId = bib.id, limit = 24, fields = felder, enableUserData = true, enableResumable = false).content.items
+	}
+
+	private suspend fun liste(
+		bib: BaseItemDto, typen: Set<BaseItemKind>, sortBy: List<ItemSortBy>, absteigend: Boolean,
+		filter: Set<ItemFilter> = emptySet(), genre: String? = null, anzahl: Int = 24,
+	) = api.itemsApi.getItems(
+		parentId = bib.id, includeItemTypes = typen, recursive = true, sortBy = sortBy,
+		sortOrder = listOf(if (absteigend) SortOrder.DESCENDING else SortOrder.ASCENDING),
+		filters = filter, genres = setOfNotNull(genre), fields = felder, enableUserData = true, limit = anzahl,
+	).content.items
+
+	suspend fun topUngesehen(bib: BaseItemDto, typen: Set<BaseItemKind>) = io {
+		liste(bib, typen, listOf(ItemSortBy.COMMUNITY_RATING), true, setOf(ItemFilter.IS_UNPLAYED))
+	}
+
+	suspend fun wiederentdecken(bib: BaseItemDto, typen: Set<BaseItemKind>) = io {
+		liste(bib, typen, listOf(ItemSortBy.RANDOM), true)
+	}
+
+	suspend fun genreReihe(bib: BaseItemDto, typen: Set<BaseItemKind>, genre: String) = io {
+		liste(bib, typen, listOf(ItemSortBy.RANDOM), true, genre = genre)
+	}
+
+	/** Zuletzt gesehen; bei Serien über die Folgen, je Serie einmal. */
+	suspend fun zuletztGesehen(bib: BaseItemDto, serien: Boolean) = io {
+		if (serien) liste(bib, setOf(BaseItemKind.EPISODE), listOf(ItemSortBy.DATE_PLAYED), true, setOf(ItemFilter.IS_PLAYED), anzahl = 60)
+			.distinctBy { it.seriesId }.take(24)
+		else liste(bib, setOf(BaseItemKind.MOVIE), listOf(ItemSortBy.DATE_PLAYED), true, setOf(ItemFilter.IS_PLAYED))
+	}
+
+	/** «Weil du X geschaut hast»: Ähnliches zum zuletzt Gesehenen der Bibliothek. */
+	suspend fun weilDuGeschaut(bib: BaseItemDto, serien: Boolean): Pair<String, List<BaseItemDto>>? = io {
+		val zuletzt = zuletztGesehen(bib, serien).firstOrNull() ?: return@io null
+		val basis = if (serien) zuletzt.seriesId ?: return@io null else zuletzt.id
+		val name = if (serien) zuletzt.seriesName.orEmpty() else zuletzt.name.orEmpty()
+		val treffer = api.libraryApi.getSimilarItems(itemId = basis, limit = 20, fields = felder).content.items
+		if (treffer.isEmpty()) null else "Weil du «$name» geschaut hast" to treffer
+	}
+
+	// --- Empfehlungen für den grossen Banner ---
+
+	/** Lieblings-Genres des Benutzers aus dem zuletzt Gesehenen (Filme und Folgen), häufigste zuerst. */
+	suspend fun lieblingsGenres(): List<String> = io {
+		val gesehen = api.itemsApi.getItems(
+			includeItemTypes = setOf(BaseItemKind.MOVIE, BaseItemKind.EPISODE), recursive = true,
+			filters = setOf(ItemFilter.IS_PLAYED), sortBy = listOf(ItemSortBy.DATE_PLAYED), sortOrder = listOf(SortOrder.DESCENDING),
+			fields = setOf(ItemFields.GENRES), limit = 150,
+		).content.items
+		// Folgen tragen oft keine Genres – dann die der Serie
+		val serienGenres = gesehen.mapNotNull { it.seriesId }.distinct().take(30).flatMap { id ->
+			runCatching { api.userLibraryApi.getItem(itemId = id).content.genres.orEmpty() }.getOrDefault(emptyList())
+		}
+		(gesehen.flatMap { it.genres.orEmpty() } + serienGenres).groupingBy { it }.eachCount()
+			.entries.sortedByDescending { it.value }.map { it.key }
+	}
+
+	/**
+	 * Banner-Empfehlungen: noch nicht gesehene Filme/Serien mit Hintergrundbild, bevorzugt in den Lieblings-Genres
+	 * des Benutzers und gut bewertet; sonst zufällig Ungesehenes. [bib] schränkt auf eine Bibliothek ein.
+	 */
+	suspend fun bannerEmpfehlungen(bib: BaseItemDto? = null, anzahl: Int = 6): List<BaseItemDto> = io {
+		val typen = bib?.let { typenFuer(it) } ?: setOf(BaseItemKind.MOVIE, BaseItemKind.SERIES)
+		val genres = runCatching { lieblingsGenres() }.getOrDefault(emptyList()).take(3)
+		suspend fun abfrage(mitGenres: Boolean) = api.itemsApi.getItems(
+			parentId = bib?.id, includeItemTypes = typen, recursive = true,
+			filters = setOf(ItemFilter.IS_UNPLAYED), imageTypes = setOf(org.jellyfin.sdk.model.api.ImageType.BACKDROP),
+			genres = if (mitGenres) genres.toSet() else emptySet(),
+			sortBy = if (mitGenres) listOf(ItemSortBy.COMMUNITY_RATING) else listOf(ItemSortBy.RANDOM),
+			sortOrder = listOf(SortOrder.DESCENDING), fields = felder, enableUserData = true, limit = 40,
+		).content.items
+		val passend = if (genres.isNotEmpty()) abfrage(true).shuffled().take(anzahl) else emptyList()
+		(passend + abfrage(false)).distinctBy { it.id }.take(anzahl)
+	}
+
+	// --- Musik ---
+
+	/** Eigene Playlists; Playlist-Dateien aus den Medienordnern (z. B. .m3u in Album-Ordnern) bleiben aussen vor. */
+	suspend fun playlists(): List<BaseItemDto> = io {
+		api.itemsApi.getItems(includeItemTypes = setOf(BaseItemKind.PLAYLIST), recursive = true, sortBy = listOf(ItemSortBy.SORT_NAME),
+			fields = felder + ItemFields.PATH).content.items.filter { it.path?.startsWith("/mnt/") != true }
+	}
+
+	suspend fun playlistTitel(id: UUID): List<BaseItemDto> = io {
+		api.playlistsApi.getPlaylistItems(playlistId = id, fields = felder, enableUserData = true).content.items
+	}
+
+	suspend fun genreMix(name: String): List<BaseItemDto> = io {
+		api.instantMixApi.getInstantMixFromMusicGenreByName(name = name, limit = 100, fields = felder).content.items
+	}
+
+	suspend fun musikTitel(bib: BaseItemDto, sortBy: ItemSortBy, absteigend: Boolean, filter: Set<ItemFilter> = emptySet(), anzahl: Int = 100) = io {
+		liste(bib, setOf(BaseItemKind.AUDIO), listOf(sortBy), absteigend, filter, anzahl = anzahl)
+	}
+
+	suspend fun favorit(id: UUID, ja: Boolean) = io {
+		if (ja) api.userLibraryApi.markFavoriteItem(itemId = id) else api.userLibraryApi.unmarkFavoriteItem(itemId = id)
 	}
 
 	suspend fun staffeln(serie: UUID): List<BaseItemDto> = io {
