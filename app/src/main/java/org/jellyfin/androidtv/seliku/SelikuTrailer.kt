@@ -34,17 +34,18 @@ import java.util.concurrent.ConcurrentHashMap
  */
 object Trailer {
 	private val zwischenspeicher = ConcurrentHashMap<UUID, String>()
-	private val keiner = ConcurrentHashMap.newKeySet<UUID>()
+	// «Kein Trailer» nur 15 Minuten merken: Trailarr lädt laufend nach, und der Fernseher hält die App tagelang am Leben
+	private val keiner = ConcurrentHashMap<UUID, Long>()
 
 	/** Adresse des ersten lokalen Trailers (bei Folgen: der Serie), sonst null. */
 	suspend fun adresse(api: ApiClient, item: BaseItemDto): String? {
 		val id = if (item.type == BaseItemKind.EPISODE || item.type == BaseItemKind.SEASON) item.seriesId ?: item.id else item.id
 		zwischenspeicher[id]?.let { return it }
-		if (id in keiner) return null
+		keiner[id]?.let { if (System.currentTimeMillis() - it < 15 * 60_000) return null else keiner.remove(id) }
 		val t = runCatching { withContext(Dispatchers.IO) { api.userLibraryApi.getLocalTrailers(itemId = id).content.firstOrNull() } }
 			.onFailure { Timber.d(it, "Trailer suchen") }.getOrNull()
 		val url = t?.let { "${api.baseUrl?.trimEnd('/')}/Videos/${it.id}/stream?static=true" }
-		if (url != null) zwischenspeicher[id] = url else keiner += id
+		if (url != null) zwischenspeicher[id] = url else keiner[id] = System.currentTimeMillis()
 		return url
 	}
 
