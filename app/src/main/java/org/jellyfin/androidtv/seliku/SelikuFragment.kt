@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -131,14 +132,16 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 		}
 	}
 
+	var updateEintrag: Eintrag? = null
+	var einstellungenEintrag: Eintrag? = null
 	val eintraege = buildList {
 		add(Eintrag(R.drawable.ic_house, "Startseite", Seite.Start))
 		// Feste Reihenfolge wie gewohnt: Filme, Serien, Live-TV, Musik, dann alles andere
 		val rang = { b: BaseItemDto -> when (b.collectionType?.serialName) { "movies" -> 0; "tvshows" -> 1; "livetv" -> 2; "music" -> 3; else -> 4 } }
 		bibliotheken.sortedBy(rang).forEach { bib -> add(Eintrag(symbolFuer(bib), bib.name.orEmpty(), seiteFuerBibliothek(bib))) }
 		add(Eintrag(R.drawable.ic_grid, "Bibliotheken", Seite.Bibliotheken))
-		update?.let { v ->
-			add(Eintrag(R.drawable.seliku_update, updateText ?: "Update ${v.name}", null, hervor = true) {
+		updateEintrag = update?.let { v ->
+			(Eintrag(R.drawable.seliku_update, updateText ?: "Update ${v.name}", null, hervor = true) {
 				when {
 					updateText != null && updateText!!.startsWith("Lädt") -> Unit
 					!SelikuUpdate.darfInstallieren(context) -> {
@@ -153,7 +156,7 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 				}
 			})
 		}
-		add(Eintrag(R.drawable.ic_settings, "Einstellungen", null) {
+		einstellungenEintrag = (Eintrag(R.drawable.ic_settings, "Einstellungen", null) {
 			context.startActivity(ActivityDestinations.userPreferences(context))
 		})
 	}
@@ -204,6 +207,7 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 			if (leisteOffen) Box(Modifier.fillMaxSize().background(Color(0x99000000)))
 			Seitenleiste(
 				eintraege = eintraege,
+				oben = listOfNotNull(einstellungenEintrag, updateEintrag),
 				aktiv = vm.stapel.first(),
 				offen = leisteOffen,
 				modifier = Modifier.focusRequester(leiste).onFocusChanged { leisteOffen = it.hasFocus },
@@ -222,6 +226,7 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 @Composable
 private fun Seitenleiste(
 	eintraege: List<Eintrag>,
+	oben: List<Eintrag>,
 	aktiv: Seite,
 	offen: Boolean,
 	modifier: Modifier,
@@ -239,6 +244,8 @@ private fun Seitenleiste(
 	val benutzer = benutzerNeu ?: benutzerAlt
 	// Beim Betreten der Seitenleiste steht der Fokus auf der aktiven Seite, nicht oben beim Profil
 	val aktivAnfrage = remember { FocusRequester() }
+	// Von der ersten Bibliothek nach oben landet man immer zuerst bei der Suche (ganz links)
+	val sucheAnfrage = remember { FocusRequester() }
 
 	Column(
 		modifier
@@ -255,37 +262,33 @@ private fun Seitenleiste(
 			.padding(vertical = 24.dp, horizontal = 12.dp),
 		verticalArrangement = Arrangement.spacedBy(4.dp),
 	) {
-		// Oben: Suche als kleines Symbol; in der offenen Insel rechts daneben das Profilbild (wechselt das Profil)
+		// Oben eine Symbolreihe: Suche, Einstellungen, Update (falls vorhanden), Profilbild. Zugeklappt nur die Suche.
 		Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-			horizontalArrangement = if (offen) Arrangement.SpaceBetween else Arrangement.Center) {
+			horizontalArrangement = if (offen) Arrangement.spacedBy(6.dp) else Arrangement.Center) {
 			val sucheAktiv = aktiv.schluessel == Seite.Suche.schluessel
-			Waehlbar(onClick = { waehlen(Eintrag(R.drawable.ic_search, "Suche", Seite.Suche)) }, vergroessern = false, shape = CircleShape) { fokussiert ->
-				Box(Modifier.size(44.dp).background(when { fokussiert -> Farben.Text; sucheAktiv -> Farben.FlaecheHell; else -> Color.Transparent }),
-					contentAlignment = Alignment.Center) {
-					androidx.compose.foundation.Image(
-						painter = androidx.compose.ui.res.painterResource(R.drawable.ic_search),
-						contentDescription = "Suche",
-						colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(when { fokussiert -> Color.Black; sucheAktiv -> Farben.Akzent; else -> Farben.TextLeise }),
-						modifier = Modifier.size(24.dp),
-					)
-				}
-			}
-			if (offen) Waehlbar(onClick = {
-				mediaManager.clearAudioQueue()
-				sessionRepository.destroyCurrentSession()
-				context.startActivity(ActivityDestinations.startup(context))
-			}, vergroessern = false, shape = RoundedCornerShape(24.dp)) { fokussiert ->
-				Row(Modifier.background(if (fokussiert) Farben.FlaecheHell else Color.Transparent).padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-					Text(benutzer?.name.orEmpty(), style = Schrift.Klein, maxLines = 1, modifier = Modifier.padding(start = 8.dp, end = 8.dp))
-					Bild(benutzer?.primaryImage?.getUrl(api), Modifier.size(36.dp).clip(CircleShape), ersatz = initialen(benutzer?.name))
+			SymbolKnopf(R.drawable.ic_search, "Suche", aktiv = sucheAktiv, modifier = Modifier.focusRequester(sucheAnfrage)) { waehlen(Eintrag(R.drawable.ic_search, "Suche", Seite.Suche)) }
+			if (offen) {
+				oben.forEach { e -> SymbolKnopf(e.symbol, e.titel, hervor = e.hervor) { waehlen(e) } }
+				Spacer(Modifier.weight(1f))
+				Waehlbar(onClick = {
+					mediaManager.clearAudioQueue()
+					sessionRepository.destroyCurrentSession()
+					context.startActivity(ActivityDestinations.startup(context))
+				}, vergroessern = false, shape = CircleShape) { fokussiert ->
+					Box(Modifier.size(44.dp).background(if (fokussiert) Farben.Text else Color.Transparent).padding(3.dp)) {
+						Avatar(benutzer?.primaryImage?.getUrl(api), benutzer?.name, Modifier.fillMaxSize())
+					}
 				}
 			}
 		}
+		// Was die Symbole gerade melden (z. B. Update-Fortschritt), steht klein darunter
+		oben.firstOrNull { it.hervor }?.let { if (offen) Text(it.titel, style = Schrift.Klein.copy(color = Farben.Akzent), maxLines = 1, modifier = Modifier.padding(start = 8.dp, top = 4.dp)) }
 		Spacer(Modifier.height(12.dp))
-		eintraege.forEach { e ->
+		eintraege.forEachIndexed { index, e ->
 			val istAktiv = e.seite != null && e.seite.schluessel == aktiv.schluessel
 			Waehlbar(onClick = { waehlen(e) }, vergroessern = false, shape = RoundedCornerShape(10.dp),
-				modifier = if (istAktiv) Modifier.focusRequester(aktivAnfrage) else Modifier) { fokussiert ->
+				modifier = (if (istAktiv) Modifier.focusRequester(aktivAnfrage) else Modifier)
+					.then(if (index == 0) Modifier.focusProperties { up = sucheAnfrage } else Modifier)) { fokussiert ->
 				Row(
 					Modifier.fillMaxWidth()
 						.background(when { fokussiert -> Farben.Text; istAktiv -> Farben.FlaecheHell; else -> Color.Transparent })
@@ -336,5 +339,30 @@ private fun MiniPlayer(modifier: Modifier) {
 				repeat(2) { Box(Modifier.size(width = 5.dp, height = 18.dp).background(Farben.Akzent, RoundedCornerShape(1.dp))) }
 			} else Text("▶", style = Schrift.Titel.copy(color = Farben.Akzent))
 		}
+	}
+}
+
+@Composable
+private fun SymbolKnopf(symbol: Int, titel: String, aktiv: Boolean = false, hervor: Boolean = false, modifier: Modifier = Modifier, onClick: () -> Unit) {
+	Waehlbar(onClick = onClick, vergroessern = false, shape = CircleShape, modifier = modifier) { fokussiert ->
+		Box(Modifier.size(44.dp).background(when { fokussiert -> Farben.Text; aktiv -> Farben.FlaecheHell; else -> Color.Transparent }),
+			contentAlignment = Alignment.Center) {
+			androidx.compose.foundation.Image(
+				painter = androidx.compose.ui.res.painterResource(symbol),
+				contentDescription = titel,
+				colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(when { fokussiert -> Color.Black; aktiv || hervor -> Farben.Akzent; else -> Farben.TextLeise }),
+				modifier = Modifier.size(24.dp),
+			)
+		}
+	}
+}
+
+/** Profilbild; fehlt eines, ein farbiger Kreis mit Initialen (es gibt also immer ein Bild). */
+@Composable
+fun Avatar(url: String?, name: String?, modifier: Modifier = Modifier) {
+	Box(modifier.clip(CircleShape).background(Farben.AkzentDunkel), contentAlignment = Alignment.Center) {
+		Text(initialen(name), style = Schrift.Normal.copy(color = Farben.Text, fontWeight = FontWeight.Bold))
+		if (url != null) coil3.compose.AsyncImage(model = url, contentDescription = name, imageLoader = koinInject<coil3.ImageLoader>(),
+			contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
 	}
 }

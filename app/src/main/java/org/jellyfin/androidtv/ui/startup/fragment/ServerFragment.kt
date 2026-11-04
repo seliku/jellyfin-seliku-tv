@@ -104,6 +104,12 @@ class ServerFragment : Fragment() {
 			.flowWithLifecycle(viewLifecycleOwner.lifecycle, Lifecycle.State.STARTED)
 			.onEach { users ->
 				userAdapter.items = users
+				// Seliku: Profile mittig anordnen (Kartenbreite 170dp + 2×14dp Abstand)
+				binding.users.post {
+					val karte = (198 * resources.displayMetrics.density).toInt()
+					val rand = ((binding.users.width - users.size * karte) / 2).coerceAtLeast(0)
+					binding.users.setPadding(rand, binding.users.paddingTop, rand, binding.users.paddingBottom)
+				}
 
 				binding.users.isFocusable = users.any()
 				binding.noUsersWarning.isVisible = users.isEmpty()
@@ -217,7 +223,8 @@ class ServerFragment : Fragment() {
 
 		override fun onBindViewHolder(holder: ViewHolder, user: User) {
 			holder.cardView.name = user.name
-			holder.cardView.image = startupViewModel.getUserImage(server, user)
+			// Seliku: Bild immer frisch vom Server holen (das gespeicherte Bild-Kennzeichen ist oft veraltet oder leer)
+			holder.cardView.image = server.address.trimEnd('/') + "/Users/" + user.id + "/Images/Primary?maxWidth=400"
 
 			holder.cardView.setPopupMenu {
 				// Logout button

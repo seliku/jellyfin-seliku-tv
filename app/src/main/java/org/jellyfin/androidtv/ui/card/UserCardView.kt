@@ -156,30 +156,15 @@ class UserCardView @JvmOverloads constructor(
 
 		UserCard(
 			image = {
-				if (image != null) {
-					AsyncImage(
-						modifier = Modifier.fillMaxSize(),
-						scaleType = ImageView.ScaleType.CENTER_CROP,
-						url = image,
-					)
-				} else {
-					Box(modifier = Modifier.fillMaxSize()) {
-						Icon(
-							imageVector = ImageVector.vectorResource(R.drawable.ic_user),
-							contentDescription = name,
-							modifier = Modifier
-								.size(48.dp)
-								.align(Alignment.Center)
-						)
-					}
-				}
+				// Seliku: immer ein Profilbild – Initialen im farbigen Kreis, darüber das Bild vom Server, falls vorhanden
+				org.jellyfin.androidtv.seliku.Avatar(image, name, Modifier.fillMaxSize())
 			},
 			name = {
 				Text(name.orEmpty(), maxLines = 1)
 			},
 			modifier = Modifier
-				.padding(horizontal = 6.dp, vertical = 8.dp)
-				.width(110.dp),
+				.padding(horizontal = 14.dp, vertical = 12.dp)
+				.width(170.dp),
 			interactionSource = interactionSource,
 			// We use our own click handler for views used in presenters
 			onClick = {}
