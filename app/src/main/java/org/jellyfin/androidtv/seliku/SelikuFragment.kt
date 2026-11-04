@@ -133,7 +133,6 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 
 	val eintraege = buildList {
 		add(Eintrag(R.drawable.ic_house, "Startseite", Seite.Start))
-		add(Eintrag(R.drawable.ic_search, "Suche", Seite.Suche))
 		// Feste Reihenfolge wie gewohnt: Filme, Serien, Live-TV, Musik, dann alles andere
 		val rang = { b: BaseItemDto -> when (b.collectionType?.serialName) { "movies" -> 0; "tvshows" -> 1; "livetv" -> 2; "music" -> 3; else -> 4 } }
 		bibliotheken.sortedBy(rang).forEach { bib -> add(Eintrag(symbolFuer(bib), bib.name.orEmpty(), seiteFuerBibliothek(bib))) }
@@ -256,21 +255,29 @@ private fun Seitenleiste(
 			.padding(vertical = 24.dp, horizontal = 12.dp),
 		verticalArrangement = Arrangement.spacedBy(4.dp),
 	) {
-		// Benutzer oben: wechselt das Profil
-		Waehlbar(onClick = {
-			mediaManager.clearAudioQueue()
-			sessionRepository.destroyCurrentSession()
-			context.startActivity(ActivityDestinations.startup(context))
-		}, vergroessern = false, shape = RoundedCornerShape(26.dp)) { fokussiert ->
-			Row(Modifier.fillMaxWidth().background(if (fokussiert) Farben.FlaecheHell else Color.Transparent).padding(6.dp), verticalAlignment = Alignment.CenterVertically,
-				horizontalArrangement = if (offen) Arrangement.Start else Arrangement.Center) {
-				Bild(benutzer?.primaryImage?.getUrl(api), Modifier.size(40.dp).clip(CircleShape))
-				if (offen) {
-					Spacer(Modifier.width(12.dp))
-					Column {
-						Text(benutzer?.name.orEmpty(), style = Schrift.Normal.copy(fontWeight = FontWeight.Bold), maxLines = 1)
-						Text("Profil wechseln", style = Schrift.Klein)
-					}
+		// Oben: Suche als kleines Symbol; in der offenen Insel rechts daneben das Profilbild (wechselt das Profil)
+		Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+			horizontalArrangement = if (offen) Arrangement.SpaceBetween else Arrangement.Center) {
+			val sucheAktiv = aktiv.schluessel == Seite.Suche.schluessel
+			Waehlbar(onClick = { waehlen(Eintrag(R.drawable.ic_search, "Suche", Seite.Suche)) }, vergroessern = false, shape = CircleShape) { fokussiert ->
+				Box(Modifier.size(44.dp).background(when { fokussiert -> Farben.Text; sucheAktiv -> Farben.FlaecheHell; else -> Color.Transparent }),
+					contentAlignment = Alignment.Center) {
+					androidx.compose.foundation.Image(
+						painter = androidx.compose.ui.res.painterResource(R.drawable.ic_search),
+						contentDescription = "Suche",
+						colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(when { fokussiert -> Color.Black; sucheAktiv -> Farben.Akzent; else -> Farben.TextLeise }),
+						modifier = Modifier.size(24.dp),
+					)
+				}
+			}
+			if (offen) Waehlbar(onClick = {
+				mediaManager.clearAudioQueue()
+				sessionRepository.destroyCurrentSession()
+				context.startActivity(ActivityDestinations.startup(context))
+			}, vergroessern = false, shape = RoundedCornerShape(24.dp)) { fokussiert ->
+				Row(Modifier.background(if (fokussiert) Farben.FlaecheHell else Color.Transparent).padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
+					Text(benutzer?.name.orEmpty(), style = Schrift.Klein, maxLines = 1, modifier = Modifier.padding(start = 8.dp, end = 8.dp))
+					Bild(benutzer?.primaryImage?.getUrl(api), Modifier.size(36.dp).clip(CircleShape), ersatz = initialen(benutzer?.name))
 				}
 			}
 		}
