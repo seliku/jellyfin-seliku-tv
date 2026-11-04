@@ -133,15 +133,20 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 	var schluckeLoslassen by remember { mutableStateOf(false) }
 	val radioSpielt by RadioSpieler.spielt.collectAsState()
 	val bildschirmModus = SelikuMusikBildschirm.aktuell(context)
-	LaunchedEffect(letzteTaste, radioSpielt, bildschirmModus) {
+	// Musik aus Jellyfin zählt wie Radio. Ohne das schaltet Google TV nach ein paar Minuten ohne Tastendruck den Bildschirm
+	// und per HDMI-CEC den Fernseher aus – die Musik ist dann weg. Video hält den Bildschirm selbst wach.
+	val wiedergabe = koinInject<PlaybackManager>()
+	val musikZustand by wiedergabe.state.playState.collectAsState()
+	val tonSpielt = radioSpielt || musikZustand == PlayState.PLAYING
+	LaunchedEffect(letzteTaste, tonSpielt, bildschirmModus) {
 		radioEbene = false
-		if (!radioSpielt || bildschirmModus == MusikBildschirm.NORMAL) return@LaunchedEffect
+		if (!tonSpielt || bildschirmModus == MusikBildschirm.NORMAL) return@LaunchedEffect
 		delay(SelikuMusikBildschirm.WARTEZEIT_MS)
 		radioEbene = true
 	}
 	val ansicht = androidx.compose.ui.platform.LocalView.current
-	DisposableEffect(radioSpielt) { ansicht.keepScreenOn = radioSpielt; onDispose { ansicht.keepScreenOn = false } }
-	org.jellyfin.androidtv.ui.ScreensaverLock(enabled = radioSpielt)
+	DisposableEffect(tonSpielt) { ansicht.keepScreenOn = tonSpielt; onDispose { ansicht.keepScreenOn = false } }
+	org.jellyfin.androidtv.ui.ScreensaverLock(enabled = tonSpielt)
 	val leisteAnteil by androidx.compose.animation.core.animateFloatAsState(if (leisteOffen) 1f else 0f,
 		androidx.compose.animation.core.tween(220, easing = androidx.compose.animation.core.FastOutSlowInEasing), label = "leiste")
 	val leiste = remember { FocusRequester() }
