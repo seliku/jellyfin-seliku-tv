@@ -43,6 +43,7 @@ sealed interface Seite {
 	data class Album(val id: UUID) : Seite { override val schluessel = "album-$id" }
 	data class Ordner(val id: UUID, val name: String) : Seite { override val schluessel = "ordner-$id" }
 	data object Bibliotheken : Seite { override val schluessel = "bibliotheken" }
+	data object Einstellungen : Seite { override val schluessel = "einstellungen" }
 }
 
 /** Seitenstapel und gemerkte Scroll-/Fokuspositionen; überlebt den Abstecher in den Player. */

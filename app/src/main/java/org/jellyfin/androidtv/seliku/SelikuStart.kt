@@ -63,6 +63,9 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 		if (neu != null) {
 			reihen = neu
 			vm.wahl["start-reihen"] = neu
+			// Hintergründe für die Anmeldeseite merken (neu hinzugefügte zuerst)
+			Kulissen.merken(context, neu.filter { it.titel.startsWith("Neu in") || it.titel == "Weiterschauen" }
+				.flatMap { r -> r.items.mapNotNull { bilder.hintergrund(it, 1280) } })
 		}
 	}
 	// Hintergrund erst nach kurzem Verweilen wechseln, damit schnelles Durchblättern flüssig bleibt

@@ -137,3 +137,36 @@ fun BibliothekenSeite(vm: SelikuViewModel, oeffnenBibliothek: (BaseItemDto) -> U
 		}
 	}
 }
+
+/**
+ * Seliku-Einstellungen: eigene Punkte der Oberfläche plus der Weg zu den Jellyfin-Einstellungen.
+ * Weitere Schalter (Zurück-Verhalten, Seerr, Radio, Bildschirmschoner) kommen hier dazu.
+ */
+@Composable
+fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
+	data class Punkt(val titel: String, val text: String, val aktion: () -> Unit)
+	val punkte = listOf(
+		Punkt("Bibliotheken", "Welche Bibliotheken in der Leiste und auf der Startseite erscheinen; ausgeblendete hier öffnen") { vm.zu(Seite.Bibliotheken) },
+		Punkt("Jellyfin-Einstellungen", "Wiedergabe, Untertitel, Live-TV, Konten – die Einstellungen der Jellyfin-App") { jellyfinEinstellungen() },
+	)
+	Column(Modifier.fillMaxSize().background(Farben.Hintergrund)) {
+		Text("Einstellungen", style = Schrift.Titel, modifier = Modifier.padding(start = 48.dp, top = 28.dp, bottom = 16.dp))
+		LazyColumn(state = vm.liste(Seite.Einstellungen), contentPadding = PaddingValues(start = 40.dp, end = 48.dp, bottom = 40.dp)) {
+			items(punkte, key = { it.titel }) { p ->
+				Waehlbar(onClick = p.aktion, vergroessern = false, modifier = Modifier.padding(vertical = 4.dp),
+					merken = vm to (Seite.Einstellungen.schluessel to p.titel)) { fokussiert ->
+					Row(
+						Modifier.fillMaxWidth().background(if (fokussiert) Farben.FlaecheHell else Farben.Flaeche).padding(horizontal = 20.dp, vertical = 14.dp),
+						verticalAlignment = Alignment.CenterVertically,
+					) {
+						Column(Modifier.weight(1f)) {
+							Text(p.titel, style = Schrift.Normal.copy(fontWeight = FontWeight.Bold))
+							Text(p.text, style = Schrift.Klein, maxLines = 2)
+						}
+						Text("›", style = Schrift.Titel.copy(color = Farben.TextLeise))
+					}
+				}
+			}
+		}
+	}
+}

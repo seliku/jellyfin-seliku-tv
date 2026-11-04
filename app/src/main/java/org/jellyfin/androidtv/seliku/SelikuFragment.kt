@@ -139,7 +139,6 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 		// Feste Reihenfolge wie gewohnt: Filme, Serien, Live-TV, Musik, dann alles andere
 		val rang = { b: BaseItemDto -> when (b.collectionType?.serialName) { "movies" -> 0; "tvshows" -> 1; "livetv" -> 2; "music" -> 3; else -> 4 } }
 		bibliotheken.sortedBy(rang).forEach { bib -> add(Eintrag(symbolFuer(bib), bib.name.orEmpty(), seiteFuerBibliothek(bib))) }
-		add(Eintrag(R.drawable.ic_grid, "Bibliotheken", Seite.Bibliotheken))
 		updateEintrag = update?.let { v ->
 			(Eintrag(R.drawable.seliku_update, updateText ?: "Update ${v.name}", null, hervor = true) {
 				when {
@@ -156,9 +155,7 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 				}
 			})
 		}
-		einstellungenEintrag = (Eintrag(R.drawable.ic_settings, "Einstellungen", null) {
-			context.startActivity(ActivityDestinations.userPreferences(context))
-		})
+		einstellungenEintrag = Eintrag(R.drawable.ic_settings, "Einstellungen", Seite.Einstellungen)
 	}
 
 	// Beim Start und nach jedem Seitenwechsel steht der Fokus im Inhalt, nicht in der Seitenleiste
@@ -200,6 +197,7 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 						is Seite.Interpret -> InterpretSeite(vm, seite, oeffnen)
 						is Seite.Album -> AlbumSeite(vm, seite, oeffnen)
 						is Seite.Ordner -> OrdnerSeite(vm, seite, oeffnen)
+						Seite.Einstellungen -> EinstellungenSeite(vm) { context.startActivity(ActivityDestinations.userPreferences(context)) }
 						Seite.Bibliotheken -> BibliothekenSeite(vm, oeffnenBibliothek = { vm.zu(seiteFuerBibliothek(it)) }, geaendert = { neuLaden++ })
 					}
 				} }
