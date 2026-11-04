@@ -57,11 +57,18 @@ fun Banner(
 	var hatFokus by remember { mutableStateOf(false) }
 	val item = items[nr % items.size]
 	LaunchedEffect(item.id) { zeigt(item) }
-	LaunchedEffect(hatFokus, items) {
-		while (!hatFokus && items.size > 1) { delay(9_000); nr = (nr + 1) % items.size }
+	// Fester Takt: zählt Sekunden und wechselt alle 9 s; Fokuswechsel setzen den Takt nicht zurück.
+	// Steht der Fokus im Banner (Knöpfe oder Punkte), wird nur pausiert.
+	LaunchedEffect(items) {
+		var sekunden = 0
+		while (items.size > 1) {
+			delay(1_000)
+			if (hatFokus) { sekunden = 0; continue }
+			if (++sekunden >= 9) { sekunden = 0; nr = (nr + 1) % items.size }
+		}
 	}
 	// Eigene Karte mit eigenem Bild: der Seitenhintergrund folgt den Reihen, der Banner bleibt für sich
-	Box(modifier.fillMaxWidth().height(262.dp).padding(start = 40.dp, end = 40.dp, top = 16.dp)
+	Box(modifier.fillMaxWidth().height(290.dp).padding(start = 40.dp, end = 40.dp, top = 16.dp, bottom = 28.dp)
 		.clip(androidx.compose.foundation.shape.RoundedCornerShape(18.dp)).background(Farben.Flaeche)
 		.onFocusChanged { hatFokus = it.hasFocus }) {
 		Bild(bilder.hintergrund(item, 1280), Modifier.matchParentSize())
@@ -87,9 +94,15 @@ fun Banner(
 			})
 			Knopf("Mehr Infos", symbol = "ⓘ", onClick = { oeffnen(item) })
 			Spacer(Modifier.width(12.dp))
-			// Punkte: welche Empfehlung gerade läuft
+			// Punkte: welche Empfehlung gerade läuft – anwählbar, Links/Rechts blättert durch die Empfehlungen
 			items.indices.forEach { i ->
-				Box(Modifier.size(if (i == nr % items.size) 9.dp else 6.dp).background(if (i == nr % items.size) Farben.Akzent else Farben.TextLeise, CircleShape))
+				val aktiv = i == nr % items.size
+				Waehlbar(onClick = { nr = i }, vergroessern = false, shape = CircleShape, onFokus = { nr = i }) { fokussiert ->
+					Box(Modifier.size(22.dp), contentAlignment = androidx.compose.ui.Alignment.Center) {
+						Box(Modifier.size(if (fokussiert) 12.dp else if (aktiv) 9.dp else 6.dp)
+							.background(if (fokussiert || aktiv) Farben.Akzent else Farben.TextLeise, CircleShape))
+					}
+				}
 			}
 		}
 	}
