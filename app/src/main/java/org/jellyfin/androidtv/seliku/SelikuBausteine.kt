@@ -206,13 +206,29 @@ fun PosterKachel(
 	merken: Pair<SelikuViewModel, Pair<String, String>>? = null,
 	onFokus: () -> Unit = {},
 	onMenue: (() -> Unit)? = null,
+	aufklappen: Boolean = false,
 ) {
 	val bilder = koinInject<Bilder>()
-	Column(Modifier.width(breite)) {
-		Waehlbar(onClick = onClick, merken = merken, onFokus = onFokus, onMenue = onMenue, modifier = if (erster != null) Modifier.focusRequester(erster) else Modifier) {
-			Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f)) {
-				Bild(bilder.poster(item, 300), Modifier.fillMaxSize(), ersatz = "▶")
-				Abzeichen(item, Modifier.align(Alignment.TopEnd))
+	val context = androidx.compose.ui.platform.LocalContext.current
+	var fokussiert by remember { mutableStateOf(false) }
+	// Wie bei Netflix: Die gewählte Kachel zieht sich nach kurzem Verweilen ins Querformat auf (Hintergrundbild, Logo, Infos);
+	// bleibt man länger, läuft darin stumm der Trailer. Nur in Reihen – im Raster würde das Gitter verrutschen.
+	var offen by remember { mutableStateOf(false) }
+	LaunchedEffect(fokussiert) {
+		offen = false
+		if (fokussiert && aufklappen && SelikuEinstellungen.netflixKacheln(context)) { kotlinx.coroutines.delay(450); offen = true }
+	}
+	val hoehe = breite * 1.5f
+	val b by androidx.compose.animation.core.animateDpAsState(if (offen) hoehe * 16f / 9f else breite,
+		androidx.compose.animation.core.tween(240, easing = androidx.compose.animation.core.FastOutSlowInEasing), label = "kachel")
+	Column(Modifier.width(b)) {
+		Waehlbar(onClick = onClick, merken = merken, onFokus = onFokus, onMenue = onMenue, vergroessern = !aufklappen,
+			modifier = (if (erster != null) Modifier.focusRequester(erster) else Modifier).onFocusChanged { fokussiert = it.isFocused }) {
+			Box(Modifier.width(b).height(hoehe)) {
+				if (!offen) {
+					Bild(bilder.poster(item, 300), Modifier.fillMaxSize(), ersatz = "▶")
+					Abzeichen(item, Modifier.align(Alignment.TopEnd))
+				} else AufgeklappteKachel(item)
 				val anteil = item.anteilGesehen()
 				if (anteil > 0f && item.userData?.played != true) Fortschritt(anteil, Modifier.align(Alignment.BottomStart))
 			}
@@ -220,6 +236,36 @@ fun PosterKachel(
 		Spacer(Modifier.height(6.dp))
 		Text(item.hauptzeile(), style = Schrift.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
 		Text(item.unterzeile(), style = Schrift.Klein, maxLines = 1, overflow = TextOverflow.Ellipsis)
+	}
+}
+
+/** Inhalt der aufgeklappten Kachel: Hintergrund, Logo/Titel, Infozeile; nach ein paar Sekunden stumm der Trailer. */
+@Composable
+private fun AufgeklappteKachel(item: BaseItemDto) {
+	val bilder = koinInject<Bilder>()
+	val api = koinInject<org.jellyfin.sdk.api.client.ApiClient>()
+	val context = androidx.compose.ui.platform.LocalContext.current
+	var trailer by remember { mutableStateOf<String?>(null) }
+	var bereit by remember { mutableStateOf(false) }
+	LaunchedEffect(item.id) {
+		if (!SelikuEinstellungen.trailerImBanner(context)) return@LaunchedEffect
+		kotlinx.coroutines.delay(2_500)
+		trailer = Trailer.adresse(api, item)
+	}
+	val sicht by androidx.compose.animation.core.animateFloatAsState(if (bereit) 1f else 0f, androidx.compose.animation.core.tween(700), label = "kacheltrailer")
+	Box(Modifier.fillMaxSize().background(Farben.Flaeche)) {
+		Bild(bilder.hintergrund(item, 780) ?: bilder.poster(item, 300), Modifier.fillMaxSize(), grund = Farben.Flaeche)
+		trailer?.let { url ->
+			TrailerVideo(url, Modifier.fillMaxSize().graphicsLayer { alpha = sicht }, onBereit = { bereit = true }, onEnde = { trailer = null; bereit = false })
+		}
+		Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color(0x22000000), Color(0xE0000000)))))
+		Column(Modifier.align(Alignment.BottomStart).padding(10.dp).graphicsLayer { alpha = 1f - sicht * 0.6f }) {
+			val logo = bilder.logo(item, 400)
+			if (logo != null) Bild(logo, Modifier.height(34.dp).width(160.dp), ContentScale.Fit, grund = Color.Transparent)
+			else Text(item.hauptzeile(), style = Schrift.Reihe, maxLines = 1, overflow = TextOverflow.Ellipsis)
+			Spacer(Modifier.height(4.dp))
+			Text(item.metazeile(), style = Schrift.Klein.copy(color = Color.White.copy(alpha = 0.85f)), maxLines = 1, overflow = TextOverflow.Ellipsis)
+		}
 	}
 }
 

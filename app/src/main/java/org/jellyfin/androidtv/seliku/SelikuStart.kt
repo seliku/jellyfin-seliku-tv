@@ -130,7 +130,7 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 							}
 						},
 						kachel = if (reihe.titel == "Weiterschauen") { item, klick, merken, fokus ->
-							PosterKachel(item, klick, breite = 120.dp, merken = merken, onFokus = fokus, onMenue = { vm.menue = item })
+							PosterKachel(item, klick, breite = 120.dp, merken = merken, onFokus = fokus, onMenue = { vm.menue = item }, aufklappen = true)
 						} else if (reihe.titel == "Jetzt im TV") { item, klick, merken, fokus ->
 							SenderKachel(item, klick, merken = merken, onFokus = fokus)
 						} else if (reihe.loeschdatum.isNotEmpty()) { item, klick, merken, fokus ->
@@ -138,7 +138,7 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 							val wann = tag?.let { "Wird am " + it.format(java.time.format.DateTimeFormatter.ofPattern("d.M.")) + " gelöscht" } ?: "Wird bald gelöscht"
 							QuerKachel(item, klick, merken = merken, onFokus = fokus, zeilen = item.name.orEmpty() to wann)
 						} else if (reihe.titel.startsWith("Neu in") && reihe.items.none { it.type == BaseItemKind.MUSIC_ALBUM || it.type == BaseItemKind.AUDIO }) { item, klick, merken, fokus ->
-							PosterKachel(item, klick, breite = 120.dp, merken = merken, onFokus = fokus, onMenue = { vm.menue = item })
+							PosterKachel(item, klick, breite = 120.dp, merken = merken, onFokus = fokus, onMenue = { vm.menue = item }, aufklappen = true)
 						} else null,
 					)
 				}

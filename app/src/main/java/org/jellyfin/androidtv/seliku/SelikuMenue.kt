@@ -48,6 +48,10 @@ object SelikuEinstellungen {
 	@JvmStatic fun schlankerPlayer(c: Context) = prefs(c).getBoolean("schlanker_player", true)
 	fun schlankerPlayer(c: Context, an: Boolean) = prefs(c).edit().putBoolean("schlanker_player", an).apply()
 
+	/** An (Vorgabe): gewählte Kachel in Reihen zieht sich auf (Hintergrund, Infos, später Trailer) – wie bei Netflix. */
+	fun netflixKacheln(c: Context) = prefs(c).getBoolean("netflix_kacheln", true)
+	fun netflixKacheln(c: Context, an: Boolean) = prefs(c).edit().putBoolean("netflix_kacheln", an).apply()
+
 	/** Aus (Vorgabe): Knopf «Zufällig» auf Serienseiten (sonst im Menü «⋯ Mehr»). */
 	fun zufallKnopf(c: Context) = prefs(c).getBoolean("zufall_knopf", false)
 	fun zufallKnopf(c: Context, an: Boolean) = prefs(c).edit().putBoolean("zufall_knopf", an).apply()
