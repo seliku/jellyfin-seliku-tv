@@ -139,12 +139,11 @@ fun BibliothekenSeite(vm: SelikuViewModel, oeffnenBibliothek: (BaseItemDto) -> U
 }
 
 /**
- * Seliku-Einstellungen: eigene Punkte der Oberfläche plus der Weg zu den Jellyfin-Einstellungen.
- * Weitere Schalter (Zurück-Verhalten, Seerr, Radio, Bildschirmschoner) kommen hier dazu.
+ * Seliku-Einstellungen, in Gruppen: Schalter (An/Aus), Auswahl (OK wechselt den Wert) und Verweise auf Unterseiten.
+ * Neue Punkte in die passende Gruppe; die id bleibt fest, damit der Fokus beim Umschalten stehen bleibt.
  */
 @Composable
 fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
-	data class Punkt(val titel: String, val text: String, val aktion: () -> Unit)
 	val context = androidx.compose.ui.platform.LocalContext.current
 	var doppel by remember { mutableStateOf(SelikuEinstellungen.doppelZurueck(context)) }
 	var schlank by remember { mutableStateOf(SelikuEinstellungen.schlankerPlayer(context)) }
@@ -157,69 +156,107 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 	val userPrefs = remember { org.koin.java.KoinJavaComponent.get<org.jellyfin.androidtv.preference.UserPreferences>(org.jellyfin.androidtv.preference.UserPreferences::class.java) }
 	var bitrate by remember { mutableStateOf(userPrefs[org.jellyfin.androidtv.preference.UserPreferences.maxBitrate]) }
 	val bitrateStufen = listOf("100", "40", "20", "10", "5")
-	val punkte = listOf(
-		Punkt("Zurück-Taste: " + (if (doppel) "zweimal drücken beendet die App" else "beendet die App nie"),
-			"Aus: Zurück springt nach oben, dann in die Leiste, dann zur Startseite – wie bei Netflix. An: zusätzlich zweimal Zurück auf der Startseite zum Beenden") {
+	val seerr = when {
+		SeerrVerbindung.vermittelt.value -> "über Jellyfin"
+		SeerrVerbindung.verbunden(context) -> "verbunden" + SeerrVerbindung.name(context).let { if (it.isBlank()) "" else " als $it" }
+		else -> "nicht verbunden"
+	}
+
+	val eintraege = listOf(
+		EinstellungsEintrag.Gruppe("Startseite & Navigation"),
+		EinstellungsEintrag.Schalter("kacheln", "Kacheln aufklappen", "Gewählte Kachel zeigt nach kurzem Verweilen Bild und Infos", netflix) {
+			netflix = !netflix; SelikuEinstellungen.netflixKacheln(context, netflix)
+		},
+		EinstellungsEintrag.Schalter("trailer", "Trailer im Banner und in Kacheln", "Läuft nach ein paar Sekunden, stumm wenn Musik läuft", trailerBanner) {
+			trailerBanner = !trailerBanner; SelikuEinstellungen.trailerImBanner(context, trailerBanner)
+		},
+		EinstellungsEintrag.Schalter("leiste", "Seitenleiste auch mit Links öffnen", "Sonst geht die Leiste nur mit Zurück auf", links) {
+			links = !links; SelikuEinstellungen.leisteMitLinks(context, links)
+		},
+		EinstellungsEintrag.Schalter("zurueck", "Zweimal Zurück beendet die App", "Aus: Zurück beendet die App nie – wie bei Netflix", doppel) {
 			doppel = !doppel; SelikuEinstellungen.doppelZurueck(context, doppel)
 		},
-		Punkt("Player: " + (if (schlank) "schlanke Bedienung" else "Jellyfin-Bedienung"),
-			"Schlank: OK pausiert, Links/Rechts spult (Live-TV: Sender wechseln) – ohne Einblendung; Bedienleiste mit «hoch». Sonst wie in Jellyfin") {
+
+		EinstellungsEintrag.Gruppe("Wiedergabe"),
+		EinstellungsEintrag.Schalter("player", "Schlanke Player-Bedienung", "OK pausiert, Links/Rechts spult, Bedienleiste mit «hoch»", schlank) {
 			schlank = !schlank; SelikuEinstellungen.schlankerPlayer(context, schlank)
 		},
-		Punkt("Max. Streaming-Bitrate: $bitrate Mbit/s",
-			"Weniger = weniger Unterbrüche bei langsamem Internet, etwas weniger scharf. Gilt nur für dieses Gerät. OK wechselt: 100 → 40 → 20 → 10 → 5") {
+		EinstellungsEintrag.Auswahl("bitrate", "Max. Streaming-Bitrate", "Tiefer bei langsamem Internet – weniger Unterbrüche. Nur dieses Gerät", "$bitrate Mbit/s") {
 			bitrate = bitrateStufen[(bitrateStufen.indexOf(bitrate) + 1) % bitrateStufen.size]
 			userPrefs[org.jellyfin.androidtv.preference.UserPreferences.maxBitrate] = bitrate
 		},
-		Punkt("Untertitel nachladen: " + (if (nachladen) "an" else "aus"),
-			"An: Filme starten sofort, Untertitel kommen nach, sobald der Server sie bereit hat. Aus: wie in Jellyfin – Start wartet auf die Untertitel") {
+		EinstellungsEintrag.Schalter("untertitel", "Untertitel nachladen", "Filme starten sofort, Untertitel kommen nach", nachladen) {
 			nachladen = !nachladen; SelikuEinstellungen.untertitelNachladen(context, nachladen)
 		},
-		Punkt("Trailer im Banner und in Kacheln: " + (if (trailerBanner) "an" else "aus"),
-			"Nach ein paar Sekunden läuft im Banner und in der gewählten Kachel der Trailer, mit Ton (stumm, wenn Musik läuft)") {
-			trailerBanner = !trailerBanner; SelikuEinstellungen.trailerImBanner(context, trailerBanner)
-		},
-		Punkt("Titelmusik bei Serien: " + (if (musik) "an" else "aus"),
-			"Beim Öffnen einer Serie läuft leise ihre Titelmusik – wie bei Plex (nicht, wenn gerade Musik läuft)") {
+
+		EinstellungsEintrag.Gruppe("Serien"),
+		EinstellungsEintrag.Schalter("titelmusik", "Titelmusik", "Läuft leise beim Öffnen einer Serie – wie bei Plex", musik) {
 			musik = !musik; SelikuEinstellungen.titelmusik(context, musik)
 		},
-		Punkt("Kacheln aufklappen: " + (if (netflix) "an" else "aus"),
-			"Die gewählte Kachel zeigt nach kurzem Verweilen Hintergrund und Infos, nach ein paar Sekunden den Trailer – wie bei Netflix") {
-			netflix = !netflix; SelikuEinstellungen.netflixKacheln(context, netflix)
-		},
-		Punkt("Knopf «Zufällig» bei Serien: " + (if (zufall) "an" else "aus"),
-			"Zufällige Folge direkt auf der Serienseite; sonst im Menü «⋯ Mehr»") {
+		EinstellungsEintrag.Schalter("zufall", "Knopf «Zufällig»", "Zufällige Folge direkt auf der Serienseite, sonst im Menü «⋯»", zufall) {
 			zufall = !zufall; SelikuEinstellungen.zufallKnopf(context, zufall)
 		},
-		Punkt("Seitenleiste: " + (if (links) "mit Zurück oder Links" else "nur mit Zurück"),
-			"Ob die Leiste auch aufgeht, wenn man am linken Rand nochmals Links drückt") {
-			links = !links; SelikuEinstellungen.leisteMitLinks(context, links)
+
+		EinstellungsEintrag.Gruppe("Inhalte & Dienste"),
+		EinstellungsEintrag.Verweis("bibliotheken", "Bibliotheken", "Welche in der Leiste und auf der Startseite erscheinen") { vm.zu(Seite.Bibliotheken) },
+		EinstellungsEintrag.Verweis("seerr", "Seerr", "Fehlende Filme und Serien entdecken und anfragen", seerr) {
+			if (SeerrVerbindung.vermittelt.value) vm.wurzel(Seite.Entdecken) else vm.zu(Seite.SeerrVerbinden)
 		},
-		if (SeerrVerbindung.vermittelt.value)
-			Punkt("Seerr: über Jellyfin verbunden", "Fehlende Filme und Serien entdecken und anfragen – ohne eigene Anmeldung") { vm.wurzel(Seite.Entdecken) }
-		else Punkt("Seerr: " + (if (SeerrVerbindung.verbunden(context)) "verbunden" + SeerrVerbindung.name(context).let { if (it.isBlank()) "" else " als $it" } else "nicht verbunden"),
-			"Fehlende Filme und Serien entdecken und mit einem Klick anfragen – mit deinem eigenen Seerr") { vm.zu(Seite.SeerrVerbinden) },
-		Punkt("Bibliotheken", "Welche Bibliotheken in der Leiste und auf der Startseite erscheinen; ausgeblendete hier öffnen") { vm.zu(Seite.Bibliotheken) },
-		Punkt("Jellyfin-Einstellungen", "Wiedergabe, Untertitel, Live-TV, Konten – die Einstellungen der Jellyfin-App") { jellyfinEinstellungen() },
+
+		EinstellungsEintrag.Gruppe("Weiteres"),
+		EinstellungsEintrag.Verweis("jellyfin", "Jellyfin-Einstellungen", "Untertitel-Aussehen, Live-TV, Konten und mehr") { jellyfinEinstellungen() },
 	)
+
 	Column(Modifier.fillMaxSize().background(Farben.Hintergrund)) {
-		Text("Einstellungen", style = Schrift.Titel, modifier = Modifier.padding(start = 48.dp, top = 28.dp, bottom = 16.dp))
+		Text("Einstellungen", style = Schrift.Titel, modifier = Modifier.padding(start = 48.dp, top = 28.dp, bottom = 8.dp))
 		LazyColumn(state = vm.liste(Seite.Einstellungen), contentPadding = PaddingValues(start = 40.dp, end = 48.dp, bottom = 40.dp)) {
-			items(punkte, key = { it.titel.substringBefore(":") }) { p ->
-				Waehlbar(onClick = p.aktion, vergroessern = false, modifier = Modifier.padding(vertical = 4.dp),
-					merken = vm to (Seite.Einstellungen.schluessel to p.titel.substringBefore(":"))) { fokussiert ->
-					Row(
-						Modifier.fillMaxWidth().background(if (fokussiert) Farben.FlaecheHell else Farben.Flaeche).padding(horizontal = 20.dp, vertical = 14.dp),
-						verticalAlignment = Alignment.CenterVertically,
-					) {
-						Column(Modifier.weight(1f)) {
-							Text(p.titel, style = Schrift.Normal.copy(fontWeight = FontWeight.Bold))
-							Text(p.text, style = Schrift.Klein, maxLines = 2)
+			items(eintraege, key = { it.id }) { e ->
+				when (e) {
+					is EinstellungsEintrag.Gruppe -> Text(e.titel, style = Schrift.Reihe.copy(color = Farben.Akzent),
+						modifier = Modifier.padding(start = 8.dp, top = 22.dp, bottom = 6.dp))
+					else -> Waehlbar(onClick = e.aktion, vergroessern = false, modifier = Modifier.padding(vertical = 3.dp),
+						merken = vm to (Seite.Einstellungen.schluessel to e.id)) { fokussiert ->
+						Row(
+							Modifier.fillMaxWidth().background(if (fokussiert) Farben.FlaecheHell else Farben.Flaeche).padding(horizontal = 20.dp, vertical = 12.dp),
+							verticalAlignment = Alignment.CenterVertically,
+						) {
+							Column(Modifier.weight(1f)) {
+								Text(e.titel, style = Schrift.Normal.copy(fontWeight = FontWeight.Bold))
+								Text(e.text, style = Schrift.Klein, maxLines = 1, overflow = TextOverflow.Ellipsis)
+							}
+							Spacer(Modifier.width(16.dp))
+							when (e) {
+								is EinstellungsEintrag.Schalter -> AnAusSchalter(e.an)
+								is EinstellungsEintrag.Auswahl -> Text(e.wert + "  ‹›", style = Schrift.Normal.copy(color = Farben.Akzent, fontWeight = FontWeight.Bold))
+								is EinstellungsEintrag.Verweis -> Text((e.wert?.let { "$it  " } ?: "") + "›", style = Schrift.Normal.copy(color = Farben.TextLeise))
+								else -> Unit
+							}
 						}
-						Text("›", style = Schrift.Titel.copy(color = Farben.TextLeise))
 					}
 				}
 			}
+			item(key = "version") {
+				Text("Version ${org.jellyfin.androidtv.BuildConfig.VERSION_NAME}", style = Schrift.Klein,
+					modifier = Modifier.padding(start = 8.dp, top = 24.dp))
+			}
 		}
+	}
+}
+
+private sealed class EinstellungsEintrag(val id: String, val titel: String, val text: String, val aktion: () -> Unit) {
+	class Gruppe(titel: String) : EinstellungsEintrag("gruppe:$titel", titel, "", {})
+	class Schalter(id: String, titel: String, text: String, val an: Boolean, aktion: () -> Unit) : EinstellungsEintrag(id, titel, text, aktion)
+	class Auswahl(id: String, titel: String, text: String, val wert: String, aktion: () -> Unit) : EinstellungsEintrag(id, titel, text, aktion)
+	class Verweis(id: String, titel: String, text: String, val wert: String? = null, aktion: () -> Unit) : EinstellungsEintrag(id, titel, text, aktion)
+}
+
+/** An/Aus-Schalter wie in Android: Spur mit Knopf, an = Akzentfarbe, Knopf rechts. */
+@Composable
+private fun AnAusSchalter(an: Boolean) {
+	val lage by androidx.compose.animation.core.animateDpAsState(if (an) 22.dp else 2.dp, label = "schalter")
+	Box(Modifier.width(46.dp).height(26.dp)
+		.background(if (an) Farben.Akzent else Farben.TextLeise.copy(alpha = 0.35f), androidx.compose.foundation.shape.RoundedCornerShape(13.dp))) {
+		Box(Modifier.padding(start = lage, top = 3.dp).width(20.dp).height(20.dp)
+			.background(if (an) Farben.Text else Farben.TextLeise, androidx.compose.foundation.shape.CircleShape))
 	}
 }
