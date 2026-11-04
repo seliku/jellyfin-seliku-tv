@@ -18,6 +18,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
@@ -51,42 +53,182 @@ import timber.log.Timber
 @Composable
 fun MusikSeite(vm: SelikuViewModel, seite: Seite.Musik, oeffnen: (BaseItemDto) -> Unit) {
 	val daten = koinInject<SelikuDaten>()
-	// Reiter: 0 Playlists (mit automatischen Mixen), 1 Interpreten, 2 Alben
-	var reiter by remember { mutableStateOf(vm.wahl["${seite.schluessel}|reiter"] as? Int ?: 0) }
+	// Reiter: 0 Übersicht, 1 Playlists (alle, mit Buchstabenleiste), 2 Interpreten, 3 Alben
+	var reiter by remember { mutableStateOf(vm.wahl["${seite.schluessel}|reiter2"] as? Int ?: 0) }
 	@Suppress("UNCHECKED_CAST")
-	var liste by remember(reiter) { mutableStateOf(vm.wahl["${seite.schluessel}|liste|$reiter"] as? List<BaseItemDto>) }
+	var liste by remember(reiter) { mutableStateOf(vm.wahl["${seite.schluessel}|liste2|$reiter"] as? List<BaseItemDto>) }
 
 	LaunchedEffect(reiter) {
-		vm.wahl["${seite.schluessel}|reiter"] = reiter
-		if (reiter == 0) return@LaunchedEffect
-		val neu = runCatching { if (reiter == 1) daten.interpreten(seite.ansicht) else daten.alben(seite.ansicht, null) }
+		vm.wahl["${seite.schluessel}|reiter2"] = reiter
+		if (reiter < 2) return@LaunchedEffect
+		val neu = runCatching { if (reiter == 2) daten.interpreten(seite.ansicht) else daten.alben(seite.ansicht, null) }
 			.onFailure { Timber.w(it, "Musik laden") }.getOrNull()
-		if (neu != null) { liste = neu; vm.wahl["${seite.schluessel}|liste|$reiter"] = neu }
-		if (neu != null && neu.isEmpty() && reiter == 1) reiter = 2
+		if (neu != null) { liste = neu; vm.wahl["${seite.schluessel}|liste2|$reiter"] = neu }
+		if (neu != null && neu.isEmpty() && reiter == 2) reiter = 3
 	}
 
 	Column(Modifier.fillMaxSize()) {
 		Row(Modifier.padding(start = 48.dp, top = 28.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
 			Text(seite.ansicht.name.orEmpty(), style = Schrift.Titel)
 			Spacer(Modifier.width(12.dp))
-			Knopf("Playlists", onClick = { reiter = 0 }, aktiv = reiter == 0)
-			Knopf("Interpreten", onClick = { reiter = 1 }, aktiv = reiter == 1)
-			Knopf("Alben", onClick = { reiter = 2 }, aktiv = reiter == 2)
+			listOf("Übersicht", "Playlists", "Interpreten", "Alben").forEachIndexed { n, t -> Knopf(t, onClick = { reiter = n }, aktiv = reiter == n) }
 		}
-		if (reiter == 0) { PlaylistsReiter(vm, seite); return@Column }
+		when (reiter) {
+			0 -> { MusikUebersicht(vm, seite, oeffnen); return@Column }
+			1 -> { AllePlaylists(vm, seite); return@Column }
+		}
 		val l = liste
 		if (l == null) { Hinweis("Wird geladen …"); return@Column }
 		val schluessel = Seite.Ordner(seite.ansicht.id, "musik-$reiter")
+		val raster = vm.raster(schluessel)
+		Row(Modifier.fillMaxSize()) {
+			LazyVerticalGrid(
+				state = raster,
+				columns = GridCells.Adaptive(150.dp),
+				contentPadding = PaddingValues(start = 48.dp, end = 16.dp, top = 12.dp, bottom = 40.dp),
+				horizontalArrangement = Arrangement.spacedBy(22.dp),
+				verticalArrangement = Arrangement.spacedBy(22.dp),
+				modifier = Modifier.weight(1f),
+			) {
+				items(l, key = { it.id }) { item ->
+					QuadratKachel(item, onClick = { oeffnen(item) }, rund = reiter == 2, merken = vm to (schluessel.schluessel to item.id.toString()))
+				}
+			}
+			AlphabetLeiste(l.map { it.sortName ?: it.name.orEmpty() }, raster)
+		}
+	}
+}
+
+/** Übersicht der Musik: zuletzt gehört, neu hinzugefügt, Mixe, eigene Playlists. */
+@Composable
+private fun MusikUebersicht(vm: SelikuViewModel, seite: Seite.Musik, oeffnen: (BaseItemDto) -> Unit) {
+	val daten = koinInject<SelikuDaten>()
+	val abspielen = koinInject<Abspielen>()
+	val context = LocalContext.current
+	val scope = rememberCoroutineScope()
+	val bib = seite.ansicht
+	val k = "${seite.schluessel}|uebersicht"
+	@Suppress("UNCHECKED_CAST")
+	var zuletzt by remember { mutableStateOf(vm.wahl["$k|zuletzt"] as? List<BaseItemDto> ?: emptyList()) }
+	@Suppress("UNCHECKED_CAST")
+	var neu by remember { mutableStateOf(vm.wahl["$k|neu"] as? List<BaseItemDto> ?: emptyList()) }
+	@Suppress("UNCHECKED_CAST")
+	var eigene by remember { mutableStateOf(vm.wahl["musik-playlists"] as? List<BaseItemDto> ?: emptyList()) }
+	LaunchedEffect(Unit) {
+		runCatching { daten.musikTitel(bib, ItemSortBy.DATE_PLAYED, true, setOf(ItemFilter.IS_PLAYED), anzahl = 30) }.onSuccess { zuletzt = it; vm.wahl["$k|zuletzt"] = it }
+		runCatching { daten.neuIn(bib) }.onSuccess { neu = it; vm.wahl["$k|neu"] = it }
+		runCatching { daten.playlists() }.onSuccess { eigene = it; vm.wahl["musik-playlists"] = it }
+	}
+	val mixe = grundMixe(daten, bib)
+	val unterSeite = Seite.Ordner(bib.id, "musik-uebersicht")
+	SenkrechtRollen {
+		LazyColumn(state = vm.liste(unterSeite), contentPadding = PaddingValues(top = 8.dp, bottom = 48.dp), modifier = Modifier.fillMaxSize()) {
+			if (zuletzt.isNotEmpty()) item {
+				Reihe("Zuletzt gehört", zuletzt, vm, unterSeite, onClick = { t -> abspielen.musik(context, zuletzt, zuletzt.indexOf(t).coerceAtLeast(0)) },
+					kachel = { item, klick, merken, fokus -> QuadratKachel(item, klick, merken = merken, onFokus = fokus) })
+			}
+			if (neu.isNotEmpty()) item { Reihe("Neu hinzugefügt", neu, vm, unterSeite, onClick = oeffnen) }
+			item {
+				Text("Automatische Mixe", style = Schrift.Reihe, modifier = Modifier.padding(start = 48.dp, top = 6.dp, bottom = 8.dp))
+				androidx.compose.foundation.lazy.LazyRow(contentPadding = PaddingValues(horizontal = 48.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+					itemsIndexed(mixe, key = { _, m -> m.name }) { n, m ->
+						MixKachel(m.name, m.unter, n, merken = vm to (unterSeite.schluessel to "mix|" + m.name)) {
+							scope.launch { abspielen.musik(context, runCatching { m.laden() }.getOrDefault(emptyList())) }
+						}
+					}
+				}
+			}
+			if (eigene.isNotEmpty()) item {
+				Reihe("Deine Playlists", eigene.take(20), vm, unterSeite, onClick = { p ->
+					scope.launch { abspielen.musik(context, runCatching { daten.playlistTitel(p.id) }.getOrDefault(emptyList())) }
+				}, kachel = { item, klick, merken, fokus -> QuadratKachel(item, klick, merken = merken, onFokus = fokus) })
+			}
+		}
+	}
+}
+
+/** Eintrag im Playlists-Reiter: eigene Playlist oder automatischer Mix. */
+private class PlaylistEintrag(val name: String, val unter: String, val eigen: BaseItemDto?, val mix: Mix?)
+
+/** Die festen automatischen Mixe (ohne Genre-Mixe). */
+private fun grundMixe(daten: SelikuDaten, bib: BaseItemDto) = listOf(
+	Mix("Zufallsmix", "Querbeet durch alles") { daten.musikTitel(bib, ItemSortBy.RANDOM, true) },
+	Mix("Neu hinzugefügt", "Die neuesten Titel") { daten.musikTitel(bib, ItemSortBy.DATE_CREATED, true) },
+	Mix("Meistgehört", "Deine Lieblinge") { daten.musikTitel(bib, ItemSortBy.PLAY_COUNT, true, setOf(ItemFilter.IS_PLAYED)) },
+	Mix("Lange nicht gehört", "Wiederentdecken") { daten.musikTitel(bib, ItemSortBy.DATE_PLAYED, false, setOf(ItemFilter.IS_PLAYED)) },
+)
+
+/** Alle Playlists: eigene und automatische (auch alle Genre-Mixe), nach Name, mit Buchstabenleiste. */
+@Composable
+private fun AllePlaylists(vm: SelikuViewModel, seite: Seite.Musik) {
+	val daten = koinInject<SelikuDaten>()
+	val abspielen = koinInject<Abspielen>()
+	val context = LocalContext.current
+	val scope = rememberCoroutineScope()
+	val bib = seite.ansicht
+	@Suppress("UNCHECKED_CAST")
+	var eigene by remember { mutableStateOf(vm.wahl["musik-playlists"] as? List<BaseItemDto> ?: emptyList()) }
+	@Suppress("UNCHECKED_CAST")
+	var genres by remember { mutableStateOf(vm.wahl["${seite.schluessel}|alle-genres"] as? List<String> ?: emptyList()) }
+	LaunchedEffect(Unit) {
+		runCatching { daten.playlists() }.onSuccess { eigene = it; vm.wahl["musik-playlists"] = it }
+		runCatching { daten.genres(bib, setOf(BaseItemKind.MUSIC_ALBUM, BaseItemKind.AUDIO)) }.onSuccess { genres = it; vm.wahl["${seite.schluessel}|alle-genres"] = it }
+	}
+	// Eigene Playlists und Mixe gemeinsam alphabetisch
+	val alle = (eigene.map { PlaylistEintrag(it.name.orEmpty(), "Playlist", it, null) } +
+		grundMixe(daten, bib).map { PlaylistEintrag(it.name, it.unter, null, it) } +
+		genres.map { g -> PlaylistEintrag("$g-Mix", "Automatisch nach Genre", null, Mix("$g-Mix", "") { daten.genreMix(g) }) })
+		.sortedBy { it.name.lowercase() }
+	val schluessel = Seite.Ordner(bib.id, "musik-alle-playlists")
+	val raster = vm.raster(schluessel)
+	if (alle.isEmpty()) { Hinweis("Wird geladen …"); return }
+	Row(Modifier.fillMaxSize()) {
 		LazyVerticalGrid(
-			state = vm.raster(schluessel),
+			state = raster,
 			columns = GridCells.Adaptive(150.dp),
-			contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 12.dp, bottom = 40.dp),
+			contentPadding = PaddingValues(start = 48.dp, end = 16.dp, top = 12.dp, bottom = 40.dp),
 			horizontalArrangement = Arrangement.spacedBy(22.dp),
 			verticalArrangement = Arrangement.spacedBy(22.dp),
-			modifier = Modifier.fillMaxSize(),
+			modifier = Modifier.weight(1f),
 		) {
-			items(l, key = { it.id }) { item ->
-				QuadratKachel(item, onClick = { oeffnen(item) }, rund = reiter == 1, merken = vm to (schluessel.schluessel to item.id.toString()))
+			itemsIndexed(alle, key = { _: Int, e: PlaylistEintrag -> e.name + (e.eigen?.id ?: "") }) { n: Int, e: PlaylistEintrag ->
+				MixKachel(e.name, e.unter, n, merken = vm to (schluessel.schluessel to e.name)) {
+					scope.launch {
+						val titel = e.eigen?.let { runCatching { daten.playlistTitel(it.id) }.getOrDefault(emptyList()) }
+							?: runCatching { e.mix!!.laden() }.getOrDefault(emptyList())
+						abspielen.musik(context, titel)
+					}
+				}
+			}
+		}
+		AlphabetLeiste(alle.map { it.name }, raster)
+	}
+}
+
+/**
+ * Buchstabenleiste rechts (wie in Plex): beim Darüberfahren springt das Raster zum ersten Eintrag mit diesem
+ * Anfangsbuchstaben. «#» steht für Zahlen und Zeichen. Buchstaben ohne Einträge sind ausgegraut.
+ */
+@Composable
+fun AlphabetLeiste(namen: List<String>, raster: androidx.compose.foundation.lazy.grid.LazyGridState) {
+	val scope = rememberCoroutineScope()
+	val buchstaben = listOf("#") + ('A'..'Z').map { it.toString() }
+	fun anfang(n: String) = n.trim().firstOrNull()?.uppercaseChar()?.let { if (it in 'A'..'Z') it.toString() else "#" } ?: "#"
+	val erste = remember(namen) { buchstaben.associateWith { b -> namen.indexOfFirst { anfang(it) == b } } }
+	Column(Modifier.padding(end = 18.dp, top = 8.dp), verticalArrangement = Arrangement.spacedBy(1.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+		buchstaben.forEach { b ->
+			val index = erste[b] ?: -1
+			Waehlbar(onClick = {}, vergroessern = false, shape = CircleShape, onFokus = {
+				if (index >= 0) scope.launch { raster.scrollToItem(index) }
+			}) { fokussiert ->
+				Box(Modifier.size(width = 26.dp, height = 16.dp).background(if (fokussiert) Farben.Akzent else androidx.compose.ui.graphics.Color.Transparent),
+					contentAlignment = Alignment.Center) {
+					Text(b, style = Schrift.Klein.copy(color = when {
+						fokussiert -> androidx.compose.ui.graphics.Color.Black
+						index >= 0 -> Farben.Text
+						else -> Farben.TextLeise.copy(alpha = 0.4f)
+					}, fontWeight = FontWeight.Bold))
+				}
 			}
 		}
 	}
@@ -94,54 +236,6 @@ fun MusikSeite(vm: SelikuViewModel, seite: Seite.Musik, oeffnen: (BaseItemDto) -
 
 /** Ein automatischer Mix: Name, Untertitel und wie er seine Titel holt. */
 private class Mix(val name: String, val unter: String, val laden: suspend () -> List<BaseItemDto>)
-
-/** Playlists-Reiter: eigene Playlists, darunter automatische Mixe (je Genre, neu, meistgehört, lange nicht gehört, Zufall). */
-@Composable
-private fun PlaylistsReiter(vm: SelikuViewModel, seite: Seite.Musik) {
-	val daten = koinInject<SelikuDaten>()
-	val abspielen = koinInject<Abspielen>()
-	val context = LocalContext.current
-	val scope = rememberCoroutineScope()
-	@Suppress("UNCHECKED_CAST")
-	var eigene by remember { mutableStateOf(vm.wahl["musik-playlists"] as? List<BaseItemDto> ?: emptyList()) }
-	@Suppress("UNCHECKED_CAST")
-	var genres by remember { mutableStateOf(vm.wahl["${seite.schluessel}|genres"] as? List<String> ?: emptyList()) }
-	LaunchedEffect(Unit) {
-		runCatching { daten.playlists() }.onSuccess { eigene = it; vm.wahl["musik-playlists"] = it }
-		runCatching { daten.genres(seite.ansicht, setOf(BaseItemKind.MUSIC_ALBUM, BaseItemKind.AUDIO)) }
-			.onSuccess { genres = it.take(8); vm.wahl["${seite.schluessel}|genres"] = genres }
-	}
-	val bib = seite.ansicht
-	val mixe = listOf(
-		Mix("Zufallsmix", "Querbeet durch alles") { daten.musikTitel(bib, ItemSortBy.RANDOM, true) },
-		Mix("Neu hinzugefügt", "Die neuesten Titel") { daten.musikTitel(bib, ItemSortBy.DATE_CREATED, true) },
-		Mix("Meistgehört", "Deine Lieblinge") { daten.musikTitel(bib, ItemSortBy.PLAY_COUNT, true, setOf(ItemFilter.IS_PLAYED)) },
-		Mix("Lange nicht gehört", "Wiederentdecken") { daten.musikTitel(bib, ItemSortBy.DATE_PLAYED, false, setOf(ItemFilter.IS_PLAYED)) },
-	) + genres.map { g -> Mix("$g-Mix", "Automatisch nach Genre") { daten.genreMix(g) } }
-	val unterSeite = Seite.Ordner(seite.ansicht.id, "musik-playlists")
-	SenkrechtRollen {
-		LazyColumn(state = vm.liste(unterSeite), contentPadding = PaddingValues(top = 8.dp, bottom = 48.dp), modifier = Modifier.fillMaxSize()) {
-			if (eigene.isNotEmpty()) item {
-				Reihe("Deine Playlists", eigene, vm, unterSeite, onClick = { p ->
-					scope.launch { abspielen.musik(context, runCatching { daten.playlistTitel(p.id) }.getOrDefault(emptyList())) }
-				}, kachel = { item, klick, merken, fokus -> QuadratKachel(item, klick, merken = merken, onFokus = fokus) })
-			}
-			item {
-				Text("Automatische Mixe", style = Schrift.Reihe, modifier = Modifier.padding(start = 48.dp, top = 6.dp, bottom = 8.dp))
-				androidx.compose.foundation.lazy.LazyRow(
-					contentPadding = PaddingValues(horizontal = 48.dp, vertical = 8.dp),
-					horizontalArrangement = Arrangement.spacedBy(18.dp),
-				) {
-					itemsIndexed(mixe, key = { _, m -> m.name }) { i, m ->
-						MixKachel(m.name, m.unter, i, merken = vm to (unterSeite.schluessel to "mix|" + m.name)) {
-							scope.launch { abspielen.musik(context, runCatching { m.laden() }.getOrDefault(emptyList())) }
-						}
-					}
-				}
-			}
-		}
-	}
-}
 
 /** Quadratische Mix-Kachel mit warmem Verlauf (je Nummer ein anderer Farbton) und Namen darauf. */
 @Composable

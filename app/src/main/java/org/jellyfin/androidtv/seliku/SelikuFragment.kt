@@ -135,7 +135,7 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 					}
 					is Seite.Musik -> {
 						if (vm.wahl["musik-playlists"] == null) vm.wahl["musik-playlists"] = daten.playlists()
-						if (vm.wahl["${ziel.schluessel}|liste|1"] == null) vm.wahl["${ziel.schluessel}|liste|1"] = daten.interpreten(bib)
+						if (vm.wahl["${ziel.schluessel}|liste2|2"] == null) vm.wahl["${ziel.schluessel}|liste2|2"] = daten.interpreten(bib)
 					}
 					Seite.LiveTv -> if (vm.wahl["livetv|sender"] == null) vm.wahl["livetv|sender"] = daten.sender()
 					else -> Unit

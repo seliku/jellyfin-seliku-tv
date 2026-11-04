@@ -12,7 +12,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -56,6 +64,8 @@ fun TitelMenue(vm: SelikuViewModel, item: BaseItemDto, geaendert: () -> Unit) {
 
 	data class Punkt(val text: String, val symbol: String, val aktion: () -> Unit)
 	val punkte = buildList {
+		// Bei Folgen steht «Zur Serie» zuoberst
+		item.seriesId?.let { sid -> add(Punkt("Zur Serie", "›") { schliessen(); vm.zu(Seite.Serie(sid)) }) }
 		if (spielbar) add(Punkt(if (angefangen) fortsetzenText(item) ?: "Abspielen" else "Abspielen", "▶") { abspielen.video(context, item); schliessen() })
 		if (spielbar && angefangen) add(Punkt("Von vorn", "↺") { abspielen.video(context, item, vonVorn = true); schliessen() })
 		if (item.type == BaseItemKind.SERIES || item.type == BaseItemKind.SEASON) add(Punkt("Zufällige Folge", "⤨") { abspielen.zufall(context, item); schliessen() })
@@ -65,13 +75,23 @@ fun TitelMenue(vm: SelikuViewModel, item: BaseItemDto, geaendert: () -> Unit) {
 		add(Punkt(if (favorit) "Aus Favoriten entfernen" else "Zu Favoriten", if (favorit) "☆" else "★") {
 			scope.launch { runCatching { daten.favorit(item.id, !favorit) }; schliessen(); geaendert() }
 		})
-		item.seriesId?.let { sid -> add(Punkt("Zur Serie", "›") { schliessen(); vm.zu(Seite.Serie(sid)) }) }
 		seiteFuer(item)?.let { s -> add(Punkt("Details", "ⓘ") { schliessen(); vm.zu(s) }) }
 	}
 
+	// Das Menü geht auf, während OK noch gedrückt ist. Das Loslassen dieser Taste darf nicht den ersten Punkt
+	// auslösen: bis zum ersten neuen Tastendruck im Menü wird ein «OK losgelassen» verschluckt.
+	var bereit by remember { mutableStateOf(false) }
 	Dialog(onDismissRequest = schliessen) {
 		Column(
-			Modifier.width(420.dp).background(Farben.Flaeche, RoundedCornerShape(18.dp)).padding(20.dp),
+			Modifier.width(420.dp).background(Farben.Flaeche, RoundedCornerShape(18.dp)).padding(20.dp)
+				.onPreviewKeyEvent { e ->
+					when {
+						bereit -> false
+						e.type == KeyEventType.KeyDown -> { bereit = true; false }
+						e.type == KeyEventType.KeyUp && (e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter) -> true
+						else -> false
+					}
+				},
 			verticalArrangement = Arrangement.spacedBy(8.dp),
 		) {
 			Text(item.hauptzeile(), style = Schrift.Reihe, maxLines = 1, overflow = TextOverflow.Ellipsis)

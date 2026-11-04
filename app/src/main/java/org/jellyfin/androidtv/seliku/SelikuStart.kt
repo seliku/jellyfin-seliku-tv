@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.jellyfin.androidtv.ui.base.Text
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
@@ -47,6 +48,12 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 	var gewaehlt by remember { mutableStateOf<BaseItemDto?>(null) }
 	var hero by remember { mutableStateOf<BaseItemDto?>(null) }
 	var bannerFokus by remember { mutableStateOf(false) }
+	val bannerAnfrage = remember { androidx.compose.ui.focus.FocusRequester() }
+	val rollScope = androidx.compose.runtime.rememberCoroutineScope()
+	// Beim Start steht die Seite ganz oben (Banner sichtbar), auch wenn der Fokus auf «Weiterschauen» liegt
+	LaunchedEffect(reihen != null) {
+		if (reihen != null && vm.fokus[seite.schluessel] == null) { kotlinx.coroutines.delay(600); runCatching { vm.liste(seite).scrollToItem(0) } }
+	}
 	@Suppress("UNCHECKED_CAST")
 	var banner by remember { mutableStateOf(vm.wahl["start-banner"] as? List<BaseItemDto> ?: emptyList()) }
 	LaunchedEffect(Unit) {
@@ -95,11 +102,16 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 				modifier = Modifier.fillMaxSize(),
 			) {
 				item(key = "banner") {
-					Banner(banner, oeffnen = { b -> seiteFuer(b)?.let(vm::zu) }, zeigt = { b -> if (gewaehlt == null || bannerFokus) hero = b },
+					Banner(banner, oeffnen = { b -> seiteFuer(b)?.let(vm::zu) }, zeigt = { b -> if (gewaehlt == null || bannerFokus) hero = b }, fokus = bannerAnfrage,
 						modifier = Modifier.onFocusChanged { bannerFokus = it.hasFocus; if (it.hasFocus) gewaehlt = null })
 				}
 				items(r, key = { it.titel }) { reihe ->
+					val ersteReihe = reihe == r.firstOrNull()
 					Reihe(
+						beiHoch = if (ersteReihe && banner.isNotEmpty()) ({
+							rollScope.launch { runCatching { vm.liste(seite).animateScrollToItem(0) } }
+							runCatching { bannerAnfrage.requestFocus() }.getOrDefault(false)
+						}) else null,
 						titel = reihe.titel,
 						items = reihe.items,
 						vm = vm,

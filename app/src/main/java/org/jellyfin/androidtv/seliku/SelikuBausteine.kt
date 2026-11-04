@@ -274,9 +274,13 @@ fun Reihe(
 	onFokus: (BaseItemDto) -> Unit = {},
 	onMenue: ((BaseItemDto) -> Unit)? = null,
 	kachel: @Composable ((BaseItemDto, () -> Unit, Pair<SelikuViewModel, Pair<String, String>>, () -> Unit) -> Unit)? = null,
+	beiHoch: (() -> Boolean)? = null,
 ) {
 	if (items.isEmpty()) return
-	Column(Modifier.fillMaxWidth().padding(bottom = 18.dp)) {
+	// beiHoch: «nach oben» aus dieser Reihe selbst behandeln (z. B. zum Banner springen, auch wenn er gerade ausserhalb liegt)
+	Column(Modifier.fillMaxWidth().padding(bottom = 18.dp).onPreviewKeyEvent { e ->
+		if (beiHoch != null && e.type == KeyEventType.KeyDown && e.key == Key.DirectionUp) beiHoch() else false
+	}) {
 		Text(titel, style = Schrift.Reihe, modifier = Modifier.padding(start = 48.dp, bottom = 8.dp))
 		val zustand = remember(seite.schluessel, titel) { vm.listen.getOrPut("${seite.schluessel}|$titel") { androidx.compose.foundation.lazy.LazyListState() } }
 		SeitlichRollen { LazyRow(

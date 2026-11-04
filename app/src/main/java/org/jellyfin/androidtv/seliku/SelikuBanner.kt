@@ -20,6 +20,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -43,6 +44,7 @@ fun Banner(
 	oeffnen: (BaseItemDto) -> Unit,
 	zeigt: (BaseItemDto) -> Unit,
 	modifier: Modifier = Modifier,
+	fokus: androidx.compose.ui.focus.FocusRequester? = null,
 ) {
 	if (items.isEmpty()) return
 	val bilder = koinInject<Bilder>()
@@ -51,13 +53,13 @@ fun Banner(
 	val context = LocalContext.current
 	val scope = androidx.compose.runtime.rememberCoroutineScope()
 	var nr by remember { mutableIntStateOf(0) }
-	var fokus by remember { mutableStateOf(false) }
+	var hatFokus by remember { mutableStateOf(false) }
 	val item = items[nr % items.size]
 	LaunchedEffect(item.id) { zeigt(item) }
-	LaunchedEffect(fokus, items) {
-		while (!fokus && items.size > 1) { delay(9_000); nr = (nr + 1) % items.size }
+	LaunchedEffect(hatFokus, items) {
+		while (!hatFokus && items.size > 1) { delay(9_000); nr = (nr + 1) % items.size }
 	}
-	Column(modifier.fillMaxWidth().height(250.dp).padding(start = 48.dp, top = 30.dp, end = 360.dp).onFocusChanged { fokus = it.hasFocus }) {
+	Column(modifier.fillMaxWidth().height(250.dp).padding(start = 48.dp, top = 30.dp, end = 360.dp).onFocusChanged { hatFokus = it.hasFocus }) {
 		val logo = bilder.logo(item)
 		if (logo != null) Bild(logo, Modifier.height(76.dp).width(320.dp), ContentScale.Fit, grund = androidx.compose.ui.graphics.Color.Transparent)
 		else Text(item.name.orEmpty(), style = Schrift.Riesig, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -67,7 +69,8 @@ fun Banner(
 		Text(item.overview.orEmpty(), style = Schrift.Normal, maxLines = 2, overflow = TextOverflow.Ellipsis)
 		Spacer(Modifier.height(12.dp))
 		Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-			Knopf("Abspielen", symbol = "▶", hervorgehoben = true, onClick = {
+			Knopf("Abspielen", symbol = "▶", hervorgehoben = true,
+				modifier = if (fokus != null) Modifier.focusRequester(fokus) else Modifier, onClick = {
 				// Serie: nächste ungesehene Folge
 				if (item.type == BaseItemKind.SERIES) scope.launch {
 					val folge = runCatching { daten.naechsteFolge(item.id) }.getOrNull()

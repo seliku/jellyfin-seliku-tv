@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.jellyfin.androidtv.ui.base.Text
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
@@ -117,13 +118,18 @@ private fun BibliothekEmpfohlen(vm: SelikuViewModel, seite: Seite.Bibliothek, oe
 	if (r == null) { Hinweis("Wird geladen …"); return }
 	if (r.isEmpty() && banner.isEmpty()) { Hinweis("Noch nichts da."); return }
 	val unterSeite = Seite.Ordner(seite.ansicht.id, "empfohlen-" + seite.ansicht.name)
+	val bannerAnfrage = remember { androidx.compose.ui.focus.FocusRequester() }
+	val rollScope = androidx.compose.runtime.rememberCoroutineScope()
 	Box(Modifier.fillMaxSize()) {
 	Kulisse(bilder.hintergrund(hero, 1280))
 	SeitlichRollen(rand = 24.dp) {
 		LazyColumn(state = vm.liste(unterSeite), contentPadding = PaddingValues(top = 0.dp, bottom = 48.dp), modifier = Modifier.fillMaxSize()) {
-			item(key = "banner") { Banner(banner, oeffnen = oeffnen, zeigt = { hero = it }) }
+			item(key = "banner") { Banner(banner, oeffnen = oeffnen, zeigt = { hero = it }, fokus = bannerAnfrage) }
 			items(r, key = { it.titel }) { reihe ->
-				Reihe(reihe.titel, reihe.items, vm, unterSeite, onClick = { item ->
+				Reihe(reihe.titel, reihe.items, vm, unterSeite, beiHoch = if (reihe == r.firstOrNull() && banner.isNotEmpty()) ({
+					rollScope.launch { runCatching { vm.liste(unterSeite).animateScrollToItem(0) } }
+					runCatching { bannerAnfrage.requestFocus() }.getOrDefault(false)
+				}) else null, onClick = { item ->
 					when {
 						reihe.titel == "Weiterschauen" -> abspielen.video(context, item)
 						item.type == BaseItemKind.EPISODE -> abspielen.video(context, item)
