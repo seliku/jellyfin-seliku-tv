@@ -20,6 +20,10 @@ android {
 		val selikuNummer = ((System.currentTimeMillis() / 60_000L) - 29_000_000L).toInt()
 		versionName = "1.0.$selikuNummer"
 		versionCode = selikuNummer
+		// Seliku: eigene Adressen nur aus privaten Gradle-Einstellungen (~/.gradle/gradle.properties), nie im Code –
+		// ohne sie gibt es kein Selbst-Update und keine vorausgefüllte Serveradresse
+		buildConfigField("String", "SELIKU_UPDATE_URL", "\"${project.findProperty("seliku.updateUrl") ?: ""}\"")
+		buildConfigField("String", "SELIKU_SERVER", "\"${project.findProperty("seliku.server") ?: ""}\"")
 	}
 
 	buildFeatures {

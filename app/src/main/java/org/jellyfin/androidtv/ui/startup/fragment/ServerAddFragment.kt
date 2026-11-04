@@ -64,8 +64,9 @@ class ServerAddFragment : Fragment() {
 			binding.address.isEnabled = false
 			submitAddress()
 		} else {
-			// Seliku: eigener Server vorausgefüllt
-			if (binding.address.text.isNullOrBlank()) binding.address.setText("https://jellyfin.example.org")
+			// Seliku: eigener Server vorausgefüllt (Gradle-Einstellung seliku.server; leer = nichts vorausfüllen)
+			if (binding.address.text.isNullOrBlank() && org.jellyfin.androidtv.BuildConfig.SELIKU_SERVER.isNotBlank())
+				binding.address.setText(org.jellyfin.androidtv.BuildConfig.SELIKU_SERVER)
 			binding.address.requestFocus()
 		}
 

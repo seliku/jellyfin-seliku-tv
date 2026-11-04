@@ -27,8 +27,8 @@ streaming-service style home screen, built for our own living room – and share
 
 ## Things that are still personal / hard-coded
 
-- **Self-update** checks `https://jellyfin.example.org/seliku-app/version.json` (`SelikuUpdate.kt`, `ABLAGE`). If you build your
-  own APK, change or remove this – otherwise the app offers our builds as updates.
+- **Self-update and server address** come from private Gradle properties (`seliku.updateUrl`, `seliku.server` in
+  `~/.gradle/gradle.properties`). Without them your build simply has no self-update and an empty server field.
 - **Application id** `ch.seliku.jellyfin.tv`, name and logo "Seliku".
 - **Seerr helper**: the app first looks for `<your-jellyfin>/seerr` (or port 8097 on the same host). The helper is a small
   Python service we run next to Jellyfin; it is not part of this repo yet.
@@ -50,7 +50,7 @@ Our own code lives mainly in `app/src/main/java/org/jellyfin/androidtv/seliku/`.
 ---
 
 *Kurz auf Deutsch:* Unsere eigene Fernseh-App für Jellyfin mit Bedienung wie bei den Streamingdiensten. Experimentell, mit
-noch fest eingebauten persönlichen Einstellungen (Update-Adresse, Namen, Seerr-Vermittler). Wer mag, darf sie gern ausprobieren.
+noch fest eingebauten persönlichen Einstellungen (Name, Logo, Seerr-Vermittler). Wer mag, darf sie gern ausprobieren.
 
 ---
 

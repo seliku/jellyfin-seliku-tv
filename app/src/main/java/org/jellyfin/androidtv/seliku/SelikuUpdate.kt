@@ -24,12 +24,14 @@ import java.net.URL
  * «Unbekannte Apps installieren», danach genügt ein Klick auf «Installieren».
  */
 object SelikuUpdate {
-	const val ABLAGE = "https://jellyfin.example.org/seliku-app/"
+	/** Ablage für Selbst-Updates (version.json + APK); leer = kein Selbst-Update. Kommt aus der Gradle-Einstellung seliku.updateUrl. */
+	val ABLAGE: String = org.jellyfin.androidtv.BuildConfig.SELIKU_UPDATE_URL
 	private const val AKTION = "ch.seliku.jellyfin.tv.UPDATE_STATUS"
 
 	data class Version(val code: Int, val name: String, val apk: String, val notiz: String)
 
 	suspend fun pruefen(): Version? = withContext(Dispatchers.IO) {
+		if (ABLAGE.isBlank()) return@withContext null
 		runCatching {
 			val text = (URL(ABLAGE + "version.json").openConnection() as HttpURLConnection).run {
 				connectTimeout = 10_000; readTimeout = 10_000; useCaches = false
