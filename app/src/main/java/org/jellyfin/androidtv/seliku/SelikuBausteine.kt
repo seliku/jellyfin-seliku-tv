@@ -91,7 +91,11 @@ fun Waehlbar(
 	if (merken != null) {
 		val (vm, wo) = merken
 		LaunchedEffect(Unit) {
-			if (vm.fokus[wo.first] == wo.second) runCatching { anfrage.requestFocus() }
+			// Nur beim Betreten der Seite; taucht die Kachel später beim Rollen wieder auf, darf sie den Fokus nicht wegziehen
+			if (vm.fokus[wo.first] == wo.second && wo.first !in vm.wiederhergestellt) {
+				vm.wiederhergestellt += wo.first
+				runCatching { anfrage.requestFocus() }
+			}
 		}
 	}
 	var lage by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
@@ -104,7 +108,8 @@ fun Waehlbar(
 				fokussiert = it.isFocused
 				if (it.isFocused) FokusSpur.setze(anfrage, { lage }, imInhalt)
 				if (it.isFocused) {
-					merken?.let { (vm, wo) -> vm.fokus[wo.first] = wo.second }
+					// Gemerkt wird für das nächste Betreten der Seite; bis dahin darf keine Kachel den Fokus mehr zurückholen
+					merken?.let { (vm, wo) -> vm.fokus[wo.first] = wo.second; vm.wiederhergestellt += wo.first }
 					onFokus()
 				}
 			}

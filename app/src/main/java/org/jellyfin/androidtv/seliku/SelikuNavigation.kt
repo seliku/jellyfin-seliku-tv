@@ -63,6 +63,8 @@ class SelikuViewModel : ViewModel() {
 	var menue by androidx.compose.runtime.mutableStateOf<BaseItemDto?>(null)
 
 	/** Erste Kachel je Seite: «Zurück» springt dorthin, bevor die Leiste aufgeht. */
+	/** Seiten, auf denen die gemerkte Kachel den Fokus schon zurückgeholt hat (einmal pro Besuch, nicht bei jedem Auftauchen). */
+	val wiederhergestellt = mutableSetOf<String>()
 	val ersterSchluessel = mutableMapOf<String, String>()
 	private val ersteAnfragen = mutableMapOf<String, androidx.compose.ui.focus.FocusRequester>()
 	fun ersteAnfrageFuer(seite: String, kachel: String): androidx.compose.ui.focus.FocusRequester {

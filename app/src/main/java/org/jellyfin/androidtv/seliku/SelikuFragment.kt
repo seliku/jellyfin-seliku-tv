@@ -306,7 +306,9 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 				.focusRestorer().focusGroup()) {
 				val seite = vm.aktuell
 				val oeffnen: (BaseItemDto) -> Unit = { item -> seiteFuer(item)?.let(vm::zu) }
-				key(seite.schluessel) { androidx.compose.runtime.CompositionLocalProvider(LocalImInhalt provides true) { SeitlichRollen(rand = 60.dp) {
+				// Neue Seite bzw. wieder sichtbar: die gemerkte Kachel darf den Fokus einmal zurückholen
+				key(seite.schluessel) { androidx.compose.runtime.remember { vm.wiederhergestellt.remove(seite.schluessel); 0 }
+ androidx.compose.runtime.CompositionLocalProvider(LocalImInhalt provides true) { SeitlichRollen(rand = 60.dp) {
 					when (seite) {
 						Seite.Start -> StartSeite(vm, oeffnen)
 						Seite.Suche -> SuchSeite(vm, oeffnen)
