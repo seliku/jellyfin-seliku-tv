@@ -180,7 +180,7 @@
 	<string name="seliku_set_slim_player">Simple player controls</string>
 	<string name="seliku_set_slim_player_desc">OK pauses, Left/Right seeks, Up shows the controls</string>
 	<string name="seliku_set_bitrate">Max streaming bitrate</string>
-	<string name="seliku_set_bitrate_desc">Lower it on slow internet for fewer interruptions. This device only</string>
+	<string name="seliku_set_bitrate_desc">Lower it on slow internet for fewer interruptions</string>
 	<string name="seliku_set_bitrate_value">%1$s Mbit/s</string>
 	<string name="seliku_set_clip">Clip when there is no trailer</string>
 	<string name="seliku_set_clip_desc">90 seconds from the movie or an episode instead</string>
@@ -248,4 +248,7 @@
 		<item quantity="one">%1$d episode</item>
 		<item quantity="other">%1$d episodes</item>
 	</plurals>
+	<string name="seliku_set_autoplay_next">Play next episode automatically</string>
+	<string name="seliku_set_autoplay_next_desc">When an episode ends, the next one starts. Off: playback stops after the episode</string>
+	<string name="seliku_set_scope_hint">Menu key (or hold OK): ☁ all devices ↔ 📺 this device only</string>
 </resources>

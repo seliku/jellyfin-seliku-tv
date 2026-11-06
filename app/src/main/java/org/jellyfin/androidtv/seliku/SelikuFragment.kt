@@ -201,6 +201,9 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 		}
 	}
 
+	// Einstellungen «für alle Geräte» vom Jellyfin-Konto holen (nach Start bzw. Anmeldung); ohne Netz bleibt es bei den Werten hier
+	LaunchedEffect(Unit) { SelikuSync.holen(context) }
+
 	// Bietet der Jellyfin-Server Seerr an (Vermittler), ist man ohne eigene Anmeldung verbunden
 	val seerrDaten = koinInject<SeerrDaten>()
 	LaunchedEffect(Unit) {

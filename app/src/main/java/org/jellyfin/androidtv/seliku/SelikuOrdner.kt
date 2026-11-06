@@ -147,18 +147,25 @@ fun BibliothekenSeite(vm: SelikuViewModel, oeffnenBibliothek: (BaseItemDto) -> U
 @Composable
 fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 	val context = androidx.compose.ui.platform.LocalContext.current
-	var doppel by remember { mutableStateOf(SelikuEinstellungen.doppelZurueck(context)) }
-	var schlank by remember { mutableStateOf(SelikuEinstellungen.schlankerPlayer(context)) }
-	var links by remember { mutableStateOf(SelikuEinstellungen.leisteMitLinks(context)) }
-	var trailerBanner by remember { mutableStateOf(SelikuEinstellungen.trailerImBanner(context)) }
-	var zufall by remember { mutableStateOf(SelikuEinstellungen.zufallKnopf(context)) }
-	var netflix by remember { mutableStateOf(SelikuEinstellungen.netflixKacheln(context)) }
-	var musik by remember { mutableStateOf(SelikuEinstellungen.titelmusik(context)) }
-	var nachladen by remember { mutableStateOf(SelikuEinstellungen.untertitelNachladen(context)) }
-	var ausschnitt by remember { mutableStateOf(SelikuEinstellungen.ausschnittOhneTrailer(context)) }
-	var wach by remember { mutableStateOf(SelikuEinstellungen.nurBeiWiedergabeWach(context)) }
+	// Beim Öffnen Werte vom Server holen; hat sich etwas geändert, liest «stand» alles neu
+	var stand by remember { mutableStateOf(0) }
+	LaunchedEffect(Unit) { if (SelikuSync.holen(context)) stand++ }
+	// Umfang (☁/📺) pro Einstellung; «umfangStand» zeichnet die Zeichen nach dem Umschalten neu
+	var umfangStand by remember { mutableStateOf(0) }
+	val gesetzt = { schluessel: String -> SelikuSync.geaendert(context, schluessel) }
+	var doppel by remember(stand) { mutableStateOf(SelikuEinstellungen.doppelZurueck(context)) }
+	var schlank by remember(stand) { mutableStateOf(SelikuEinstellungen.schlankerPlayer(context)) }
+	var links by remember(stand) { mutableStateOf(SelikuEinstellungen.leisteMitLinks(context)) }
+	var trailerBanner by remember(stand) { mutableStateOf(SelikuEinstellungen.trailerImBanner(context)) }
+	var zufall by remember(stand) { mutableStateOf(SelikuEinstellungen.zufallKnopf(context)) }
+	var netflix by remember(stand) { mutableStateOf(SelikuEinstellungen.netflixKacheln(context)) }
+	var musik by remember(stand) { mutableStateOf(SelikuEinstellungen.titelmusik(context)) }
+	var nachladen by remember(stand) { mutableStateOf(SelikuEinstellungen.untertitelNachladen(context)) }
+	var ausschnitt by remember(stand) { mutableStateOf(SelikuEinstellungen.ausschnittOhneTrailer(context)) }
+	var wach by remember(stand) { mutableStateOf(SelikuEinstellungen.nurBeiWiedergabeWach(context)) }
 	val userPrefs = remember { org.koin.java.KoinJavaComponent.get<org.jellyfin.androidtv.preference.UserPreferences>(org.jellyfin.androidtv.preference.UserPreferences::class.java) }
-	var bitrate by remember { mutableStateOf(userPrefs[org.jellyfin.androidtv.preference.UserPreferences.maxBitrate]) }
+	var bitrate by remember(stand) { mutableStateOf(userPrefs[org.jellyfin.androidtv.preference.UserPreferences.maxBitrate]) }
+	var naechste by remember(stand) { mutableStateOf(userPrefs[org.jellyfin.androidtv.preference.UserPreferences.mediaQueuingEnabled]) }
 	val bitrateStufen = listOf("100", "40", "20", "10", "5")
 	val seerr = when {
 		SeerrVerbindung.vermittelt.value -> stringResource(R.string.seliku_seerr_via_jellyfin)
@@ -168,43 +175,47 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 
 	val eintraege = listOf(
 		EinstellungsEintrag.Gruppe(stringResource(R.string.seliku_set_group_home)),
-		EinstellungsEintrag.Schalter("kacheln", stringResource(R.string.seliku_set_tiles), stringResource(R.string.seliku_set_tiles_desc), netflix) {
-			netflix = !netflix; SelikuEinstellungen.netflixKacheln(context, netflix)
+		EinstellungsEintrag.Schalter("kacheln", umfang = "netflix_kacheln", stringResource(R.string.seliku_set_tiles), stringResource(R.string.seliku_set_tiles_desc), netflix) {
+			netflix = !netflix; SelikuEinstellungen.netflixKacheln(context, netflix); gesetzt("netflix_kacheln")
 		},
-		EinstellungsEintrag.Schalter("trailer", stringResource(R.string.seliku_set_trailer), stringResource(R.string.seliku_set_trailer_desc), trailerBanner) {
-			trailerBanner = !trailerBanner; SelikuEinstellungen.trailerImBanner(context, trailerBanner)
+		EinstellungsEintrag.Schalter("trailer", umfang = "trailer_banner", stringResource(R.string.seliku_set_trailer), stringResource(R.string.seliku_set_trailer_desc), trailerBanner) {
+			trailerBanner = !trailerBanner; SelikuEinstellungen.trailerImBanner(context, trailerBanner); gesetzt("trailer_banner")
 		},
-		EinstellungsEintrag.Schalter("ausschnitt", stringResource(R.string.seliku_set_clip), stringResource(R.string.seliku_set_clip_desc), ausschnitt) {
-			ausschnitt = !ausschnitt; SelikuEinstellungen.ausschnittOhneTrailer(context, ausschnitt)
+		EinstellungsEintrag.Schalter("ausschnitt", umfang = "ausschnitt_ohne_trailer", stringResource(R.string.seliku_set_clip), stringResource(R.string.seliku_set_clip_desc), ausschnitt) {
+			ausschnitt = !ausschnitt; SelikuEinstellungen.ausschnittOhneTrailer(context, ausschnitt); gesetzt("ausschnitt_ohne_trailer")
 		},
-		EinstellungsEintrag.Schalter("leiste", stringResource(R.string.seliku_set_sidebar_left), stringResource(R.string.seliku_set_sidebar_left_desc), links) {
-			links = !links; SelikuEinstellungen.leisteMitLinks(context, links)
+		EinstellungsEintrag.Schalter("leiste", umfang = "leiste_mit_links", stringResource(R.string.seliku_set_sidebar_left), stringResource(R.string.seliku_set_sidebar_left_desc), links) {
+			links = !links; SelikuEinstellungen.leisteMitLinks(context, links); gesetzt("leiste_mit_links")
 		},
-		EinstellungsEintrag.Schalter("zurueck", stringResource(R.string.seliku_set_double_back), stringResource(R.string.seliku_set_double_back_desc), doppel) {
-			doppel = !doppel; SelikuEinstellungen.doppelZurueck(context, doppel)
+		EinstellungsEintrag.Schalter("zurueck", umfang = "doppel_zurueck", stringResource(R.string.seliku_set_double_back), stringResource(R.string.seliku_set_double_back_desc), doppel) {
+			doppel = !doppel; SelikuEinstellungen.doppelZurueck(context, doppel); gesetzt("doppel_zurueck")
 		},
 
 		EinstellungsEintrag.Gruppe(stringResource(R.string.seliku_set_group_playback)),
-		EinstellungsEintrag.Schalter("player", stringResource(R.string.seliku_set_slim_player), stringResource(R.string.seliku_set_slim_player_desc), schlank) {
-			schlank = !schlank; SelikuEinstellungen.schlankerPlayer(context, schlank)
+		EinstellungsEintrag.Schalter("player", umfang = "schlanker_player", stringResource(R.string.seliku_set_slim_player), stringResource(R.string.seliku_set_slim_player_desc), schlank) {
+			schlank = !schlank; SelikuEinstellungen.schlankerPlayer(context, schlank); gesetzt("schlanker_player")
 		},
-		EinstellungsEintrag.Auswahl("bitrate", stringResource(R.string.seliku_set_bitrate), stringResource(R.string.seliku_set_bitrate_desc), stringResource(R.string.seliku_set_bitrate_value, bitrate)) {
+		EinstellungsEintrag.Auswahl("bitrate", umfang = "max_bitrate", stringResource(R.string.seliku_set_bitrate), stringResource(R.string.seliku_set_bitrate_desc), stringResource(R.string.seliku_set_bitrate_value, bitrate)) {
 			bitrate = bitrateStufen[(bitrateStufen.indexOf(bitrate) + 1) % bitrateStufen.size]
-			userPrefs[org.jellyfin.androidtv.preference.UserPreferences.maxBitrate] = bitrate
+			userPrefs[org.jellyfin.androidtv.preference.UserPreferences.maxBitrate] = bitrate; gesetzt("max_bitrate")
 		},
-		EinstellungsEintrag.Schalter("wach", stringResource(R.string.seliku_set_keep_awake), stringResource(R.string.seliku_set_keep_awake_desc), wach) {
-			wach = !wach; SelikuEinstellungen.nurBeiWiedergabeWach(context, wach)
+		// Jellyfins «Nächstes automatisch abspielen» (pref_enable_tv_queuing): aus = nur die gewählte Folge kommt in die Warteschlange
+		EinstellungsEintrag.Schalter("folge", umfang = "naechste_folge", stringResource(R.string.seliku_set_autoplay_next), stringResource(R.string.seliku_set_autoplay_next_desc), naechste) {
+			naechste = !naechste; userPrefs[org.jellyfin.androidtv.preference.UserPreferences.mediaQueuingEnabled] = naechste; gesetzt("naechste_folge")
 		},
-		EinstellungsEintrag.Schalter("untertitel", stringResource(R.string.seliku_set_subtitles_later), stringResource(R.string.seliku_set_subtitles_later_desc), nachladen) {
-			nachladen = !nachladen; SelikuEinstellungen.untertitelNachladen(context, nachladen)
+		EinstellungsEintrag.Schalter("wach", umfang = "nur_bei_wiedergabe_wach", stringResource(R.string.seliku_set_keep_awake), stringResource(R.string.seliku_set_keep_awake_desc), wach) {
+			wach = !wach; SelikuEinstellungen.nurBeiWiedergabeWach(context, wach); gesetzt("nur_bei_wiedergabe_wach")
+		},
+		EinstellungsEintrag.Schalter("untertitel", umfang = "untertitel_nachladen", stringResource(R.string.seliku_set_subtitles_later), stringResource(R.string.seliku_set_subtitles_later_desc), nachladen) {
+			nachladen = !nachladen; SelikuEinstellungen.untertitelNachladen(context, nachladen); gesetzt("untertitel_nachladen")
 		},
 
 		EinstellungsEintrag.Gruppe(stringResource(R.string.seliku_set_group_series)),
-		EinstellungsEintrag.Schalter("titelmusik", stringResource(R.string.seliku_set_theme_music), stringResource(R.string.seliku_set_theme_music_desc), musik) {
-			musik = !musik; SelikuEinstellungen.titelmusik(context, musik)
+		EinstellungsEintrag.Schalter("titelmusik", umfang = "titelmusik", stringResource(R.string.seliku_set_theme_music), stringResource(R.string.seliku_set_theme_music_desc), musik) {
+			musik = !musik; SelikuEinstellungen.titelmusik(context, musik); gesetzt("titelmusik")
 		},
-		EinstellungsEintrag.Schalter("zufall", stringResource(R.string.seliku_set_shuffle_button), stringResource(R.string.seliku_set_shuffle_button_desc), zufall) {
-			zufall = !zufall; SelikuEinstellungen.zufallKnopf(context, zufall)
+		EinstellungsEintrag.Schalter("zufall", umfang = "zufall_knopf", stringResource(R.string.seliku_set_shuffle_button), stringResource(R.string.seliku_set_shuffle_button_desc), zufall) {
+			zufall = !zufall; SelikuEinstellungen.zufallKnopf(context, zufall); gesetzt("zufall_knopf")
 		},
 
 		EinstellungsEintrag.Gruppe(stringResource(R.string.seliku_set_group_content)),
@@ -218,14 +229,20 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 	)
 
 	Column(Modifier.fillMaxSize().background(Farben.Hintergrund)) {
-		Text(stringResource(R.string.seliku_settings), style = Schrift.Titel, modifier = Modifier.padding(start = 48.dp, top = 28.dp, bottom = 8.dp))
+		Text(stringResource(R.string.seliku_settings), style = Schrift.Titel, modifier = Modifier.padding(start = 48.dp, top = 28.dp))
+		Text(stringResource(R.string.seliku_set_scope_hint), style = Schrift.Leise, modifier = Modifier.padding(start = 48.dp, top = 4.dp, bottom = 8.dp))
 		LazyColumn(state = vm.liste(Seite.Einstellungen), contentPadding = PaddingValues(start = 40.dp, end = 48.dp, bottom = 40.dp)) {
 			items(eintraege, key = { it.id }) { e ->
 				when (e) {
 					is EinstellungsEintrag.Gruppe -> Text(e.titel, style = Schrift.Reihe.copy(color = Farben.Akzent),
 						modifier = Modifier.padding(start = 8.dp, top = 22.dp, bottom = 6.dp))
 					else -> Waehlbar(onClick = e.aktion, vergroessern = false, modifier = Modifier.padding(vertical = 3.dp),
-						merken = vm to (Seite.Einstellungen.schluessel to e.id)) { fokussiert ->
+						merken = vm to (Seite.Einstellungen.schluessel to e.id),
+						// Menütaste bzw. OK lang: für alle Geräte ↔ nur dieses Gerät; wird abgeglichen, gleich den Wert hochladen
+						onMenue = e.umfang?.let { k -> fun() {
+							if (SelikuUmfang.umschalten(context, k)) SelikuSync.speichern(context)
+							umfangStand++
+						} }) { fokussiert ->
 						Row(
 							Modifier.fillMaxWidth().background(if (fokussiert) Farben.FlaecheHell else Farben.Flaeche).padding(horizontal = 20.dp, vertical = 12.dp),
 							verticalAlignment = Alignment.CenterVertically,
@@ -235,6 +252,11 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 								Text(e.text, style = Schrift.Klein, maxLines = 1, overflow = TextOverflow.Ellipsis)
 							}
 							Spacer(Modifier.width(16.dp))
+							e.umfang?.let { k ->
+								val alle = remember(umfangStand, k) { SelikuUmfang.alle(context, k) }
+								Text(if (alle) "☁" else "📺", style = Schrift.Normal.copy(color = Farben.TextLeise))
+								Spacer(Modifier.width(14.dp))
+							}
 							when (e) {
 								is EinstellungsEintrag.Schalter -> AnAusSchalter(e.an)
 								is EinstellungsEintrag.Auswahl -> Text(e.wert + "  ‹›", style = Schrift.Normal.copy(color = Farben.Akzent, fontWeight = FontWeight.Bold))
@@ -253,10 +275,11 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 	}
 }
 
-private sealed class EinstellungsEintrag(val id: String, val titel: String, val text: String, val aktion: () -> Unit) {
+/** [umfang]: Schlüssel für den Abgleich (☁/📺, siehe [SelikuSync]); null = nicht abgleichbar. */
+private sealed class EinstellungsEintrag(val id: String, val titel: String, val text: String, val aktion: () -> Unit, val umfang: String? = null) {
 	class Gruppe(titel: String) : EinstellungsEintrag("gruppe:$titel", titel, "", {})
-	class Schalter(id: String, titel: String, text: String, val an: Boolean, aktion: () -> Unit) : EinstellungsEintrag(id, titel, text, aktion)
-	class Auswahl(id: String, titel: String, text: String, val wert: String, aktion: () -> Unit) : EinstellungsEintrag(id, titel, text, aktion)
+	class Schalter(id: String, umfang: String?, titel: String, text: String, val an: Boolean, aktion: () -> Unit) : EinstellungsEintrag(id, titel, text, aktion, umfang)
+	class Auswahl(id: String, umfang: String?, titel: String, text: String, val wert: String, aktion: () -> Unit) : EinstellungsEintrag(id, titel, text, aktion, umfang)
 	class Verweis(id: String, titel: String, text: String, val wert: String? = null, aktion: () -> Unit) : EinstellungsEintrag(id, titel, text, aktion)
 }
 

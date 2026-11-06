@@ -180,7 +180,7 @@
 	<string name="seliku_set_slim_player">Schlanke Player-Bedienung</string>
 	<string name="seliku_set_slim_player_desc">OK pausiert, Links/Rechts spult, Bedienleiste mit «hoch»</string>
 	<string name="seliku_set_bitrate">Max. Streaming-Bitrate</string>
-	<string name="seliku_set_bitrate_desc">Tiefer bei langsamem Internet – weniger Unterbrüche. Nur dieses Gerät</string>
+	<string name="seliku_set_bitrate_desc">Tiefer bei langsamem Internet – weniger Unterbrüche</string>
 	<string name="seliku_set_bitrate_value">%1$s Mbit/s</string>
 	<string name="seliku_set_clip">Ausschnitt, wenn kein Trailer</string>
 	<string name="seliku_set_clip_desc">Stattdessen 90 Sekunden aus dem Film oder einer Folge</string>
@@ -248,4 +248,7 @@
 		<item quantity="one">%1$d Folge</item>
 		<item quantity="other">%1$d Folgen</item>
 	</plurals>
+	<string name="seliku_set_autoplay_next">Nächste Folge automatisch abspielen</string>
+	<string name="seliku_set_autoplay_next_desc">Nach einer Folge startet die nächste von selbst. Aus: Schluss nach der Folge</string>
+	<string name="seliku_set_scope_hint">Menütaste (oder OK lang drücken): ☁ für alle Geräte ↔ 📺 nur dieses Gerät</string>
 </resources>
