@@ -229,4 +229,23 @@
 		<item quantity="one">%1$d track</item>
 		<item quantity="other">%1$d tracks</item>
 	</plurals>
+	<!-- Entdecken wie bei Seerr -->
+	<string name="seliku_seerr_movie_genres">Movie genres</string>
+	<string name="seliku_seerr_series_genres">Series genres</string>
+	<string name="seliku_seerr_upcoming_series">Upcoming series</string>
+	<string name="seliku_seerr_studios">Studios</string>
+	<string name="seliku_seerr_networks">Networks</string>
+	<string name="seliku_seerr_studio">Studio</string>
+	<string name="seliku_seerr_network">Network</string>
+	<string name="seliku_seerr_filmography">Filmography</string>
+	<string name="seliku_seerr_cast">Cast</string>
+	<string name="seliku_seerr_recommendations">Recommendations</string>
+	<string name="seliku_seerr_similar">Similar titles</string>
+	<string name="seliku_seerr_directed_by">Directed by %1$s</string>
+	<string name="seliku_seerr_created_by">Created by %1$s</string>
+	<string name="seliku_seerr_rotten_tomatoes">Rotten Tomatoes %1$d %%</string>
+	<plurals name="seliku_seerr_episode_count">
+		<item quantity="one">%1$d episode</item>
+		<item quantity="other">%1$d episodes</item>
+	</plurals>
 </resources>

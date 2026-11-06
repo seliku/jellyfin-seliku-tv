@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -48,6 +49,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.focus.onFocusChanged
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -138,7 +140,7 @@ data class SeerrTitel(
 	val schluessel get() = "$typ-$tmdb"
 
 	companion object {
-		private const val BILD = "https://image.tmdb.org/t/p/"
+		private const val BILD = TMDB_BILD
 		fun ausJson(o: JSONObject, typVorgabe: String? = null, ich: Int? = null): SeerrTitel? {
 			val typ = o.optString("mediaType").ifBlank { typVorgabe ?: "" }
 			if (typ != "movie" && typ != "tv") return null
@@ -160,6 +162,49 @@ data class SeerrTitel(
 				anfrageId = anfrage?.optInt("id"),
 				anfrageSeit = anfrage?.optString("createdAt")?.let { runCatching { Instant.parse(it) }.getOrNull() },
 				anfrageVonMir = meine != null,
+			)
+		}
+	}
+}
+
+/** Bilder von TMDB (Seerr liefert nur die Pfade). */
+internal const val TMDB_BILD = "https://image.tmdb.org/t/p/"
+
+/** Person aus der Besetzung. */
+data class SeerrPerson(val id: Int, val name: String, val rolle: String, val bild: String?)
+
+/** Was die Detailseite zusätzlich zeigt: Genres, Laufzeit bzw. Staffeln, Bewertung, Macher, Besetzung. */
+data class SeerrMehr(
+	val genres: List<String>,
+	val laufzeit: Int?,      // Minuten (bei Serien: eine Folge)
+	val staffeln: Int?,
+	val folgen: Int?,
+	val bewertung: Double?,  // TMDB, 0–10
+	val stimmen: Int,
+	val macher: String?,     // Regie bzw. Idee
+	val firmen: String?,     // Studios bzw. Sender
+	val besetzung: List<SeerrPerson>,
+) {
+	companion object {
+		fun ausJson(o: JSONObject, typ: String): SeerrMehr {
+			fun liste(a: JSONArray?) = a?.let { (0 until it.length()).mapNotNull { i -> it.optJSONObject(i) } }.orEmpty()
+			fun namen(a: JSONArray?, n: Int) = liste(a).map { it.optString("name") }.filter { it.isNotBlank() }.distinct().take(n).joinToString(", ").ifBlank { null }
+			val credits = o.optJSONObject("credits")
+			val film = typ == "movie"
+			return SeerrMehr(
+				genres = liste(o.optJSONArray("genres")).map { it.optString("name") }.filter { it.isNotBlank() },
+				laufzeit = (if (film) o.optInt("runtime") else o.optJSONArray("episodeRunTime")?.optInt(0) ?: 0).takeIf { it > 0 },
+				staffeln = if (film) null else o.optInt("numberOfSeasons").takeIf { it > 0 },
+				folgen = if (film) null else o.optInt("numberOfEpisodes").takeIf { it > 0 },
+				bewertung = o.optDouble("voteAverage", 0.0).takeIf { it > 0.0 },
+				stimmen = o.optInt("voteCount"),
+				macher = if (film) liste(credits?.optJSONArray("crew")).filter { it.optString("job") == "Director" }.map { it.optString("name") }.distinct().take(2).joinToString(", ").ifBlank { null }
+					else namen(o.optJSONArray("createdBy"), 2),
+				firmen = if (film) namen(o.optJSONArray("productionCompanies"), 2) else namen(o.optJSONArray("networks"), 2),
+				besetzung = liste(credits?.optJSONArray("cast")).distinctBy { it.optInt("id") }.take(20).map {
+					SeerrPerson(it.optInt("id"), it.optString("name"), it.optString("character"),
+						it.optString("profilePath").takeIf { p -> p.startsWith("/") }?.let { p -> TMDB_BILD + "w185" + p })
+				}.filter { it.id > 0 && it.name.isNotBlank() },
 			)
 		}
 	}
@@ -246,6 +291,60 @@ class SeerrDaten(private val context: Context, private val api: ApiClient) {
 
 	suspend fun titel(typ: String, tmdb: Int): SeerrTitel =
 		SeerrTitel.ausJson(json("/$typ/$tmdb?language=de"), typ, meineId()) ?: throw SeerrFehler(404, "unbekannt")
+
+	/** Titel samt Genres, Laufzeit, Besetzung … aus derselben Antwort. */
+	suspend fun detail(typ: String, tmdb: Int): Pair<SeerrTitel, SeerrMehr> {
+		val o = json("/$typ/$tmdb?language=de")
+		val t = SeerrTitel.ausJson(o, typ, meineId()) ?: throw SeerrFehler(404, "unbekannt")
+		return t to SeerrMehr.ausJson(o, typ)
+	}
+
+	/** Kritiker-Wertung von Rotten Tomatoes, falls Seerr eine kennt. */
+	suspend fun rottenTomatoes(typ: String, tmdb: Int): Int? =
+		runCatching { json("/$typ/$tmdb/ratings").optInt("criticsScore", -1).takeIf { it in 0..100 } }.getOrNull()
+
+	/** Eine Seite einer Liste (Genre, Studio, Sender, Empfehlungen …) und wie viele Seiten es gibt. */
+	suspend fun blatt(pfad: String, typ: String?, seite: Int): Pair<List<SeerrTitel>, Int> {
+		val i = meineId()
+		val o = json(pfad + (if ('?' in pfad) "&" else "?") + "page=$seite&language=de")
+		val a = o.optJSONArray("results") ?: JSONArray()
+		return (0 until a.length()).mapNotNull { SeerrTitel.ausJson(a.getJSONObject(it), typ, i) } to o.optInt("totalPages", seite)
+	}
+
+	/** Genres mit einem Hintergrundbild, wie in Seerrs Genre-Reihe. */
+	suspend fun genres(typ: String): List<SeerrRubrik> {
+		val a = JSONArray(anfrage("GET", "/api/v1/discover/genreslider/$typ?language=de").first)
+		return (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { g ->
+			val bild = g.optJSONArray("backdrops")?.optString(0)?.takeIf { it.startsWith("/") }?.let { TMDB_BILD + "w780" + it }
+			SeerrRubrik(if (typ == "movie") "film-genre" else "serie-genre", g.optInt("id"), g.optString("name"), bild)
+		}.filter { it.id > 0 && it.name.isNotBlank() }
+	}
+
+	/** Logo eines Studios oder Senders (weiss eingefärbt wie bei Seerr); einmal geholt, dann gemerkt. */
+	suspend fun logo(r: SeerrRubrik): String? {
+		SeerrLogos.bekannt[r.schluessel]?.let { return it.ifEmpty { null } }
+		val sender = r.art == "sender"
+		val o = json(if (sender) "/discover/tv/network/${r.id}?page=1&language=de" else "/discover/movies/studio/${r.id}?page=1&language=de")
+		val firma = o.optJSONObject(if (sender) "network" else "studio")
+		firma?.optString("name")?.takeIf { it.isNotBlank() }?.let { SeerrLogos.namen[r.schluessel] = it }
+		val pfad = firma?.optString("logoPath")?.takeIf { it.startsWith("/") }
+		val url = pfad?.let { TMDB_BILD + "w500_filter(duotone,ffffff,bababa)" + it }.orEmpty()
+		SeerrLogos.bekannt[r.schluessel] = url
+		return url.ifEmpty { null }
+	}
+
+	/** Filme und Serien einer Person, die bekanntesten zuerst (ohne Auftritte als Gast in Talkshows u. ä.). */
+	suspend fun filmografie(person: Int): List<SeerrTitel> {
+		val i = meineId()
+		val a = json("/person/$person/combined_credits?language=de").optJSONArray("cast") ?: JSONArray()
+		val auftritte = setOf(10763, 10764, 10767) // Nachrichten, Reality, Talk
+		return (0 until a.length()).mapNotNull { a.optJSONObject(it) }
+			.filterNot { o -> o.optJSONArray("genreIds")?.let { g -> (0 until g.length()).any { g.optInt(it) in auftritte } } == true }
+			.sortedByDescending { it.optInt("voteCount") }
+			.mapNotNull { SeerrTitel.ausJson(it, null, i) }
+			// Einträge ohne Bild ans Ende; TMDB führt manche Titel doppelt (einmal ohne Bild)
+			.sortedBy { it.poster == null }.distinctBy { it.schluessel }.distinctBy { "${it.typ}|${it.titel}|${it.jahr}" }
+	}
 
 	suspend fun anfragen(t: SeerrTitel) {
 		val body = JSONObject().put("mediaType", t.typ).put("mediaId", t.tmdb)
@@ -337,54 +436,89 @@ fun SeerrKachel(t: SeerrTitel, onClick: () -> Unit, breite: Dp = 120.dp, merken:
 	}
 }
 
+/** [nachladen]: wird aufgerufen, wenn der Fokus gegen das Ende der Reihe läuft (nächste Seite holen). */
 @Composable
-fun SeerrReihe(titel: String, liste: List<SeerrTitel>, vm: SelikuViewModel, seite: Seite, onFokus: (SeerrTitel) -> Unit = {}) {
+fun SeerrReihe(titel: String, liste: List<SeerrTitel>, vm: SelikuViewModel, seite: Seite, nachladen: (() -> Unit)? = null, onFokus: (SeerrTitel) -> Unit = {}) {
 	if (liste.isEmpty()) return
 	Column(Modifier.fillMaxWidth().padding(bottom = 18.dp)) {
 		Text(titel, style = Schrift.Reihe, modifier = Modifier.padding(start = 48.dp, bottom = 8.dp))
+		// Rollstand merken: nach dem Zurückkommen steht die Reihe wieder dort, wo die gewählte Kachel ist
+		val zustand = remember(seite.schluessel, titel) { vm.listen.getOrPut("${seite.schluessel}|$titel") { androidx.compose.foundation.lazy.LazyListState() } }
 		SeitlichRollen {
-			LazyRow(contentPadding = PaddingValues(horizontal = 48.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-				items(liste, key = { titel + it.schluessel }) { t ->
-					SeerrKachel(t, onClick = { vm.zu(Seite.SeerrDetail(t.typ, t.tmdb)) }, merken = vm to (seite.schluessel to titel + t.schluessel), onFokus = { onFokus(t) })
+			LazyRow(state = zustand, contentPadding = PaddingValues(horizontal = 48.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+				itemsIndexed(liste, key = { _, t -> titel + t.schluessel }) { i, t ->
+					SeerrKachel(t, onClick = { vm.zu(Seite.SeerrDetail(t.typ, t.tmdb)) }, merken = vm to (seite.schluessel to titel + t.schluessel), onFokus = {
+						onFokus(t)
+						if (nachladen != null && i >= liste.size - 6) nachladen()
+					})
 				}
 			}
 		}
 	}
 }
 
+/** Reihe, die beim Weiterblättern die nächsten Seiten nachlädt. */
+@Composable
+fun SeerrReihe(titel: String, quelle: SeerrBlaettern, vm: SelikuViewModel, seite: Seite, onFokus: (SeerrTitel) -> Unit = {}) {
+	val daten = koinInject<SeerrDaten>()
+	val scope = rememberCoroutineScope()
+	SeerrReihe(titel, quelle.liste, vm, seite, nachladen = { scope.launch { quelle.mehr(daten) } }, onFokus = onFokus)
+}
+
 // ───────────────────────── Seiten ─────────────────────────
 
-/** «Entdecken»: blättern wie bei einem Bezahldienst, auch durch Titel, die noch fehlen. */
+/** «Entdecken» wie bei Seerr: Trends, Beliebtes, Genres, Demnächst, Studios, Sender – durch Titel, die noch fehlen. */
 @Composable
 fun EntdeckenSeite(vm: SelikuViewModel) {
 	val context = LocalContext.current
 	val daten = koinInject<SeerrDaten>()
 	val seite = Seite.Entdecken
 	@Suppress("UNCHECKED_CAST")
-	var reihen by remember { mutableStateOf(vm.wahl["entdecken"] as? List<Pair<String, List<SeerrTitel>>>) }
+	var reihen by remember { mutableStateOf(vm.wahl["entdecken"] as? List<EntdeckenReihe>) }
 	var fehler by remember { mutableStateOf<String?>(null) }
-	var hero by remember { mutableStateOf<SeerrTitel?>(null) }
+	var hero by remember { mutableStateOf<String?>(null) }
 	LaunchedEffect(Unit) {
+		val alt = reihen
+		if (alt != null) {
+			// Zurück aus einer Unterseite: die nachgeladenen Seiten bleiben, nur «Meine Anfragen» auffrischen
+			val anfragen = alt.filterIsInstance<EntdeckenReihe.Titel>().firstOrNull { it.anfragen } ?: return@LaunchedEffect
+			runCatching { daten.meineAnfragen() }.onSuccess { l -> anfragen.quelle.ersetzen(l.filter { it.zustand != SeerrZustand.ANSEHEN }) }
+			return@LaunchedEffect
+		}
 		runCatching {
 			coroutineScope {
+				fun q(pfad: String, typ: String?) = SeerrBlaettern(pfad, typ)
+				val trend = q("/discover/trending", null)
+				val filme = q("/discover/movies", "movie")
+				val kino = q("/discover/movies/upcoming", "movie")
+				val serien = q("/discover/tv", "tv")
+				val serienBald = q("/discover/tv/upcoming", "tv")
+				// Ohne die drei Hauptreihen gilt Seerr als nicht erreichbar; der Rest darf fehlen
+				val wichtig = listOf(trend, filme, serien).map { async { it.erste(daten) } }
+				val rest = listOf(kino, serienBald).map { async { runCatching { it.erste(daten) } } }
+				val filmGenres = async { runCatching { daten.genres("movie") }.getOrDefault(emptyList()) }
+				val serienGenres = async { runCatching { daten.genres("tv") }.getOrDefault(emptyList()) }
 				val anfragen = async { runCatching { daten.meineAnfragen() }.getOrDefault(emptyList()) }
-				val trend = async { daten.imTrend() }
-				val filme = async { daten.beliebteFilme() }
-				val serien = async { daten.beliebteSerien() }
-				val bald = async { runCatching { daten.baldImKino() }.getOrDefault(emptyList()) }
+				wichtig.awaitAll(); rest.awaitAll()
 				listOf(
-					context.getString(R.string.seliku_seerr_your_requests) to anfragen.await().filter { it.zustand != SeerrZustand.ANSEHEN },
-					context.getString(R.string.seliku_seerr_trending) to trend.await(),
-					context.getString(R.string.seliku_seerr_popular_movies) to filme.await(),
-					context.getString(R.string.seliku_seerr_popular_series) to serien.await(),
-					context.getString(R.string.seliku_seerr_coming_soon) to bald.await(),
-				).filter { it.second.isNotEmpty() }
+					EntdeckenReihe.Titel(context.getString(R.string.seliku_seerr_trending), trend),
+					EntdeckenReihe.Titel(context.getString(R.string.seliku_seerr_popular_movies), filme),
+					EntdeckenReihe.Rubriken(context.getString(R.string.seliku_seerr_movie_genres), filmGenres.await()),
+					EntdeckenReihe.Titel(context.getString(R.string.seliku_seerr_coming_soon), kino),
+					EntdeckenReihe.Rubriken(context.getString(R.string.seliku_seerr_studios), SeerrStudios),
+					EntdeckenReihe.Titel(context.getString(R.string.seliku_seerr_popular_series), serien),
+					EntdeckenReihe.Rubriken(context.getString(R.string.seliku_seerr_series_genres), serienGenres.await()),
+					EntdeckenReihe.Titel(context.getString(R.string.seliku_seerr_upcoming_series), serienBald),
+					EntdeckenReihe.Rubriken(context.getString(R.string.seliku_seerr_networks), SeerrSender),
+					EntdeckenReihe.Titel(context.getString(R.string.seliku_seerr_your_requests),
+						SeerrBlaettern(null, null, anfragen.await().filter { it.zustand != SeerrZustand.ANSEHEN }), anfragen = true),
+				)
 			}
 		}.onSuccess { reihen = it; vm.wahl["entdecken"] = it }
 			.onFailure { Timber.w(it, "Entdecken"); fehler = if (it is SeerrFehler && it.code == 403 || it is SeerrFehler && it.code == 401) context.getString(R.string.seliku_seerr_session_expired) else context.getString(R.string.seliku_seerr_unreachable) }
 	}
 	Box(Modifier.fillMaxSize()) {
-		Kulisse(hero?.hintergrund)
+		Kulisse(hero)
 		val r = reihen
 		when {
 			r == null && fehler != null -> Hinweis(fehler!!)
@@ -392,7 +526,12 @@ fun EntdeckenSeite(vm: SelikuViewModel) {
 			else -> SenkrechtRollen {
 				LazyColumn(state = vm.liste(seite), contentPadding = PaddingValues(top = 28.dp, bottom = 48.dp), modifier = Modifier.fillMaxSize()) {
 					item { Text(stringResource(R.string.seliku_discover), style = Schrift.Titel, modifier = Modifier.padding(start = 48.dp, bottom = 16.dp)) }
-					items(r, key = { it.first }) { (titel, liste) -> SeerrReihe(titel, liste, vm, seite) { hero = it } }
+					items(r, key = { it.titel }) { reihe ->
+						when (reihe) {
+							is EntdeckenReihe.Titel -> SeerrReihe(reihe.titel, reihe.quelle, vm, seite) { hero = it.hintergrund }
+							is EntdeckenReihe.Rubriken -> SeerrRubrikReihe(reihe.titel, reihe.liste, vm, seite) { rb -> rb.bild?.let { hero = it } }
+						}
+					}
 				}
 			}
 		}
@@ -405,13 +544,29 @@ fun SeerrDetailSeite(vm: SelikuViewModel, seite: Seite.SeerrDetail, oeffnen: (Ba
 	val context = LocalContext.current
 	val daten = koinInject<SeerrDaten>()
 	val scope = rememberCoroutineScope()
-	var t by remember { mutableStateOf<SeerrTitel?>(null) }
+	// Gemerkt, damit beim Zurückkommen alles sofort da ist und die zuletzt gewählte Kachel den Fokus zurückholen kann
+	@Suppress("UNCHECKED_CAST")
+	val gemerkt = remember(seite.schluessel) { vm.wahl["${seite.schluessel}|titel"] as? Pair<SeerrTitel, SeerrMehr> }
+	val zurueckGekommen = remember(seite.schluessel) { vm.fokus[seite.schluessel] != null }
+	var t by remember { mutableStateOf(gemerkt?.first) }
+	var mehr by remember { mutableStateOf(gemerkt?.second) }
+	var tomaten by remember { mutableStateOf(vm.wahl["${seite.schluessel}|tomaten"] as? Int) }
 	var meldung by remember { mutableStateOf<String?>(null) }
 	var neu by remember { mutableIntStateOf(0) }
 	var arbeitet by remember { mutableStateOf(false) }
-	val erster = remember { FocusRequester() }
+	// Der Knopf ist die erste Station der Seite (Zurück-Logik und Fokus beim Betreten), nicht die erste Kachel weiter unten
+	val erster = remember(seite.schluessel) { vm.ersteAnfrageFuer(seite.schluessel, "knopf") }
+	val liste = vm.liste(seite)
+	@Suppress("UNCHECKED_CAST")
+	val empfehlungen = remember(seite.schluessel) { vm.wahl.getOrPut("${seite.schluessel}|empfehlungen") { SeerrBlaettern("/${seite.typ}/${seite.tmdb}/recommendations", seite.typ, hoechstens = 3) } as SeerrBlaettern }
+	val aehnliche = remember(seite.schluessel) { vm.wahl.getOrPut("${seite.schluessel}|aehnliche") { SeerrBlaettern("/${seite.typ}/${seite.tmdb}/similar", seite.typ, hoechstens = 3) } as SeerrBlaettern }
 	LaunchedEffect(seite.tmdb, neu) {
-		runCatching { daten.titel(seite.typ, seite.tmdb) }.onSuccess { t = it }.onFailure { Timber.w(it, "Seerr-Titel"); meldung = context.getString(R.string.seliku_seerr_unreachable) }
+		runCatching { daten.detail(seite.typ, seite.tmdb) }.onSuccess { (titel, m) -> t = titel; mehr = m; vm.wahl["${seite.schluessel}|titel"] = titel to m }.onFailure { Timber.w(it, "Seerr-Titel"); meldung = context.getString(R.string.seliku_seerr_unreachable) }
+	}
+	LaunchedEffect(seite.schluessel) {
+		launch { if (empfehlungen.liste.isEmpty()) empfehlungen.mehr(daten) }
+		launch { if (aehnliche.liste.isEmpty()) aehnliche.mehr(daten) }
+		if (tomaten == null) tomaten = daten.rottenTomatoes(seite.typ, seite.tmdb)?.also { vm.wahl["${seite.schluessel}|tomaten"] = it }
 	}
 	// Solange gesucht/geladen wird, still nachsehen, ob sich etwas tut
 	LaunchedEffect(t?.zustand) {
@@ -422,52 +577,92 @@ fun SeerrDetailSeite(vm: SelikuViewModel, seite: Seite.SeerrDetail, oeffnen: (Ba
 	Box(Modifier.fillMaxSize()) {
 		Kulisse(x?.hintergrund)
 		if (x == null) { Hinweis(meldung ?: stringResource(R.string.seliku_loading)); return@Box }
-		LaunchedEffect(x.tmdb) { delay(150); runCatching { erster.requestFocus() } }
+		// Beim Betreten auf den Knopf – ausser man kommt von einer Kachel weiter unten zurück, die holt den Fokus selbst
+		LaunchedEffect(x.tmdb) {
+			if (zurueckGekommen) return@LaunchedEffect
+			delay(150); runCatching { erster.requestFocus() }
+		}
 		// Wechselt der Stand (Anfragen → Angefragt …), ist es ein anderer Knopf: Fokus gleich wieder darauf setzen
 		var letzterZustand by remember { mutableStateOf(x.zustand) }
 		LaunchedEffect(x.zustand) {
 			if (x.zustand != letzterZustand) { letzterZustand = x.zustand; delay(80); runCatching { erster.requestFocus() } }
 		}
-		Row(Modifier.fillMaxSize().padding(start = 48.dp, top = 48.dp, end = 64.dp), horizontalArrangement = Arrangement.spacedBy(32.dp)) {
-			Bild(x.poster, Modifier.width(220.dp).aspectRatio(2f / 3f), ersatz = initialen(x.titel))
-			Column(Modifier.weight(1f)) {
-				Text(x.titel, style = Schrift.Riesig, maxLines = 2, overflow = TextOverflow.Ellipsis)
-				Spacer(Modifier.height(6.dp))
-				Text(listOf(x.jahr, stringResource(if (x.typ == "tv") R.string.seliku_series else R.string.seliku_movie)).filter { it.isNotBlank() }.joinToString(" · "), style = Schrift.Leise)
-				Spacer(Modifier.height(14.dp))
-				Text(x.text, style = Schrift.Normal, maxLines = 7, overflow = TextOverflow.Ellipsis)
-				Spacer(Modifier.height(22.dp))
-				val tun: (suspend () -> Unit) -> Unit = { aktion ->
-					if (!arbeitet) scope.launch {
-						arbeitet = true
-						runCatching { aktion() }.onFailure { meldung = if (it is SeerrFehler && it.code == 403) context.getString(R.string.seliku_seerr_no_permission) else context.getString(R.string.seliku_failed, it.message?.take(80).toString()) }
-						arbeitet = false; neu++
-					}
-				}
-				Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-					val m = Modifier.focusRequester(erster)
-					when (x.zustand) {
-						SeerrZustand.ANFRAGEN -> Knopf(stringResource(if (arbeitet) R.string.seliku_seerr_requesting else R.string.seliku_seerr_request), symbol = "+", hervorgehoben = true, modifier = m, onClick = { tun { daten.anfragen(x) } })
-						SeerrZustand.ANGEFRAGT -> Knopf(stringResource(R.string.seliku_seerr_awaiting_approval), symbol = "⏳", modifier = m, onClick = { neu++ })
-						SeerrZustand.WIRD_GESUCHT -> Knopf(stringResource(R.string.seliku_seerr_searching), symbol = "⌕", modifier = m, onClick = { neu++ })
-						SeerrZustand.NOCH_NICHT -> Knopf(stringResource(R.string.seliku_seerr_not_yet_available), symbol = "…", modifier = m, onClick = { neu++ })
-						SeerrZustand.GLEICH -> Knopf(stringResource(R.string.seliku_seerr_available_soon), symbol = "↓", hervorgehoben = true, modifier = m, onClick = { neu++ })
-						SeerrZustand.ANSEHEN -> Knopf(stringResource(R.string.seliku_watch), symbol = "▶", hervorgehoben = true, modifier = m, onClick = {
-							tun {
-								val item = daten.inJellyfin(x)
-								if (item != null) oeffnen(item) else meldung = context.getString(R.string.seliku_seerr_not_in_jellyfin)
+		// Auf den Knöpfen ganz nach oben rollen (Poster und Titel ganz sichtbar); die Kachel unten ist dann nicht mehr «gemerkt»
+		val knopfFokus: () -> Unit = { vm.fokus.remove(seite.schluessel); scope.launch { delay(30); liste.animateScrollToItem(0) } }
+		val m = mehr
+		LazyColumn(state = liste, contentPadding = PaddingValues(bottom = 48.dp), modifier = Modifier.fillMaxSize()) {
+			item(key = "kopf") {
+				Row(Modifier.fillMaxWidth().padding(start = 48.dp, top = 48.dp, end = 64.dp, bottom = 26.dp), horizontalArrangement = Arrangement.spacedBy(32.dp)) {
+					Bild(x.poster, Modifier.width(220.dp).aspectRatio(2f / 3f), ersatz = initialen(x.titel))
+					Column(Modifier.weight(1f)) {
+						Text(x.titel, style = Schrift.Riesig, maxLines = 2, overflow = TextOverflow.Ellipsis)
+						Spacer(Modifier.height(6.dp))
+						val staffeln = m?.staffeln
+						val umfang = if (staffeln != null) listOfNotNull(
+							androidx.compose.ui.res.pluralStringResource(R.plurals.seliku_seasons, staffeln, staffeln),
+							m?.folgen?.let { androidx.compose.ui.res.pluralStringResource(R.plurals.seliku_seerr_episode_count, it, it) },
+						).joinToString(", ") else laufzeit(m?.laufzeit?.let { it * 600_000_000L })
+						Text(listOfNotNull(x.jahr, stringResource(if (x.typ == "tv") R.string.seliku_series else R.string.seliku_movie), umfang)
+							.filter { it.isNotBlank() }.joinToString(" · "), style = Schrift.Leise)
+						if (!m?.genres.isNullOrEmpty()) {
+							Spacer(Modifier.height(4.dp))
+							Text(m!!.genres.joinToString(", "), style = Schrift.Leise, maxLines = 1, overflow = TextOverflow.Ellipsis)
+						}
+						val wertung = listOfNotNull(
+							m?.bewertung?.let { "★ %.1f".format(it) + "  (TMDB)" },
+							tomaten?.let { stringResource(R.string.seliku_seerr_rotten_tomatoes, it) },
+						)
+						if (wertung.isNotEmpty()) {
+							Spacer(Modifier.height(4.dp))
+							Text(wertung.joinToString("   ·   "), style = Schrift.Leise.copy(color = Farben.Akzent))
+						}
+						Spacer(Modifier.height(12.dp))
+						Text(x.text, style = Schrift.Normal, maxLines = 5, overflow = TextOverflow.Ellipsis)
+						Spacer(Modifier.height(18.dp))
+						val tun: (suspend () -> Unit) -> Unit = { aktion ->
+							if (!arbeitet) scope.launch {
+								arbeitet = true
+								runCatching { aktion() }.onFailure { meldung = if (it is SeerrFehler && it.code == 403) context.getString(R.string.seliku_seerr_no_permission) else context.getString(R.string.seliku_failed, it.message?.take(80).toString()) }
+								arbeitet = false; neu++
 							}
-						})
+						}
+						Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+							val k = Modifier.focusRequester(erster)
+							when (x.zustand) {
+								SeerrZustand.ANFRAGEN -> Knopf(stringResource(if (arbeitet) R.string.seliku_seerr_requesting else R.string.seliku_seerr_request), symbol = "+", hervorgehoben = true, modifier = k, onFokus = knopfFokus, onClick = { tun { daten.anfragen(x) } })
+								SeerrZustand.ANGEFRAGT -> Knopf(stringResource(R.string.seliku_seerr_awaiting_approval), symbol = "⏳", modifier = k, onFokus = knopfFokus, onClick = { neu++ })
+								SeerrZustand.WIRD_GESUCHT -> Knopf(stringResource(R.string.seliku_seerr_searching), symbol = "⌕", modifier = k, onFokus = knopfFokus, onClick = { neu++ })
+								SeerrZustand.NOCH_NICHT -> Knopf(stringResource(R.string.seliku_seerr_not_yet_available), symbol = "…", modifier = k, onFokus = knopfFokus, onClick = { neu++ })
+								SeerrZustand.GLEICH -> Knopf(stringResource(R.string.seliku_seerr_available_soon), symbol = "↓", hervorgehoben = true, modifier = k, onFokus = knopfFokus, onClick = { neu++ })
+								SeerrZustand.ANSEHEN -> Knopf(stringResource(R.string.seliku_watch), symbol = "▶", hervorgehoben = true, modifier = k, onFokus = knopfFokus, onClick = {
+									tun {
+										val item = daten.inJellyfin(x)
+										if (item != null) oeffnen(item) else meldung = context.getString(R.string.seliku_seerr_not_in_jellyfin)
+									}
+								})
+							}
+							if (x.anfrageVonMir && x.zustand in setOf(SeerrZustand.ANGEFRAGT, SeerrZustand.WIRD_GESUCHT, SeerrZustand.NOCH_NICHT))
+								Knopf(stringResource(R.string.seliku_seerr_withdraw), symbol = "✕", onFokus = knopfFokus, onClick = { tun { daten.zuruecknehmen(x) } })
+						}
+						meldung?.let { Spacer(Modifier.height(14.dp)); Text(it, style = Schrift.Leise) }
+						if (x.zustand == SeerrZustand.NOCH_NICHT) {
+							Spacer(Modifier.height(10.dp))
+							Text(stringResource(R.string.seliku_seerr_no_source_yet), style = Schrift.Klein)
+						}
+						val macher = listOfNotNull(
+							m?.macher?.let { stringResource(if (x.typ == "tv") R.string.seliku_seerr_created_by else R.string.seliku_seerr_directed_by, it) },
+							m?.firmen,
+						)
+						if (macher.isNotEmpty()) {
+							Spacer(Modifier.height(14.dp))
+							Text(macher.joinToString("   ·   "), style = Schrift.Klein, maxLines = 1, overflow = TextOverflow.Ellipsis)
+						}
 					}
-					if (x.anfrageVonMir && x.zustand in setOf(SeerrZustand.ANGEFRAGT, SeerrZustand.WIRD_GESUCHT, SeerrZustand.NOCH_NICHT))
-						Knopf(stringResource(R.string.seliku_seerr_withdraw), symbol = "✕", onClick = { tun { daten.zuruecknehmen(x) } })
-				}
-				meldung?.let { Spacer(Modifier.height(14.dp)); Text(it, style = Schrift.Leise) }
-				if (x.zustand == SeerrZustand.NOCH_NICHT) {
-					Spacer(Modifier.height(10.dp))
-					Text(stringResource(R.string.seliku_seerr_no_source_yet), style = Schrift.Klein)
 				}
 			}
+			if (!m?.besetzung.isNullOrEmpty()) item(key = "besetzung") { SeerrBesetzungReihe(stringResource(R.string.seliku_seerr_cast), m!!.besetzung, vm, seite) }
+			item(key = "empfehlungen") { SeerrReihe(stringResource(R.string.seliku_seerr_recommendations), empfehlungen, vm, seite) }
+			item(key = "aehnliche") { SeerrReihe(stringResource(R.string.seliku_seerr_similar), aehnliche, vm, seite) }
 		}
 	}
 }

@@ -344,6 +344,7 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 						Seite.Einstellungen -> EinstellungenSeite(vm) { context.startActivity(ActivityDestinations.userPreferences(context)) }
 						Seite.Entdecken -> EntdeckenSeite(vm)
 						is Seite.SeerrDetail -> SeerrDetailSeite(vm, seite, oeffnen)
+						is Seite.SeerrListe -> SeerrListenSeite(vm, seite)
 						Seite.SeerrVerbinden -> SeerrVerbindenSeite(vm)
 						Seite.Bibliotheken -> BibliothekenSeite(vm, oeffnenBibliothek = { vm.zu(seiteFuerBibliothek(it)) }, geaendert = { neuLaden++ })
 					}
