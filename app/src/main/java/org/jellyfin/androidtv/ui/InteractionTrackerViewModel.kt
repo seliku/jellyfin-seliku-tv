@@ -112,7 +112,12 @@ class InteractionTrackerViewModel(
 		}
 
 		// Update KEEP_SCREEN_ON flag value
-		_keepScreenOn.value = inAppEnabled || locks > 0
+		// Seliku: Der Fernseher bleibt nur wach, solange etwas läuft (die Sperren kommen von Video, Musik und Radio) –
+		// nicht schon, weil der Jellyfin-Bildschirmschoner an ist; sonst bleibt der Fernseher die ganze Nacht an
+		val nurBeiWiedergabe = runCatching {
+			org.jellyfin.androidtv.seliku.SelikuEinstellungen.nurBeiWiedergabeWach(org.koin.java.KoinJavaComponent.get(android.content.Context::class.java))
+		}.getOrDefault(true)
+		_keepScreenOn.value = (inAppEnabled && !nurBeiWiedergabe) || locks > 0
 	}
 
 	/**

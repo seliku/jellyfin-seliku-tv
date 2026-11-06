@@ -155,6 +155,7 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 	var netflix by remember { mutableStateOf(SelikuEinstellungen.netflixKacheln(context)) }
 	var musik by remember { mutableStateOf(SelikuEinstellungen.titelmusik(context)) }
 	var nachladen by remember { mutableStateOf(SelikuEinstellungen.untertitelNachladen(context)) }
+	var wach by remember { mutableStateOf(SelikuEinstellungen.nurBeiWiedergabeWach(context)) }
 	val userPrefs = remember { org.koin.java.KoinJavaComponent.get<org.jellyfin.androidtv.preference.UserPreferences>(org.jellyfin.androidtv.preference.UserPreferences::class.java) }
 	var bitrate by remember { mutableStateOf(userPrefs[org.jellyfin.androidtv.preference.UserPreferences.maxBitrate]) }
 	val bitrateStufen = listOf("100", "40", "20", "10", "5")
@@ -186,6 +187,9 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 		EinstellungsEintrag.Auswahl("bitrate", stringResource(R.string.seliku_set_bitrate), stringResource(R.string.seliku_set_bitrate_desc), stringResource(R.string.seliku_set_bitrate_value, bitrate)) {
 			bitrate = bitrateStufen[(bitrateStufen.indexOf(bitrate) + 1) % bitrateStufen.size]
 			userPrefs[org.jellyfin.androidtv.preference.UserPreferences.maxBitrate] = bitrate
+		},
+		EinstellungsEintrag.Schalter("wach", stringResource(R.string.seliku_set_keep_awake), stringResource(R.string.seliku_set_keep_awake_desc), wach) {
+			wach = !wach; SelikuEinstellungen.nurBeiWiedergabeWach(context, wach)
 		},
 		EinstellungsEintrag.Schalter("untertitel", stringResource(R.string.seliku_set_subtitles_later), stringResource(R.string.seliku_set_subtitles_later_desc), nachladen) {
 			nachladen = !nachladen; SelikuEinstellungen.untertitelNachladen(context, nachladen)

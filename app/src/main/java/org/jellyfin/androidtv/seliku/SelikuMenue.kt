@@ -71,6 +71,10 @@ object SelikuEinstellungen {
 	fun leisteMitLinks(c: Context, an: Boolean) = prefs(c).edit().putBoolean("leiste_mit_links", an).apply()
 
 	/** An (Vorgabe): Filme starten sofort; Untertitel kommen nach, sobald der Server sie aus der Datei gelesen hat. */
+	/** An (Vorgabe): Der Fernseher bleibt nur wach, solange etwas läuft (Film, Musik, Podcast, Radio). Aus: wie in Jellyfin – immer, solange die App offen ist. */
+	@JvmStatic fun nurBeiWiedergabeWach(c: Context) = prefs(c).getBoolean("nur_bei_wiedergabe_wach", true)
+	fun nurBeiWiedergabeWach(c: Context, an: Boolean) = prefs(c).edit().putBoolean("nur_bei_wiedergabe_wach", an).apply()
+
 	@JvmStatic fun untertitelNachladen(c: Context) = prefs(c).getBoolean("untertitel_nachladen", true)
 	fun untertitelNachladen(c: Context, an: Boolean) = prefs(c).edit().putBoolean("untertitel_nachladen", an).apply()
 }

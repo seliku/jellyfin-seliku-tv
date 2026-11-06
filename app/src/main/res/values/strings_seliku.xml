@@ -182,6 +182,8 @@
 	<string name="seliku_set_bitrate">Max streaming bitrate</string>
 	<string name="seliku_set_bitrate_desc">Lower it on slow internet for fewer interruptions. This device only</string>
 	<string name="seliku_set_bitrate_value">%1$s Mbit/s</string>
+	<string name="seliku_set_keep_awake">TV stays on only while playing</string>
+	<string name="seliku_set_keep_awake_desc">Movie, music, podcast or radio running – otherwise the TV may sleep</string>
 	<string name="seliku_set_subtitles_later">Load subtitles later</string>
 	<string name="seliku_set_subtitles_later_desc">Movies start right away, subtitles follow</string>
 	<string name="seliku_set_group_series">Series</string>
