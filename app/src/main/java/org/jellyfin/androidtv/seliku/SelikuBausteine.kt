@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -231,15 +230,9 @@ fun PosterKachel(
 		if (fokussiert && aufklappen && tasteGedrueckt && SelikuEinstellungen.netflixKacheln(context)) { kotlinx.coroutines.delay(450); offen = true }
 	}
 	val hoehe = breite * 1.5f
-	val b by androidx.compose.animation.core.animateDpAsState(if (offen) hoehe * 16f / 9f else breite,
-		androidx.compose.animation.core.tween(240, easing = androidx.compose.animation.core.FastOutSlowInEasing), label = "kachel")
-	// Die Reihe rollt beim Fokus nur so weit, dass die schmale Kachel passt; nach dem Aufklappen nochmals nachrollen,
-	// sonst ragt die breite Kachel am Ende der Reihe über den Rand.
-	val sichtbar = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
-	LaunchedEffect(offen) {
-		if (offen) { kotlinx.coroutines.delay(260); runCatching { sichtbar.bringIntoView() } }
-	}
-	Column(Modifier.width(b).bringIntoViewRequester(sichtbar)) {
+	// Ohne Animation: die gewählte Kachel steht fest links (siehe Rollen.links), aufklappen schiebt nur die Kacheln rechts davon
+	val b = if (offen) hoehe * 16f / 9f else breite
+	Column(Modifier.width(b)) {
 		Waehlbar(onClick = onClick, merken = merken, onFokus = onFokus, onMenue = onMenue, vergroessern = !aufklappen,
 			modifier = (if (erster != null) Modifier.focusRequester(erster) else Modifier).onFocusChanged { fokussiert = it.isFocused }) {
 			Box(Modifier.width(b).height(hoehe)) {
@@ -373,17 +366,22 @@ fun Reihe(
 	}) {
 		Text(titel, style = Schrift.Reihe, modifier = Modifier.padding(start = 48.dp, bottom = 8.dp))
 		val zustand = remember(seite.schluessel, titel) { vm.listen.getOrPut("${seite.schluessel}|$titel") { androidx.compose.foundation.lazy.LazyListState() } }
-		SeitlichRollen { LazyRow(
+		// Wie Netflix: die gewählte Kachel steht immer an erster Stelle, die Reihe gleitet darunter durch
+		androidx.compose.foundation.layout.BoxWithConstraints { val ende = (maxWidth - 48.dp - 100.dp).coerceAtLeast(48.dp)  // genug Platz, damit auch die letzte (noch schmale) Kachel nach links kann
+		SeitlichRollen(links = true) { LazyRow(
 			state = zustand,
-			contentPadding = PaddingValues(horizontal = 48.dp, vertical = 8.dp),
+			contentPadding = PaddingValues(start = 48.dp, end = ende, top = 8.dp, bottom = 8.dp),
 			horizontalArrangement = Arrangement.spacedBy(18.dp),
 		) {
-			itemsIndexed(items, key = { _, it -> it.id }) { _, item ->
+			itemsIndexed(items, key = { _, it -> it.id }) { nr, item ->
 				val merken = vm to (seite.schluessel to "$titel|${item.id}")
-				if (kachel != null) kachel(item, { onClick(item) }, merken) { onFokus(item) }
-				else Kachel(item, { onClick(item) }, merken = merken, onFokus = { onFokus(item) }, onMenue = onMenue?.let { m -> { m(item) } } ?: { vm.menue = item })
+				// Letzte Kachel: «rechts» schlucken – rechts davon ist nur Leerraum, sonst springt der Fokus nach oben
+				Box(if (nr == items.lastIndex) Modifier.onPreviewKeyEvent { e -> e.key == Key.DirectionRight } else Modifier) {
+					if (kachel != null) kachel(item, { onClick(item) }, merken) { onFokus(item) }
+					else Kachel(item, { onClick(item) }, merken = merken, onFokus = { onFokus(item) }, onMenue = onMenue?.let { m -> { m(item) } } ?: { vm.menue = item })
+				}
 			}
-		} }
+		} } }
 	}
 }
 
@@ -466,6 +464,11 @@ object Rollen {
 		override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float = offset - abstandPx
 	}
 
+	/** Die gewählte Kachel immer an den linken Rand (Abstand [randPx]). */
+	fun links(randPx: Float) = object : androidx.compose.foundation.gestures.BringIntoViewSpec {
+		override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float = offset - randPx
+	}
+
 	fun seitlich(randPx: Float) = object : androidx.compose.foundation.gestures.BringIntoViewSpec {
 		override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
 			val ende = offset + size
@@ -490,10 +493,10 @@ fun SenkrechtRollen(abstand: Dp = 48.dp, content: @Composable () -> Unit) {
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-fun SeitlichRollen(rand: Dp = 120.dp, content: @Composable () -> Unit) {
-	val px = with(androidx.compose.ui.platform.LocalDensity.current) { rand.toPx() }
+fun SeitlichRollen(rand: Dp = 120.dp, links: Boolean = false, content: @Composable () -> Unit) {
+	val px = with(androidx.compose.ui.platform.LocalDensity.current) { (if (links) 48.dp else rand).toPx() }
 	androidx.compose.runtime.CompositionLocalProvider(
-		androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides remember(px) { Rollen.seitlich(px) },
+		androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides remember(px, links) { if (links) Rollen.links(px) else Rollen.seitlich(px) },
 		content = content,
 	)
 }
