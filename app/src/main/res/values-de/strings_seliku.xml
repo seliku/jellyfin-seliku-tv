@@ -169,7 +169,7 @@
 	<string name="seliku_seerr_state_not_connected">nicht verbunden</string>
 	<string name="seliku_set_group_home">Startseite &amp; Navigation</string>
 	<string name="seliku_set_tiles">Kacheln aufklappen</string>
-	<string name="seliku_set_tiles_desc">Der erste Platz jeder Reihe zeigt Bild und Infos, die Reihe gleitet darunter durch</string>
+	<string name="seliku_set_tiles_desc">Fester grosser erster Platz in jeder Reihe, die Reihe gleitet darunter durch</string>
 	<string name="seliku_set_trailer">Trailer im Banner und in Kacheln</string>
 	<string name="seliku_set_trailer_desc">Läuft in der gewählten Kachel und im Banner, solange du darin bist</string>
 	<string name="seliku_set_sidebar_left">Seitenleiste auch mit Links öffnen</string>
@@ -263,4 +263,20 @@
 	<string name="seliku_live_paused">Angehalten – OK spielt weiter</string>
 	<string name="seliku_favorites">Favoriten</string>
 	<string name="seliku_seerr_similar_missing">Ähnlich, aber noch nicht da</string>
+	<string name="seliku_true_stories">Wahre Geschichten</string>
+	<string name="seliku_set_true_stories">Reihe «Wahre Geschichten»</string>
+	<string name="seliku_set_true_stories_desc">Filme und Serien nach wahren Begebenheiten auf der Startseite</string>
+	<string name="seliku_set_own_rating">Eigene Wertung</string>
+	<string name="seliku_set_own_rating_desc">Titel mit 1–5 Sternen bewerten; pro Benutzer auf dem Server gespeichert</string>
+	<string name="seliku_set_tomatoes">Rotten Tomatoes</string>
+	<string name="seliku_set_tomatoes_desc">Kritikerwertung zeigen; fehlt sie in Jellyfin (z. B. bei Serien), wird sie bei Seerr nachgeschlagen</string>
+	<string name="seliku_own_rating_short">Du: %1$s</string>
+	<string name="seliku_rate">Bewerten</string>
+	<string name="seliku_rating_question">Wie war\'s?</string>
+	<string name="seliku_rating_5">Super</string>
+	<string name="seliku_rating_4">Gut</string>
+	<string name="seliku_rating_3">Okay</string>
+	<string name="seliku_rating_2">Mässig</string>
+	<string name="seliku_rating_1">Kacke</string>
+	<string name="seliku_rating_remove">Wertung löschen</string>
 </resources>

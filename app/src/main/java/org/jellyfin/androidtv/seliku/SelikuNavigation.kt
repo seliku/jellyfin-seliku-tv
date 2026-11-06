@@ -65,6 +65,8 @@ class SelikuViewModel : ViewModel() {
 
 	/** Titel, zu dem gerade das Titelmenü (langes Drücken) offen ist. */
 	var menue by androidx.compose.runtime.mutableStateOf<BaseItemDto?>(null)
+	/** Titel, für den gerade die Auswahl «Bewerten» offen ist. */
+	var wertung by androidx.compose.runtime.mutableStateOf<BaseItemDto?>(null)
 
 	/** Erste Kachel je Seite: «Zurück» springt dorthin, bevor die Leiste aufgeht. */
 	/** Seiten, auf denen die gemerkte Kachel den Fokus schon zurückgeholt hat (einmal pro Besuch, nicht bei jedem Auftauchen). */

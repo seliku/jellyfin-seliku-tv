@@ -159,7 +159,7 @@ private fun BibliothekEmpfohlen(vm: SelikuViewModel, seite: Seite.Bibliothek, oe
 						item.type == BaseItemKind.EPISODE -> abspielen.video(context, item)
 						else -> oeffnen(item)
 					}
-				}, onFokus = setzeHero, kachel = { item, klick, merken, fokus -> PosterKachel(item, klick, breite = 120.dp, merken = merken, onFokus = fokus, onMenue = { vm.menue = item }, aufklappen = true) })
+				}, onFokus = setzeHero, kachel = { item, klick, merken, fokus -> PosterKachel(item, klick, breite = 120.dp, merken = merken, onFokus = fokus, onMenue = { vm.menue = item }, aufklappen = true) }, buehne = true)
 			}
 			// Nach den eigenen Reihen: was beliebt ist, aber fehlt
 			if (fehlend.isNotEmpty()) item(key = "seerr") { SeerrReihe(stringResource(if (seerrTyp == "movie") R.string.seliku_seerr_popular_movies_missing else R.string.seliku_seerr_popular_series_missing), fehlend, vm, unterSeite) }

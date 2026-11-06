@@ -68,6 +68,7 @@ class SelikuDaten(private val api: ApiClient) {
 		ItemFields.DATE_CREATED,
 		ItemFields.MEDIA_SOURCE_COUNT,
 		ItemFields.TAGLINES,
+		ItemFields.PROVIDER_IDS,
 	)
 
 	private suspend fun <T> io(block: suspend () -> T): T = withContext(Dispatchers.IO) { block() }
@@ -160,22 +161,45 @@ class SelikuDaten(private val api: ApiClient) {
 
 	suspend fun item(id: UUID): BaseItemDto = io { api.userLibraryApi.getItem(itemId = id).content }
 
-	/** «Weiterschauen»: angefangene Videos, danach die nächsten Folgen begonnener Serien (je Serie nur einmal). */
+	/**
+	 * «Weiterschauen»: je Serie nur ein Eintrag (die zuletzt angefangene Folge bzw. die nächste Folge), Filme einzeln.
+	 * Reihenfolge: zuletzt geschaut zuerst, dann die nächsten Folgen begonnener Serien (Jellyfin sortiert sie nach
+	 * zuletzt geschaut), am Schluss angefangene Titel ohne Datum (aus Plex übernommen, also alt).
+	 */
 	suspend fun weiterschauen(): List<BaseItemDto> = io {
 		val angefangen = api.itemsApi.getResumeItems(
-			limit = 24,
+			limit = 60,
 			mediaTypes = setOf(MediaType.VIDEO),
 			fields = felder,
 			enableUserData = true,
-		).content.items
+		).content.items.distinctBy { it.seriesId ?: it.id }
 		val naechste = api.tvShowsApi.getNextUp(
-			limit = 24,
+			limit = 60,
 			fields = felder,
 			enableUserData = true,
 			enableResumable = false,
 		).content.items
 		val serien = angefangen.mapNotNull { it.seriesId }.toSet()
-		ohneAusgeblendete((angefangen + naechste.filter { it.seriesId !in serien }).distinctBy { it.id }).take(30)
+		val (mitDatum, ohneDatum) = angefangen.partition { it.userData?.lastPlayedDate != null }
+		ohneAusgeblendete((mitDatum + naechste.filter { it.seriesId !in serien } + ohneDatum).distinctBy { it.seriesId ?: it.id }).take(40)
+	}
+
+	/** «Wahre Geschichten»: Filme und Serien mit den TMDb-Schlagwörtern für wahre Begebenheiten und Biografien. */
+	suspend fun wahreGeschichten(): List<BaseItemDto> = io {
+		api.itemsApi.getItems(
+			recursive = true,
+			includeItemTypes = setOf(BaseItemKind.MOVIE, BaseItemKind.SERIES),
+			tags = listOf("based on true story", "inspired by true events", "based on memoir or autobiography", "biography", "biographical drama", "biographical comedy", "true crime"),
+			sortBy = listOf(ItemSortBy.RANDOM),
+			fields = felder,
+			enableUserData = true,
+			limit = 40,
+		).content.items
+	}
+
+	/** Eigene Wertung (1–5 Sterne, bei Jellyfin 2–10 je Benutzer gespeichert); 0 = keine. */
+	suspend fun wertung(id: UUID, sterne: Int) = io {
+		api.itemsApi.updateItemUserData(itemId = id, data = org.jellyfin.sdk.model.api.UpdateUserItemDataDto(rating = sterne * 2.0))
 	}
 
 	suspend fun neuIn(bibliothek: BaseItemDto): List<BaseItemDto> = io {

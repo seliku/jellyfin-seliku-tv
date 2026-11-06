@@ -35,7 +35,7 @@ import androidx.compose.ui.res.stringResource
 import org.jellyfin.androidtv.R
 
 /** Art der Startseiten-Reihe (die Überschrift ist übersetzt und taugt nicht als Unterscheidung). */
-private enum class StartArt { WEITER, TV, NEU, FAVORITEN, ANDERE }
+private enum class StartArt { WEITER, TV, NEU, FAVORITEN, WAHR, ANDERE }
 
 private data class StartReihe(val titel: String, val items: List<BaseItemDto>, val loeschdatum: Map<java.util.UUID, String> = emptyMap(), val art: StartArt = StartArt.ANDERE)
 
@@ -79,6 +79,8 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 				bibs.filter { !it.istLiveTv() }.forEach { bib ->
 					add(StartReihe(context.getString(R.string.seliku_new_in, bib.name.orEmpty()), runCatching { daten.neuIn(bib) }.getOrDefault(emptyList()), art = StartArt.NEU))
 				}
+				if (SelikuEinstellungen.wahreGeschichten(context))
+					add(StartReihe(context.getString(R.string.seliku_true_stories), runCatching { daten.wahreGeschichten() }.getOrDefault(emptyList()), art = StartArt.WAHR))
 			}.filter { it.items.isNotEmpty() }
 		}.onFailure { Timber.w(it, "Startseite laden") }.getOrNull()
 		if (neu != null) {
@@ -151,6 +153,10 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 							// Sammlungen (z. B. «Diese Filme werden bald gelöscht») wie die anderen Reihen
 							PosterKachel(item, klick, breite = 120.dp, merken = merken, onFokus = fokus, onMenue = { vm.menue = item }, aufklappen = true)
 						} else null,
+						// Reihen mit Postern: fester grosser erster Platz, die Reihe gleitet darunter durch
+						buehne = reihe.art == StartArt.WEITER || (reihe.art != StartArt.TV && reihe.loeschdatum.isEmpty() && (reihe.art == StartArt.FAVORITEN
+							|| (reihe.art == StartArt.NEU && reihe.items.none { it.type == BaseItemKind.MUSIC_ALBUM || it.type == BaseItemKind.AUDIO })
+							|| reihe.items.all { it.type == BaseItemKind.MOVIE || it.type == BaseItemKind.SERIES })),
 					)
 				}
 			} }

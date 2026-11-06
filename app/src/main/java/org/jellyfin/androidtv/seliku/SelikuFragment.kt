@@ -388,6 +388,7 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 			// Ist die Kachel verschwunden, auf der man stand, nach dem Neuladen wieder in den Inhalt
 			scope.launch { kotlinx.coroutines.delay(900); if (!inhaltHatFokus) zurueckInDenInhalt() }
 		} }
+		vm.wertung?.let { item -> WertungAuswahl(vm, item) { vm.datenStand++ } }
 	}
 }
 

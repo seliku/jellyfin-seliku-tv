@@ -60,6 +60,9 @@ object SelikuSync {
 		// Vorgabe ☁ alle Geräte
 		schalter("netflix_kacheln", true, SelikuEinstellungen::netflixKacheln, SelikuEinstellungen::netflixKacheln),
 		schalter("favoriten_reihe", true, SelikuEinstellungen::favoritenReihe, SelikuEinstellungen::favoritenReihe),
+		schalter("wahre_geschichten", true, SelikuEinstellungen::wahreGeschichten, SelikuEinstellungen::wahreGeschichten),
+		schalter("eigene_wertung", true, SelikuEinstellungen::eigeneWertung, SelikuEinstellungen::eigeneWertung),
+		schalter("tomaten", true, SelikuEinstellungen::tomaten, SelikuEinstellungen::tomaten),
 		schalter("trailer_banner", true, SelikuEinstellungen::trailerImBanner, SelikuEinstellungen::trailerImBanner),
 		schalter("ausschnitt_ohne_trailer", true, SelikuEinstellungen::ausschnittOhneTrailer, SelikuEinstellungen::ausschnittOhneTrailer),
 		schalter("titelmusik", true, SelikuEinstellungen::titelmusik, SelikuEinstellungen::titelmusik),

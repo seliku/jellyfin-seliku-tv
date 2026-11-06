@@ -169,7 +169,7 @@
 	<string name="seliku_seerr_state_not_connected">not connected</string>
 	<string name="seliku_set_group_home">Home &amp; navigation</string>
 	<string name="seliku_set_tiles">Expand tiles</string>
-	<string name="seliku_set_tiles_desc">The first spot of each row shows artwork and info; the row slides through it</string>
+	<string name="seliku_set_tiles_desc">A fixed large first spot in each row; the row glides underneath</string>
 	<string name="seliku_set_trailer">Trailers in banner and tiles</string>
 	<string name="seliku_set_trailer_desc">Plays in the selected tile, and in the banner while you are in it</string>
 	<string name="seliku_set_sidebar_left">Open sidebar with Left too</string>
@@ -263,4 +263,20 @@
 	<string name="seliku_live_paused">Paused – OK continues</string>
 	<string name="seliku_favorites">Favorites</string>
 	<string name="seliku_seerr_similar_missing">Similar, not here yet</string>
+	<string name="seliku_true_stories">True stories</string>
+	<string name="seliku_set_true_stories">“True stories” row</string>
+	<string name="seliku_set_true_stories_desc">Movies and series based on true events, on the home screen</string>
+	<string name="seliku_set_own_rating">Your own rating</string>
+	<string name="seliku_set_own_rating_desc">Rate titles with 1–5 stars; saved per user on the server</string>
+	<string name="seliku_set_tomatoes">Rotten Tomatoes</string>
+	<string name="seliku_set_tomatoes_desc">Show the critics score; looked up via Seerr when Jellyfin has none (e.g. series)</string>
+	<string name="seliku_own_rating_short">You: %1$s</string>
+	<string name="seliku_rate">Rate</string>
+	<string name="seliku_rating_question">How was it?</string>
+	<string name="seliku_rating_5">Great</string>
+	<string name="seliku_rating_4">Good</string>
+	<string name="seliku_rating_3">Okay</string>
+	<string name="seliku_rating_2">Meh</string>
+	<string name="seliku_rating_1">Bad</string>
+	<string name="seliku_rating_remove">Remove rating</string>
 </resources>

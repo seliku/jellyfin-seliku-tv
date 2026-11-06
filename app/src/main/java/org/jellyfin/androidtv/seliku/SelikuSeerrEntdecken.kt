@@ -338,29 +338,18 @@ fun GemischteReihe(
 		val zustand = remember(seite.schluessel, titel) { vm.listen.getOrPut("${seite.schluessel}|$titel") { LazyListState() } }
 		val offenSchluessel = "${seite.schluessel}|$titel|offen"
 		var offenNr by remember(offenSchluessel) { mutableStateOf(vm.wahl[offenSchluessel] as? Int ?: 0) }
-		androidx.compose.foundation.layout.BoxWithConstraints {
-			val ende = (maxWidth - 48.dp - 100.dp).coerceAtLeast(48.dp)
-			SeitlichRollen(links = true) {
-				LazyRow(
-					state = zustand,
-					modifier = Modifier.drawWithContent { clipRect(left = 40.dp.toPx(), top = -40f, right = size.width + 40f, bottom = size.height + 40f) { this@drawWithContent.drawContent() } },
-					contentPadding = PaddingValues(start = 48.dp, end = ende, top = 8.dp, bottom = 8.dp),
-					horizontalArrangement = Arrangement.spacedBy(18.dp),
-				) {
-					itemsIndexed(eintraege, key = { _, e -> schluessel(e) }) { nr, e ->
-						val merken = vm to (seite.schluessel to "$titel|${schluessel(e)}")
-						val gewaehlt: () -> Unit = { offenNr = nr; vm.wahl[offenSchluessel] = nr }
-						Box(if (nr == eintraege.lastIndex) Modifier.onPreviewKeyEvent { k -> k.key == androidx.compose.ui.input.key.Key.DirectionRight } else Modifier) {
-							androidx.compose.runtime.CompositionLocalProvider(LocalKachelOffen provides (nr == offenNr.coerceIn(0, eintraege.lastIndex))) {
-								if (e is SeerrTitel) SeerrKachel(e, onClick = { vm.zu(Seite.SeerrDetail(e.typ, e.tmdb)) }, merken = merken, onFokus = gewaehlt)
-								else (e as org.jellyfin.sdk.model.api.BaseItemDto).let { item ->
-									PosterKachel(item, { oeffnen(item) }, breite = 120.dp, merken = merken, onFokus = gewaehlt, onMenue = { vm.menue = item }, aufklappen = true)
-								}
-							}
-						}
-					}
-				}
+		@Composable fun zeige(e: Any, merken: Pair<SelikuViewModel, Pair<String, String>>, gewaehlt: () -> Unit) {
+			if (e is SeerrTitel) SeerrKachel(e, onClick = { vm.zu(Seite.SeerrDetail(e.typ, e.tmdb)) }, merken = merken, onFokus = gewaehlt)
+			else (e as org.jellyfin.sdk.model.api.BaseItemDto).let { item ->
+				PosterKachel(item, { oeffnen(item) }, breite = 120.dp, merken = merken, onFokus = gewaehlt, onMenue = { vm.menue = item }, aufklappen = true)
 			}
+		}
+		Band(eintraege.size, zustand, offenNr.coerceIn(0, eintraege.lastIndex), SelikuEinstellungen.netflixKacheln(androidx.compose.ui.platform.LocalContext.current),
+			schluessel = { schluessel(eintraege[it]) },
+			buehne = { nr -> zeige(eintraege[nr], vm to (seite.schluessel to "$titel|buehne"), {}) },
+		) { nr ->
+			val e = eintraege[nr]
+			zeige(e, vm to (seite.schluessel to "$titel|${schluessel(e)}")) { offenNr = nr; vm.wahl[offenSchluessel] = nr }
 		}
 	}
 }

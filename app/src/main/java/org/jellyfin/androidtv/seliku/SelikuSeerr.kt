@@ -426,6 +426,20 @@ fun SeerrAbzeichen(z: SeerrZustand, modifier: Modifier = Modifier) {
 
 @Composable
 fun SeerrKachel(t: SeerrTitel, onClick: () -> Unit, breite: Dp = 120.dp, merken: Pair<SelikuViewModel, Pair<String, String>>? = null, onFokus: () -> Unit = {}) {
+	val jahrUndArt = listOf(t.jahr, stringResource(if (t.typ == "tv") R.string.seliku_series else R.string.seliku_movie)).filter { it.isNotBlank() }.joinToString(" · ")
+	LocalBuehne.current?.let { aktiv ->
+		Buehne(breite, aktiv, t.titel to jahrUndArt) {
+			Bild(t.hintergrund ?: t.poster, Modifier.fillMaxSize(), grund = Farben.Flaeche)
+			Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Transparent, Color(0x22000000), Color(0xE0000000)))))
+			Text(t.titel, style = Schrift.Reihe, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.align(Alignment.BottomStart).padding(10.dp))
+			SeerrAbzeichen(t.zustand, Modifier.align(Alignment.TopStart))
+			if (t.zustand == SeerrZustand.ANFRAGEN)
+				Box(Modifier.align(Alignment.TopEnd).padding(6.dp).background(Color(0xE0221A16), RoundedCornerShape(8.dp)).padding(horizontal = 7.dp, vertical = 2.dp)) {
+					Text("+ " + stringResource(R.string.seliku_seerr_request), style = Schrift.Klein.copy(color = Farben.Text, fontWeight = FontWeight.Bold))
+				}
+		}
+		return
+	}
 	// In einer gemischten Reihe: offener erster Platz im Querformat wie bei den eigenen Titeln
 	val offen = LocalKachelOffen.current == true && SelikuEinstellungen.netflixKacheln(LocalContext.current)
 	val hoehe = breite * 1.5f
@@ -450,7 +464,7 @@ fun SeerrKachel(t: SeerrTitel, onClick: () -> Unit, breite: Dp = 120.dp, merken:
 		}
 		Spacer(Modifier.height(6.dp))
 		Text(t.titel, style = Schrift.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
-		Text(listOf(t.jahr, stringResource(if (t.typ == "tv") R.string.seliku_series else R.string.seliku_movie)).filter { it.isNotBlank() }.joinToString(" · "), style = Schrift.Klein, maxLines = 1)
+		Text(jahrUndArt, style = Schrift.Klein, maxLines = 1)
 	}
 }
 

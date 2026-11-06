@@ -159,6 +159,25 @@ val LocalTasteGedrueckt = androidx.compose.runtime.compositionLocalOf { true }
  */
 val LocalKachelOffen = androidx.compose.runtime.compositionLocalOf<Boolean?> { null }
 
+/**
+ * Bühne einer [Reihe]: der feste grosse erste Platz (Querformat). Ist der Wert gesetzt, zeichnet sich eine Kachel als
+ * Bühne (nicht wählbar); true = die Reihe hat den Fokus (Rahmen, Trailer).
+ */
+val LocalBuehne = androidx.compose.runtime.compositionLocalOf<Boolean?> { null }
+
+/** Der feste erste Platz einer Reihe: steht still, nur der Inhalt blendet über. */
+@Composable
+fun Buehne(breite: Dp, aktiv: Boolean, zeilen: Pair<String, String>, inhalt: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit) {
+	val hoehe = breite * 1.5f
+	val form = RoundedCornerShape(8.dp)
+	Column(Modifier.width(hoehe * 16f / 9f)) {
+		Box(Modifier.fillMaxWidth().height(hoehe).clip(form).then(if (aktiv) Modifier.border(3.dp, Color.White, form) else Modifier)) { inhalt() }
+		Spacer(Modifier.height(6.dp))
+		Text(zeilen.first, style = Schrift.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
+		Text(zeilen.second, style = Schrift.Klein, maxLines = 1, overflow = TextOverflow.Ellipsis)
+	}
+}
+
 /** True innerhalb des Seiteninhalts, false in der Seitenleiste. */
 val LocalImInhalt = androidx.compose.runtime.staticCompositionLocalOf { false }
 
@@ -227,6 +246,10 @@ fun PosterKachel(
 	onMenue: (() -> Unit)? = null,
 	aufklappen: Boolean = false,
 ) {
+	LocalBuehne.current?.let { aktiv ->
+		Buehne(breite, aktiv, item.hauptzeile() to item.unterzeile()) { AufgeklappteKachel(item, spielen = aktiv) }
+		return
+	}
 	val bilder = koinInject<Bilder>()
 	val context = androidx.compose.ui.platform.LocalContext.current
 	var fokussiert by remember { mutableStateOf(false) }
@@ -354,7 +377,7 @@ fun Kachel(
 	else -> PosterKachel(item, onClick, merken = merken, onFokus = onFokus, onMenue = onMenue)
 }
 
-/** Eine waagrechte Reihe mit Überschrift. */
+/** Eine waagrechte Reihe mit Überschrift. [buehne]: fester grosser erster Platz (nur mit aufklappenden Posterkacheln). */
 @Composable
 fun Reihe(
 	titel: String,
@@ -367,6 +390,7 @@ fun Reihe(
 	kachel: @Composable ((BaseItemDto, () -> Unit, Pair<SelikuViewModel, Pair<String, String>>, () -> Unit) -> Unit)? = null,
 	beiHoch: (() -> Boolean)? = null,
 	start: Int? = null,
+	buehne: Boolean = false,
 ) {
 	if (items.isEmpty()) return
 	// beiHoch: «nach oben» aus dieser Reihe selbst behandeln (z. B. zum Banner springen, auch wenn er gerade ausserhalb liegt)
@@ -384,27 +408,66 @@ fun Reihe(
 				offenNr = start; runCatching { zustand.scrollToItem(start) }
 			}
 		}
-		// Wie Netflix: die gewählte Kachel steht immer an erster Stelle, die Reihe gleitet darunter durch
-		androidx.compose.foundation.layout.BoxWithConstraints { val ende = (maxWidth - 48.dp - 100.dp).coerceAtLeast(48.dp)  // genug Platz, damit auch die letzte (noch schmale) Kachel nach links kann
-		SeitlichRollen(links = true) { LazyRow(
-			state = zustand,
-			// Was links aus der Reihe gerollt ist, nicht halb unter dem Rand hervorschauen lassen
-			modifier = Modifier.drawWithContent { clipRect(left = 40.dp.toPx(), top = -40f, right = size.width + 40f, bottom = size.height + 40f) { this@drawWithContent.drawContent() } },
-			contentPadding = PaddingValues(start = 48.dp, end = ende, top = 8.dp, bottom = 8.dp),
-			horizontalArrangement = Arrangement.spacedBy(18.dp),
-		) {
-			itemsIndexed(items, key = { _, it -> it.id }) { nr, item ->
-				val merken = vm to (seite.schluessel to "$titel|${item.id}")
-				// Letzte Kachel: «rechts» schlucken – rechts davon ist nur Leerraum, sonst springt der Fokus nach oben
-				val gewaehlt: () -> Unit = { offenNr = nr; vm.wahl[offenSchluessel] = nr; onFokus(item) }
-				Box(if (nr == items.lastIndex) Modifier.onPreviewKeyEvent { e -> e.key == Key.DirectionRight } else Modifier) {
-					androidx.compose.runtime.CompositionLocalProvider(LocalKachelOffen provides (nr == offenNr.coerceIn(0, items.lastIndex))) {
-						if (kachel != null) kachel(item, { onClick(item) }, merken, gewaehlt)
-						else Kachel(item, { onClick(item) }, merken = merken, onFokus = gewaehlt, onMenue = onMenue?.let { m -> { m(item) } } ?: { vm.menue = item })
+		val mitBuehne = buehne && SelikuEinstellungen.netflixKacheln(androidx.compose.ui.platform.LocalContext.current)
+		@Composable fun zeige(item: BaseItemDto, merken: Pair<SelikuViewModel, Pair<String, String>>, gewaehlt: () -> Unit) {
+			if (kachel != null) kachel(item, { onClick(item) }, merken, gewaehlt)
+			else Kachel(item, { onClick(item) }, merken = merken, onFokus = gewaehlt, onMenue = onMenue?.let { m -> { m(item) } } ?: { vm.menue = item })
+		}
+		Band(items.size, zustand, offenNr.coerceIn(0, items.lastIndex), mitBuehne, schluessel = { items[it].id },
+			buehne = { nr -> zeige(items[nr], vm to (seite.schluessel to "$titel|buehne"), {}) },
+		) { nr ->
+			val item = items[nr]
+			zeige(item, vm to (seite.schluessel to "$titel|${item.id}")) { offenNr = nr; vm.wahl[offenSchluessel] = nr; onFokus(item) }
+		}
+	}
+}
+
+/**
+ * Das waagrechte Band einer Reihe. Mit [mitBuehne] (wie Netflix) steht links ein fester grosser Platz mit der gewählten
+ * Kachel. Er bewegt sich nie, nur sein Inhalt blendet über; die Kacheln gleiten darunter durch und verschwinden an
+ * seinem rechten Rand. Der Fokus liegt dabei auf der (verdeckten) Kachel unter der Bühne.
+ * Ohne Bühne: die gewählte Kachel steht links, sie klappt selbst auf ([LocalKachelOffen]).
+ */
+@Composable
+fun Band(
+	anzahl: Int,
+	zustand: androidx.compose.foundation.lazy.LazyListState,
+	offenNr: Int,
+	mitBuehne: Boolean,
+	schluessel: (Int) -> Any,
+	breite: Dp = 120.dp,
+	buehne: @Composable (Int) -> Unit,
+	kachel: @Composable (Int) -> Unit,
+) {
+	val buehnenBreite = breite * 1.5f * 16f / 9f
+	val anfang = if (mitBuehne) 48.dp + buehnenBreite - breite else 48.dp
+	val schnitt = if (mitBuehne) 48.dp + buehnenBreite + 9.dp else 40.dp
+	var fokus by remember { mutableStateOf(false) }
+	androidx.compose.foundation.layout.BoxWithConstraints {
+		// genug Platz am Ende, damit auch die letzte Kachel an den ersten Platz kann
+		val ende = (maxWidth - anfang - if (mitBuehne) breite else 100.dp).coerceAtLeast(48.dp)
+		SeitlichRollen(links = true, linksRand = anfang) {
+			LazyRow(
+				state = zustand,
+				// Was links aus der Reihe gerollt ist (bzw. unter der Bühne liegt), nicht hervorschauen lassen
+				modifier = Modifier.onFocusChanged { fokus = it.hasFocus }
+					.drawWithContent { clipRect(left = schnitt.toPx(), top = -40f, right = size.width + 40f, bottom = size.height + 40f) { this@drawWithContent.drawContent() } },
+				contentPadding = PaddingValues(start = anfang, end = ende, top = 8.dp, bottom = 8.dp),
+				horizontalArrangement = Arrangement.spacedBy(18.dp),
+			) {
+				items(anzahl, key = schluessel) { nr ->
+					// Letzte Kachel: «rechts» schlucken – rechts davon ist nur Leerraum, sonst springt der Fokus nach oben
+					Box(if (nr == anzahl - 1) Modifier.onPreviewKeyEvent { e -> e.key == Key.DirectionRight } else Modifier) {
+						androidx.compose.runtime.CompositionLocalProvider(LocalKachelOffen provides (!mitBuehne && nr == offenNr)) { kachel(nr) }
 					}
 				}
 			}
-		} } }
+		}
+		if (mitBuehne && anzahl > 0) Box(Modifier.padding(start = 48.dp, top = 8.dp)) {
+			androidx.compose.animation.Crossfade(offenNr.coerceIn(0, anzahl - 1), animationSpec = androidx.compose.animation.core.tween(300), label = "buehne") { nr ->
+				androidx.compose.runtime.CompositionLocalProvider(LocalBuehne provides fokus) { buehne(nr) }
+			}
+		}
 	}
 }
 
@@ -472,12 +535,42 @@ fun laufzeit(ticks: Long?): String? = ticks?.let {
 
 @Composable
 fun BaseItemDto.metazeile(): String = listOfNotNull(
+	eigeneSterne()?.let { stringResource(R.string.seliku_own_rating_short, sterneText(it)) },
 	productionYear?.toString(),
 	officialRating,
 	laufzeit(runTimeTicks),
-	communityRating?.let { "★ %.1f".format(it) },
+	tomaten()?.let { "🍅 $it %" },
+	communityRating?.let { "TMDb %.1f".format(it) },
 	genres?.take(3)?.joinToString(", ")?.takeIf { it.isNotBlank() },
 ).joinToString("   ·   ")
+
+/** Eigene Wertung in Sternen (1–5), null = keine oder abgeschaltet. */
+@Composable
+fun BaseItemDto.eigeneSterne(): Int? {
+	if (!SelikuEinstellungen.eigeneWertung(androidx.compose.ui.platform.LocalContext.current)) return null
+	return userData?.rating?.let { kotlin.math.round(it / 2).toInt() }?.takeIf { it in 1..5 }
+}
+
+fun sterneText(sterne: Int) = "★".repeat(sterne) + "☆".repeat(5 - sterne)
+
+/** Gemerkte Rotten-Tomatoes-Werte aus Seerr (-1 = keiner), damit nicht jede Kachel neu fragt. */
+object Tomaten { val werte = java.util.concurrent.ConcurrentHashMap<String, Int>() }
+
+/** Rotten-Tomatoes-Kritikerwertung: aus Jellyfin (OMDb, meist nur Filme), sonst bei Seerr nachgeschlagen (auch Serien). */
+@Composable
+fun BaseItemDto.tomaten(): Int? {
+	val context = androidx.compose.ui.platform.LocalContext.current
+	if (!SelikuEinstellungen.tomaten(context)) return null
+	criticRating?.let { return it.toInt() }
+	val typ = when (type) { BaseItemKind.MOVIE -> "movie"; BaseItemKind.SERIES -> "tv"; else -> return null }
+	val tmdb = providerIds?.get("Tmdb")?.toIntOrNull() ?: return null
+	val schluessel = "$typ/$tmdb"
+	val seerr = koinInject<SeerrDaten>()
+	val wert by androidx.compose.runtime.produceState(Tomaten.werte[schluessel], schluessel) {
+		if (value == null) value = (runCatching { seerr.rottenTomatoes(typ, tmdb) }.getOrNull() ?: -1).also { Tomaten.werte[schluessel] = it }
+	}
+	return wert?.takeIf { it >= 0 }
+}
 
 /**
  * Scrollverhalten wie man es vom Fernseher kennt: senkrecht steht die gewählte Reihe immer oben ([oben] Abstand),
@@ -545,8 +638,8 @@ fun SenkrechtRollen(abstand: Dp = 48.dp, content: @Composable () -> Unit) {
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-fun SeitlichRollen(rand: Dp = 120.dp, links: Boolean = false, content: @Composable () -> Unit) {
-	val px = with(androidx.compose.ui.platform.LocalDensity.current) { (if (links) 48.dp else rand).toPx() }
+fun SeitlichRollen(rand: Dp = 120.dp, links: Boolean = false, linksRand: Dp = 48.dp, content: @Composable () -> Unit) {
+	val px = with(androidx.compose.ui.platform.LocalDensity.current) { (if (links) linksRand else rand).toPx() }
 	androidx.compose.runtime.CompositionLocalProvider(
 		androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides remember(px, links) { if (links) Rollen.links(px) else Rollen.seitlich(px) },
 		content = content,

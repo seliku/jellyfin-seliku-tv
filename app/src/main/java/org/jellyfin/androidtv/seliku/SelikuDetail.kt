@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.relocation.bringIntoViewResponder
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -50,6 +51,7 @@ import androidx.compose.ui.res.stringResource
 import org.jellyfin.androidtv.R
 
 /** Kopfbereich einer Detailseite: Logo oder Titel, Infozeile, Beschreibung, Knöpfe. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun Kopf(
 	item: BaseItemDto,
@@ -60,7 +62,9 @@ private fun Kopf(
 ) {
 	val scope = androidx.compose.runtime.rememberCoroutineScope()
 	val bilder = koinInject<Bilder>()
-	Row(Modifier.fillMaxWidth().padding(start = 48.dp, top = 40.dp, end = 48.dp), horizontalArrangement = Arrangement.spacedBy(32.dp)) {
+	// Wandert der Fokus zwischen den Knöpfen, soll die Seite nicht rollen: wer hier etwas sichtbar machen will,
+	// bekommt den oberen Rand des Kopfs gemeldet – die Seite bleibt damit ganz oben
+	Row(Modifier.fillMaxWidth().bringIntoViewResponder(remember { KopfOben() }).padding(start = 48.dp, top = 40.dp, end = 48.dp), horizontalArrangement = Arrangement.spacedBy(32.dp)) {
 		if (poster) Bild(bilder.eigenesBild(item, 400), Modifier.width(190.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(8.dp)))
 		Column(Modifier.weight(1f)) {
 			val logo = bilder.logo(item)
@@ -74,12 +78,19 @@ private fun Kopf(
 			Text(item.overview.orEmpty().takeUnless { it.trimStart().startsWith("http") }.orEmpty(), style = Schrift.Normal, maxLines = 4, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(end = 160.dp))
 			Spacer(Modifier.height(20.dp))
 			// Steht der Fokus auf den Knöpfen, bleibt die Seite ganz oben (sonst schiebt die Rollregel den Titel hinaus)
-			Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.onFocusChanged {
+			// Zu viele Knöpfe für eine Zeile (Fortsetzen, Von vorn, Trailer …): in die zweite Zeile umbrechen statt zusammendrücken
+			androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.onFocusChanged {
 				if (it.hasFocus && liste != null && (liste.firstVisibleItemIndex > 0 || liste.firstVisibleItemScrollOffset > 0))
 					scope.launch { kotlinx.coroutines.delay(80); runCatching { liste.animateScrollToItem(0) } }
 			}) { knoepfe() }
 		}
 	}
+}
+
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+private class KopfOben : androidx.compose.foundation.relocation.BringIntoViewResponder {
+	override fun calculateRectForParent(localRect: androidx.compose.ui.geometry.Rect) = androidx.compose.ui.geometry.Rect(0f, 0f, 1f, 1f)
+	override suspend fun bringChildIntoView(localRect: () -> androidx.compose.ui.geometry.Rect?) {}
 }
 
 @Composable
@@ -154,6 +165,7 @@ fun SerienSeite(vm: SelikuViewModel, seite: Seite.Serie, oeffnen: (BaseItemDto) 
 						scope.launch { runCatching { daten.gesehen(sr.id, !gesehen) }; neuLaden++ }
 					})
 					FavoritKnopf(sr) { vm.datenStand++ }
+					WertungKnopf(sr, vm)
 					TrailerKnopf(sr)
 					MehrKnopf { vm.menue = sr }
 				}
@@ -238,6 +250,7 @@ fun TitelSeite(vm: SelikuViewModel, seite: Seite.Titel, oeffnen: (BaseItemDto) -
 						scope.launch { runCatching { daten.gesehen(t.id, !gesehen) }; neuLaden++ }
 					})
 					FavoritKnopf(t) { vm.datenStand++ }
+					WertungKnopf(t, vm)
 					TrailerKnopf(t)
 					MehrKnopf { vm.menue = t }
 				}
@@ -282,6 +295,14 @@ fun FavoritKnopf(item: BaseItemDto, geaendert: () -> Unit) {
 				.onFailure { favorit = !neu; android.widget.Toast.makeText(context, context.getString(R.string.seliku_failed, it.message?.take(80).toString()), android.widget.Toast.LENGTH_SHORT).show() }
 		}
 	})
+}
+
+/** «Bewerten»: zeigt die eigene Wertung als Sterne; öffnet die Auswahl. */
+@Composable
+fun WertungKnopf(item: BaseItemDto, vm: SelikuViewModel) {
+	if (!SelikuEinstellungen.eigeneWertung(LocalContext.current)) return
+	val sterne = item.eigeneSterne()
+	Knopf(if (sterne != null) sterneText(sterne) else stringResource(R.string.seliku_rate), symbol = if (sterne != null) null else "☆", aktiv = sterne != null, onClick = { vm.wertung = item })
 }
 
 /** Trailer-Knopf (nur wenn ein Trailer auf dem Server liegt): spielt ihn mit Ton im Vollbild. */

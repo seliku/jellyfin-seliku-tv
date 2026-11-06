@@ -79,6 +79,18 @@ object SelikuEinstellungen {
 	fun favoritenReihe(c: Context) = prefs(c).getBoolean("favoriten_reihe", true)
 	fun favoritenReihe(c: Context, an: Boolean) = prefs(c).edit().putBoolean("favoriten_reihe", an).apply()
 
+	/** Startseite: Reihe «Wahre Geschichten» (TMDb-Schlagwörter). */
+	fun wahreGeschichten(c: Context) = prefs(c).getBoolean("wahre_geschichten", true)
+	fun wahreGeschichten(c: Context, an: Boolean) = prefs(c).edit().putBoolean("wahre_geschichten", an).apply()
+
+	/** Eigene Wertung (Sterne) setzen und anzeigen. */
+	fun eigeneWertung(c: Context) = prefs(c).getBoolean("eigene_wertung", true)
+	fun eigeneWertung(c: Context, an: Boolean) = prefs(c).edit().putBoolean("eigene_wertung", an).apply()
+
+	/** Rotten-Tomatoes-Wertung anzeigen (fehlt sie in Jellyfin, z. B. bei Serien, wird sie bei Seerr nachgeschlagen). */
+	fun tomaten(c: Context) = prefs(c).getBoolean("tomaten", true)
+	fun tomaten(c: Context, an: Boolean) = prefs(c).edit().putBoolean("tomaten", an).apply()
+
 	/** An (Vorgabe): Gibt es keinen Trailer, zeigen Banner und Kacheln einen Ausschnitt aus dem Film bzw. einer Folge. */
 	fun ausschnittOhneTrailer(c: Context) = prefs(c).getBoolean("ausschnitt_ohne_trailer", true)
 	fun ausschnittOhneTrailer(c: Context, an: Boolean) = prefs(c).edit().putBoolean("ausschnitt_ohne_trailer", an).apply()
@@ -126,6 +138,8 @@ fun TitelMenue(vm: SelikuViewModel, item: BaseItemDto, geaendert: () -> Unit) {
 				schliessen(); geaendert()
 			}
 		})
+		if (SelikuEinstellungen.eigeneWertung(context) && item.type in setOf(BaseItemKind.MOVIE, BaseItemKind.SERIES, BaseItemKind.EPISODE, BaseItemKind.VIDEO))
+			add(Punkt(item.eigeneSterne()?.let(::sterneText) ?: stringResource(R.string.seliku_rate), "☆") { schliessen(); vm.wertung = item })
 		seiteFuer(item)?.let { s -> add(Punkt(stringResource(R.string.seliku_details), "ⓘ") { schliessen(); vm.zu(s) }) }
 	}
 
@@ -156,6 +170,39 @@ fun TitelMenue(vm: SelikuViewModel, item: BaseItemDto, geaendert: () -> Unit) {
 				Knopf(p.text, onClick = p.aktion, symbol = p.symbol, breit = true,
 					modifier = Modifier.fillMaxWidth().then(if (i == 0) Modifier.focusRequester(erstes) else Modifier))
 			}
+		}
+	}
+	LaunchedEffect(item.id) { runCatching { erstes.requestFocus() } }
+}
+
+/** «Wie war's?»: eigene Wertung von 1 bis 5 Sternen setzen oder löschen (bei Jellyfin pro Benutzer gespeichert). */
+@Composable
+fun WertungAuswahl(vm: SelikuViewModel, item: BaseItemDto, geaendert: () -> Unit) {
+	val daten = koinInject<SelikuDaten>()
+	val context = LocalContext.current
+	val scope = rememberCoroutineScope()
+	val erstes = remember { FocusRequester() }
+	val jetzt = item.eigeneSterne()
+	val schliessen = { vm.wertung = null }
+	fun setzen(sterne: Int) {
+		scope.launch {
+			runCatching { daten.wertung(item.id, sterne) }
+				.onSuccess { geaendert() }
+				.onFailure { android.widget.Toast.makeText(context, context.getString(R.string.seliku_failed, it.message?.take(80).toString()), android.widget.Toast.LENGTH_SHORT).show() }
+			schliessen()
+		}
+	}
+	val stufen = listOf(5 to R.string.seliku_rating_5, 4 to R.string.seliku_rating_4, 3 to R.string.seliku_rating_3, 2 to R.string.seliku_rating_2, 1 to R.string.seliku_rating_1)
+	Dialog(onDismissRequest = schliessen) {
+		Column(Modifier.width(420.dp).background(Farben.Flaeche, RoundedCornerShape(18.dp)).padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+			Text(stringResource(R.string.seliku_rating_question), style = Schrift.Reihe, maxLines = 1)
+			Text(item.hauptzeile(), style = Schrift.Klein, maxLines = 1, overflow = TextOverflow.Ellipsis)
+			Spacer(Modifier.height(6.dp))
+			stufen.forEach { (sterne, text) ->
+				Knopf(sterneText(sterne) + "   " + stringResource(text), onClick = { setzen(sterne) }, aktiv = sterne == jetzt, breit = true,
+					modifier = Modifier.fillMaxWidth().then(if (sterne == (jetzt ?: 5)) Modifier.focusRequester(erstes) else Modifier))
+			}
+			if (jetzt != null) Knopf(stringResource(R.string.seliku_rating_remove), onClick = { setzen(0) }, symbol = "✕", breit = true, modifier = Modifier.fillMaxWidth())
 		}
 	}
 	LaunchedEffect(item.id) { runCatching { erstes.requestFocus() } }

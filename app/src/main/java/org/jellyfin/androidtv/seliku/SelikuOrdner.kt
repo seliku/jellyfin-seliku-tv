@@ -157,6 +157,9 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 	var schlank by remember(stand) { mutableStateOf(SelikuEinstellungen.schlankerPlayer(context)) }
 	var links by remember(stand) { mutableStateOf(SelikuEinstellungen.leisteMitLinks(context)) }
 	var favoritenReihe by remember(stand) { mutableStateOf(SelikuEinstellungen.favoritenReihe(context)) }
+	var wahre by remember(stand) { mutableStateOf(SelikuEinstellungen.wahreGeschichten(context)) }
+	var wertung by remember(stand) { mutableStateOf(SelikuEinstellungen.eigeneWertung(context)) }
+	var tomaten by remember(stand) { mutableStateOf(SelikuEinstellungen.tomaten(context)) }
 	var trailerBanner by remember(stand) { mutableStateOf(SelikuEinstellungen.trailerImBanner(context)) }
 	var zufall by remember(stand) { mutableStateOf(SelikuEinstellungen.zufallKnopf(context)) }
 	var netflix by remember(stand) { mutableStateOf(SelikuEinstellungen.netflixKacheln(context)) }
@@ -181,6 +184,15 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 		},
 		EinstellungsEintrag.Schalter("favoriten", umfang = "favoriten_reihe", stringResource(R.string.seliku_set_favorites_row), stringResource(R.string.seliku_set_favorites_row_desc), favoritenReihe) {
 			favoritenReihe = !favoritenReihe; SelikuEinstellungen.favoritenReihe(context, favoritenReihe); gesetzt("favoriten_reihe"); vm.datenStand++
+		},
+		EinstellungsEintrag.Schalter("wahre", umfang = "wahre_geschichten", stringResource(R.string.seliku_set_true_stories), stringResource(R.string.seliku_set_true_stories_desc), wahre) {
+			wahre = !wahre; SelikuEinstellungen.wahreGeschichten(context, wahre); gesetzt("wahre_geschichten"); vm.datenStand++
+		},
+		EinstellungsEintrag.Schalter("wertung", umfang = "eigene_wertung", stringResource(R.string.seliku_set_own_rating), stringResource(R.string.seliku_set_own_rating_desc), wertung) {
+			wertung = !wertung; SelikuEinstellungen.eigeneWertung(context, wertung); gesetzt("eigene_wertung")
+		},
+		EinstellungsEintrag.Schalter("tomaten", umfang = "tomaten", stringResource(R.string.seliku_set_tomatoes), stringResource(R.string.seliku_set_tomatoes_desc), tomaten) {
+			tomaten = !tomaten; SelikuEinstellungen.tomaten(context, tomaten); gesetzt("tomaten")
 		},
 		EinstellungsEintrag.Schalter("trailer", umfang = "trailer_banner", stringResource(R.string.seliku_set_trailer), stringResource(R.string.seliku_set_trailer_desc), trailerBanner) {
 			trailerBanner = !trailerBanner; SelikuEinstellungen.trailerImBanner(context, trailerBanner); gesetzt("trailer_banner")
