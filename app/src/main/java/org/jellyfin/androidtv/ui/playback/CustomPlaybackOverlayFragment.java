@@ -511,16 +511,19 @@ public class CustomPlaybackOverlayFragment extends Fragment implements LiveTvGui
                     leanbackOverlayFragment.setShouldShowOverlay(false);
                     PlaybackController pc = playbackControllerContainer.getValue().getPlaybackController();
                     if (pc.isLiveTv()) {
-                        // Kurz drücken zappt (mit kleiner Verzögerung, um Halten zu erkennen), Halten springt 30 s zurück bzw. vor
+                        // Wie bei Filmen: kurz Links/Rechts spult (gleiche Sprungweite), Halten wechselt den Sender.
+                        // Der Sprung wartet einen Augenblick, bis klar ist, ob die Taste gehalten wird.
                         int richtung = keyCode == KeyEvent.KEYCODE_DPAD_RIGHT ? 1 : -1;
                         if (event.getRepeatCount() == 0) {
                             if (selikuZapAusstehend != null) selikuHandler.removeCallbacks(selikuZapAusstehend);
-                            selikuZapAusstehend = () -> { selikuZapAusstehend = null; selikuZappen(richtung); };
-                            selikuHandler.postDelayed(selikuZapAusstehend, 650);
-                        } else {
+                            org.jellyfin.androidtv.preference.UserSettingPreferences prefs = org.koin.java.KoinJavaComponent.get(org.jellyfin.androidtv.preference.UserSettingPreferences.class);
+                            long weite = richtung > 0 ? prefs.get(org.jellyfin.androidtv.preference.UserSettingPreferences.Companion.getSkipForwardLength())
+                                    : prefs.get(org.jellyfin.androidtv.preference.UserSettingPreferences.Companion.getSkipBackLength());
+                            selikuZapAusstehend = () -> { selikuZapAusstehend = null; selikuZeitsprung(richtung * weite); };
+                            selikuHandler.postDelayed(selikuZapAusstehend, 550);
+                        } else if (event.getRepeatCount() == 1) {
                             if (selikuZapAusstehend != null) { selikuHandler.removeCallbacks(selikuZapAusstehend); selikuZapAusstehend = null; }
-                            long jetzt = android.os.SystemClock.uptimeMillis();
-                            if (jetzt - selikuLetzterSprung > 700) { selikuLetzterSprung = jetzt; selikuZeitsprung(richtung * 30_000L); }
+                            selikuZappen(richtung);
                         }
                     } else if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) pc.fastForward();
                     else pc.rewind();
@@ -685,7 +688,6 @@ public class CustomPlaybackOverlayFragment extends Fragment implements LiveTvGui
 
     private final android.os.Handler selikuHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private Runnable selikuZapAusstehend;
-    private long selikuLetzterSprung;
     private android.widget.Toast selikuMeldung;
 
     private void selikuMelden(String text) {

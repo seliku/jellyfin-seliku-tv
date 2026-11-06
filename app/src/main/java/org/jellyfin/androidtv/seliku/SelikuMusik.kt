@@ -184,7 +184,7 @@ private fun AllePlaylists(vm: SelikuViewModel, seite: Seite.Musik) {
 	// Eigene Playlists und Mixe gemeinsam alphabetisch
 	val alle = (eigene.map { PlaylistEintrag(it.name.orEmpty(), stringResource(R.string.seliku_music_playlist), it, null) } +
 		grundMixe(daten, bib).map { PlaylistEintrag(it.name, it.unter, null, it) } +
-		genres.map { g -> stringResource(R.string.seliku_mix_genre, g).let { name -> PlaylistEintrag(name, stringResource(R.string.seliku_mix_genre_sub), null, Mix(name, "") { daten.genreMix(g) }) } })
+		genres.map { g -> stringResource(R.string.seliku_mix_genre, g.replaceFirstChar { it.uppercase() }).let { name -> PlaylistEintrag(name, stringResource(R.string.seliku_mix_genre_sub), null, Mix(name, "") { daten.genreMix(g) }) } })
 		.sortedBy { it.name.lowercase() }
 	val schluessel = Seite.Ordner(bib.id, "musik-alle-playlists")
 	val raster = vm.raster(schluessel)

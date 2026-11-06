@@ -59,6 +59,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.ImageLoader
 import coil3.compose.AsyncImage
+import coil3.request.crossfade
 import org.jellyfin.androidtv.ui.base.Text
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
@@ -365,6 +366,7 @@ fun Reihe(
 	onMenue: ((BaseItemDto) -> Unit)? = null,
 	kachel: @Composable ((BaseItemDto, () -> Unit, Pair<SelikuViewModel, Pair<String, String>>, () -> Unit) -> Unit)? = null,
 	beiHoch: (() -> Boolean)? = null,
+	start: Int? = null,
 ) {
 	if (items.isEmpty()) return
 	// beiHoch: «nach oben» aus dieser Reihe selbst behandeln (z. B. zum Banner springen, auch wenn er gerade ausserhalb liegt)
@@ -375,7 +377,13 @@ fun Reihe(
 		val zustand = remember(seite.schluessel, titel) { vm.listen.getOrPut("${seite.schluessel}|$titel") { androidx.compose.foundation.lazy.LazyListState() } }
 		// Welche Kachel offen ist (erster Platz), pro Reihe gemerkt – auch über den Player hinweg
 		val offenSchluessel = "${seite.schluessel}|$titel|offen"
-		var offenNr by remember(offenSchluessel) { mutableStateOf((vm.wahl[offenSchluessel] as? Int ?: 0).coerceIn(0, items.lastIndex)) }
+		var offenNr by remember(offenSchluessel) { mutableStateOf((vm.wahl[offenSchluessel] as? Int ?: start ?: 0).coerceIn(0, items.lastIndex)) }
+		// [start]: beim ersten Betreten an dieser Stelle beginnen (z. B. bei der nächsten Folge statt bei Folge 1)
+		LaunchedEffect(offenSchluessel, start) {
+			if (start != null && start in items.indices && vm.wahl[offenSchluessel] == null && zustand.firstVisibleItemIndex == 0 && zustand.firstVisibleItemScrollOffset == 0) {
+				offenNr = start; runCatching { zustand.scrollToItem(start) }
+			}
+		}
 		// Wie Netflix: die gewählte Kachel steht immer an erster Stelle, die Reihe gleitet darunter durch
 		androidx.compose.foundation.layout.BoxWithConstraints { val ende = (maxWidth - 48.dp - 100.dp).coerceAtLeast(48.dp)  // genug Platz, damit auch die letzte (noch schmale) Kachel nach links kann
 		SeitlichRollen(links = true) { LazyRow(
@@ -436,8 +444,10 @@ fun Knopf(
 fun Kulisse(url: String?, modifier: Modifier = Modifier) {
 	// Grundton mit warmem Verlauf (oben links heller), darüber das Hintergrundbild
 	Box(modifier.fillMaxSize().background(Brush.linearGradient(listOf(Farben.HintergrundOben, Farben.Hintergrund), end = androidx.compose.ui.geometry.Offset(1400f, 1100f)))) {
+		// Langsam überblenden: beim Durchblättern springt der Hintergrund sonst bei jeder Kachel
+		val context = androidx.compose.ui.platform.LocalContext.current
 		if (url != null) AsyncImage(
-			model = url,
+			model = remember(url) { coil3.request.ImageRequest.Builder(context).data(url).crossfade(700).build() },
 			contentDescription = null,
 			imageLoader = koinInject<ImageLoader>(),
 			contentScale = ContentScale.Crop,

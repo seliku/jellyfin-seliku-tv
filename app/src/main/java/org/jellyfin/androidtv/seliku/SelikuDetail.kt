@@ -178,6 +178,8 @@ fun SerienSeite(vm: SelikuViewModel, seite: Seite.Serie, oeffnen: (BaseItemDto) 
 						seite = seite,
 						onClick = { abspielen.video(context, it) },
 						onFokus = { gewaehlteFolge = it },
+						// Die Reihe beginnt bei der nächsten Folge
+						start = naechste?.let { n -> f.indexOfFirst { it.id == n.id } }?.takeIf { it > 0 },
 						kachel = { item, klick, merken, fokus ->
 							QuerKachel(item, klick, breite = 270.dp, merken = merken, onFokus = fokus,
 								zeilen = folgenTitel(item) to listOfNotNull(laufzeit(item.runTimeTicks), if (item.userData?.played == true) stringResource(R.string.seliku_watched_lower) else null).joinToString(" · "))
