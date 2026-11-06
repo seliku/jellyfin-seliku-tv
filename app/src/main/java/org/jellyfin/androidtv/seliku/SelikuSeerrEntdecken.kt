@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -31,6 +32,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -278,6 +283,81 @@ fun SeerrListenSeite(vm: SelikuViewModel, seite: Seite.SeerrListe) {
 							// Etwa zwei Zeilen vor dem Ende die nächste Seite holen
 							if (i >= quelle.liste.size - 12) scope.launch { quelle.mehr(daten) }
 						})
+					}
+				}
+			}
+		}
+	}
+}
+
+/**
+ * Von Seerr empfohlene ähnliche Titel, die in der Bibliothek noch fehlen (für die gemischte Reihe «Ähnliche Titel»).
+ * Leer ohne Seerr-Verbindung oder TMDB-Nummer.
+ */
+@Composable
+fun seerrFehlendeAehnliche(item: org.jellyfin.sdk.model.api.BaseItemDto?, vm: SelikuViewModel, seite: Seite): List<SeerrTitel> {
+	val context = androidx.compose.ui.platform.LocalContext.current
+	val daten = koinInject<SeerrDaten>()
+	val typ = when (item?.type) {
+		org.jellyfin.sdk.model.api.BaseItemKind.MOVIE -> "movie"
+		org.jellyfin.sdk.model.api.BaseItemKind.SERIES -> "tv"
+		else -> null
+	}
+	val tmdb = item?.providerIds?.entries?.firstOrNull { it.key.equals("Tmdb", true) }?.value?.toIntOrNull()
+	if (typ == null || tmdb == null || !SeerrVerbindung.verbunden(context)) return emptyList()
+	val quelle = remember(seite.schluessel, tmdb) {
+		vm.wahl.getOrPut("${seite.schluessel}|seerr-aehnlich") { SeerrBlaettern("/$typ/$tmdb/recommendations", typ, hoechstens = 2) } as SeerrBlaettern
+	}
+	LaunchedEffect(seite.schluessel, tmdb) { if (quelle.liste.isEmpty()) quelle.mehr(daten) }
+	return quelle.liste.filter { it.zustand != SeerrZustand.ANSEHEN }
+}
+
+/**
+ * «Ähnliche Titel» aus einem Guss: was schon da ist und was noch fehlt (Seerr), abwechselnd in einer Reihe.
+ * Gleiches Verhalten wie [Reihe]: der erste Platz ist offen, die Reihe gleitet darunter durch.
+ */
+@Composable
+fun GemischteReihe(
+	titel: String,
+	eigene: List<org.jellyfin.sdk.model.api.BaseItemDto>,
+	fehlende: List<SeerrTitel>,
+	vm: SelikuViewModel,
+	seite: Seite,
+	oeffnen: (org.jellyfin.sdk.model.api.BaseItemDto) -> Unit,
+) {
+	val eintraege: List<Any> = remember(eigene, fehlende.toList()) {
+		buildList {
+			val n = maxOf(eigene.size, fehlende.size)
+			for (i in 0 until n) { eigene.getOrNull(i)?.let(::add); fehlende.getOrNull(i)?.let(::add) }
+		}
+	}
+	if (eintraege.isEmpty()) return
+	fun schluessel(e: Any) = if (e is SeerrTitel) "seerr-" + e.schluessel else (e as org.jellyfin.sdk.model.api.BaseItemDto).id.toString()
+	Column(Modifier.fillMaxWidth().padding(bottom = 18.dp)) {
+		Text(titel, style = Schrift.Reihe, modifier = Modifier.padding(start = 48.dp, bottom = 8.dp))
+		val zustand = remember(seite.schluessel, titel) { vm.listen.getOrPut("${seite.schluessel}|$titel") { LazyListState() } }
+		val offenSchluessel = "${seite.schluessel}|$titel|offen"
+		var offenNr by remember(offenSchluessel) { mutableStateOf(vm.wahl[offenSchluessel] as? Int ?: 0) }
+		androidx.compose.foundation.layout.BoxWithConstraints {
+			val ende = (maxWidth - 48.dp - 100.dp).coerceAtLeast(48.dp)
+			SeitlichRollen(links = true) {
+				LazyRow(
+					state = zustand,
+					modifier = Modifier.drawWithContent { clipRect(left = 40.dp.toPx(), top = -40f, right = size.width + 40f, bottom = size.height + 40f) { this@drawWithContent.drawContent() } },
+					contentPadding = PaddingValues(start = 48.dp, end = ende, top = 8.dp, bottom = 8.dp),
+					horizontalArrangement = Arrangement.spacedBy(18.dp),
+				) {
+					itemsIndexed(eintraege, key = { _, e -> schluessel(e) }) { nr, e ->
+						val merken = vm to (seite.schluessel to "$titel|${schluessel(e)}")
+						val gewaehlt: () -> Unit = { offenNr = nr; vm.wahl[offenSchluessel] = nr }
+						Box(if (nr == eintraege.lastIndex) Modifier.onPreviewKeyEvent { k -> k.key == androidx.compose.ui.input.key.Key.DirectionRight } else Modifier) {
+							androidx.compose.runtime.CompositionLocalProvider(LocalKachelOffen provides (nr == offenNr.coerceIn(0, eintraege.lastIndex))) {
+								if (e is SeerrTitel) SeerrKachel(e, onClick = { vm.zu(Seite.SeerrDetail(e.typ, e.tmdb)) }, merken = merken, onFokus = gewaehlt)
+								else (e as org.jellyfin.sdk.model.api.BaseItemDto).let { item ->
+									PosterKachel(item, { oeffnen(item) }, breite = 120.dp, merken = merken, onFokus = gewaehlt, onMenue = { vm.menue = item }, aufklappen = true)
+								}
+							}
+						}
 					}
 				}
 			}

@@ -192,8 +192,7 @@ fun SerienSeite(vm: SelikuViewModel, seite: Seite.Serie, oeffnen: (BaseItemDto) 
 					)
 				}
 			}
-			item { Spacer(Modifier.height(12.dp)); Reihe(stringResource(R.string.seliku_similar_series), aehnlich, vm, seite, onClick = oeffnen, kachel = { item, klick, merken, fokus ->
-				PosterKachel(item, klick, breite = 120.dp, merken = merken, onFokus = fokus, onMenue = { vm.menue = item }, aufklappen = true) }) }
+			item { Spacer(Modifier.height(12.dp)); GemischteReihe(stringResource(R.string.seliku_similar_series), aehnlich, seerrFehlendeAehnliche(sr, vm, seite), vm, seite, oeffnen) }
 		} }
 	}
 }
@@ -244,8 +243,7 @@ fun TitelSeite(vm: SelikuViewModel, seite: Seite.Titel, oeffnen: (BaseItemDto) -
 				}
 				Spacer(Modifier.height(32.dp))
 			}
-			item { Reihe(stringResource(R.string.seliku_similar_titles), aehnlich, vm, seite, onClick = oeffnen, kachel = { item, klick, merken, fokus ->
-				PosterKachel(item, klick, breite = 120.dp, merken = merken, onFokus = fokus, onMenue = { vm.menue = item }, aufklappen = true) }) }
+			item { GemischteReihe(stringResource(R.string.seliku_similar_titles), aehnlich, seerrFehlendeAehnliche(t, vm, seite), vm, seite, oeffnen) }
 		} }
 	}
 }

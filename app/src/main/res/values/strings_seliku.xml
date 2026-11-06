@@ -262,4 +262,5 @@
 	<string name="seliku_live_behind">%1$d:%2$02d behind live</string>
 	<string name="seliku_live_paused">Paused – OK continues</string>
 	<string name="seliku_favorites">Favorites</string>
+	<string name="seliku_seerr_similar_missing">Similar, not here yet</string>
 </resources>

@@ -426,11 +426,26 @@ fun SeerrAbzeichen(z: SeerrZustand, modifier: Modifier = Modifier) {
 
 @Composable
 fun SeerrKachel(t: SeerrTitel, onClick: () -> Unit, breite: Dp = 120.dp, merken: Pair<SelikuViewModel, Pair<String, String>>? = null, onFokus: () -> Unit = {}) {
-	Column(Modifier.width(breite)) {
-		Waehlbar(onClick = onClick, merken = merken, onFokus = onFokus) {
-			Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f)) {
-				Bild(t.poster, Modifier.fillMaxSize(), ersatz = initialen(t.titel))
-				SeerrAbzeichen(t.zustand, Modifier.align(Alignment.BottomStart))
+	// In einer gemischten Reihe: offener erster Platz im Querformat wie bei den eigenen Titeln
+	val offen = LocalKachelOffen.current == true && SelikuEinstellungen.netflixKacheln(LocalContext.current)
+	val hoehe = breite * 1.5f
+	Column(Modifier.width(if (offen) hoehe * 16f / 9f else breite)) {
+		Waehlbar(onClick = onClick, merken = merken, onFokus = onFokus, vergroessern = LocalKachelOffen.current == null) {
+			Box(Modifier.fillMaxWidth().height(hoehe)) {
+				if (offen) {
+					Bild(t.hintergrund ?: t.poster, Modifier.fillMaxSize(), grund = Farben.Flaeche)
+					Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Transparent, Color(0x22000000), Color(0xE0000000)))))
+					Text(t.titel, style = Schrift.Reihe, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.align(Alignment.BottomStart).padding(10.dp))
+					SeerrAbzeichen(t.zustand, Modifier.align(Alignment.TopStart))
+				} else {
+					Bild(t.poster, Modifier.fillMaxSize(), ersatz = initialen(t.titel))
+					SeerrAbzeichen(t.zustand, Modifier.align(Alignment.BottomStart))
+				}
+				// Noch nicht da: kleines «+» oben rechts, damit man fehlende Titel in gemischten Reihen erkennt
+				if (LocalKachelOffen.current != null && t.zustand == SeerrZustand.ANFRAGEN)
+					Box(Modifier.align(Alignment.TopEnd).padding(6.dp).background(Color(0xE0221A16), RoundedCornerShape(8.dp)).padding(horizontal = 7.dp, vertical = 2.dp)) {
+						Text("+ " + stringResource(R.string.seliku_seerr_request), style = Schrift.Klein.copy(color = Farben.Text, fontWeight = FontWeight.Bold))
+					}
 			}
 		}
 		Spacer(Modifier.height(6.dp))
@@ -577,9 +592,20 @@ fun SeerrDetailSeite(vm: SelikuViewModel, seite: Seite.SeerrDetail, oeffnen: (Ba
 		if (z == SeerrZustand.WIRD_GESUCHT || z == SeerrZustand.GLEICH || z == SeerrZustand.ANGEFRAGT) { delay(30_000); neu++ }
 	}
 	val x = t
+	// Schon in der Bibliothek: gleich die eigene Seite des Titels öffnen (Abspielen, Trailer, Favorit), nicht die Seerr-Seite.
+	// Die Seerr-Seite verschwindet dabei aus dem Verlauf, Zurück führt also dorthin, woher man kam.
+	var eigeneSeiteGesucht by remember(seite.schluessel) { mutableStateOf(zurueckGekommen) }
+	LaunchedEffect(x?.tmdb, x?.zustand) {
+		if (x == null || eigeneSeiteGesucht) return@LaunchedEffect
+		if (x.zustand == SeerrZustand.ANSEHEN) {
+			val item = runCatching { daten.inJellyfin(x) }.getOrNull()
+			if (item != null && seiteFuer(item) != null) { vm.zurueck(); oeffnen(item); return@LaunchedEffect }
+		}
+		eigeneSeiteGesucht = true
+	}
 	Box(Modifier.fillMaxSize()) {
 		Kulisse(x?.hintergrund)
-		if (x == null) { Hinweis(meldung ?: stringResource(R.string.seliku_loading)); return@Box }
+		if (x == null || (x.zustand == SeerrZustand.ANSEHEN && !eigeneSeiteGesucht)) { Hinweis(meldung ?: stringResource(R.string.seliku_loading)); return@Box }
 		// Beim Betreten auf den Knopf – ausser man kommt von einer Kachel weiter unten zurück, die holt den Fokus selbst
 		LaunchedEffect(x.tmdb) {
 			if (zurueckGekommen) return@LaunchedEffect
