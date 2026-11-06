@@ -64,6 +64,13 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 	LaunchedEffect(Unit) {
 		runCatching { daten.bannerEmpfehlungen() }.onSuccess { if (it.isNotEmpty()) { banner = it; vm.wahl["start-banner"] = it } }
 	}
+	// Kaltstart: der Banner kommt oft erst nach den Reihen. Die Liste hält dann die erste Reihe fest und der Banner
+	// landet oberhalb des Bildes – steht man noch auf der ersten Reihe, wieder ganz nach oben rollen
+	LaunchedEffect(banner.isNotEmpty()) {
+		if (banner.isNotEmpty() && vm.liste(seite).firstVisibleItemIndex == 1) {
+			kotlinx.coroutines.delay(100); runCatching { vm.liste(seite).scrollToItem(0) }
+		}
+	}
 
 	LaunchedEffect(vm.datenStand) {
 		// Immer frisch laden (auch nach Änderungen im Titelmenü, z. B. «Aus Weiterschauen entfernen») (Fortschritt ändert sich nach dem Schauen), alte Reihen bis dahin stehen lassen

@@ -235,13 +235,13 @@ public class CustomPlaybackTransportControlGlue extends PlaybackTransportControl
             secondaryActionsAdapter.clear();
 
         // Primary Items
-        primaryActionsAdapter.add(playPauseAction);
+        // Seliku: vorige Folge · zurückspulen · Play/Pause · vorspulen · nächste Folge (wie man es kennt)
         VideoPlayerAdapter playerAdapter = getPlayerAdapter();
-
-        if (playerAdapter.canSeek()) {
-            primaryActionsAdapter.add(rewindAction);
-            primaryActionsAdapter.add(fastForwardAction);
-        }
+        if (playerAdapter.hasPreviousItem()) primaryActionsAdapter.add(skipPreviousAction);
+        if (playerAdapter.canSeek()) primaryActionsAdapter.add(rewindAction);
+        primaryActionsAdapter.add(playPauseAction);
+        if (playerAdapter.canSeek()) primaryActionsAdapter.add(fastForwardAction);
+        if (playerAdapter.hasNextItem()) primaryActionsAdapter.add(skipNextAction);
 
         if (playerAdapter.hasSubs()) {
             primaryActionsAdapter.add(closedCaptionsAction);
@@ -263,14 +263,6 @@ public class CustomPlaybackTransportControlGlue extends PlaybackTransportControl
                 secondaryActionsAdapter.add(recordAction);
                 recordingStateChanged();
             }
-        }
-
-        if (playerAdapter.hasPreviousItem()) {
-            secondaryActionsAdapter.add(skipPreviousAction);
-        }
-
-        if (playerAdapter.hasNextItem()) {
-            secondaryActionsAdapter.add(skipNextAction);
         }
 
         if (playerAdapter.hasChapters()) {

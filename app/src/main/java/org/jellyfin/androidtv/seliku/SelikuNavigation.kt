@@ -26,6 +26,7 @@ import org.jellyfin.androidtv.util.apiclient.seriesThumbImage
 import org.jellyfin.androidtv.util.apiclient.albumPrimaryImage
 import org.jellyfin.androidtv.util.apiclient.channelPrimaryImage
 import org.jellyfin.sdk.api.client.ApiClient
+import org.jellyfin.sdk.api.client.extensions.tvShowsApi
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.CollectionType
@@ -173,6 +174,7 @@ class Abspielen(
 	private val navigation: NavigationRepository,
 ) {
 	private val daten: SelikuDaten by org.koin.java.KoinJavaComponent.inject(SelikuDaten::class.java)
+	private val api: ApiClient by org.koin.java.KoinJavaComponent.inject(ApiClient::class.java)
 
 	/** Startet ein Video dort, wo man aufgehört hat (vonVorn = false), mit den folgenden Folgen in der Warteschlange. */
 	fun video(context: Context, item: BaseItemDto, vonVorn: Boolean = false) {
@@ -181,6 +183,25 @@ class Abspielen(
 		kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch { runCatching { daten.wiederAufnehmen(item) } }
 		val ticks = item.userData?.playbackPositionTicks ?: 0L
 		val start = if (vonVorn || ticks <= 0L) 0 else ((ticks / 10_000L) - 5_000L).coerceAtLeast(0L).toInt()
+		// Folgen: die ganze Serie in die Warteschlange (ab der gewählten Folge), damit im Player auch «Vorige Folge» geht
+		val serie = item.seriesId
+		val userPrefs = org.koin.java.KoinJavaComponent.get<org.jellyfin.androidtv.preference.UserPreferences>(org.jellyfin.androidtv.preference.UserPreferences::class.java)
+		if (item.type == BaseItemKind.EPISODE && serie != null && userPrefs[org.jellyfin.androidtv.preference.UserPreferences.mediaQueuingEnabled]) {
+			kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+				val alle = runCatching {
+					kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+						api.tvShowsApi.getEpisodes(seriesId = serie, isMissing = false, fields = org.jellyfin.androidtv.data.repository.ItemRepository.itemFields).content.items
+					}
+				}.getOrNull().orEmpty()
+				val nr = alle.indexOfFirst { it.id == item.id }
+				if (nr < 0) { playbackLauncher.launch(context, listOf(item), start); return@launch }
+				// Nicht endlos lang: 30 Folgen davor, 150 danach
+				val von = (nr - 30).coerceAtLeast(0)
+				val liste = alle.subList(von, (nr + 150).coerceAtMost(alle.size))
+				playbackLauncher.launch(context, liste, start, itemsPosition = nr - von)
+			}
+			return
+		}
 		playbackHelper.getItemsToPlay(context, item, false, false, object : Response<List<BaseItemDto>>() {
 			override fun onResponse(response: List<BaseItemDto>) {
 				playbackLauncher.launch(context, response, start)

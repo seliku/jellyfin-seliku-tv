@@ -619,7 +619,19 @@ fun BannerRollen(liste: androidx.compose.foundation.lazy.LazyListState, mitBanne
 					1 -> bannerPx + liste.firstVisibleItemScrollOffset
 					else -> null
 				}
-				return if (jetzt != null && jetzt + offset < bannerPx + ersteReihePx) -jetzt else offset - obenPx
+				// Erste Reihe direkt unter dem Banner: Banner ganz zeigen – aber nur, wenn die Reihe dann ganz aufs Bild passt
+				// (auf Seiten mit Reitern oben passt sie nicht: dann rollt der Banner ganz weg und die Reihe steht oben)
+				if (jetzt != null && jetzt + offset < bannerPx + ersteReihePx) {
+					if (jetzt + offset + size <= containerSize) return -jetzt
+					return maxOf(offset - obenPx, bannerPx - jetzt)
+				}
+				// Schon ganz zu sehen: nichts bewegen
+				if (offset >= obenPx && offset + size <= containerSize) return 0f
+				// Darüber: oben anlegen. Darunter: nur so weit rollen, bis die Reihe unten ganz zu sehen ist
+				var weg = if (offset < obenPx || size > containerSize - obenPx) offset - obenPx else offset + size - containerSize
+				// Der Banner ist nie halb zu sehen: wäre er es danach, ganz hinausrollen
+				if (jetzt != null && jetzt + weg in 0.5f..(bannerPx - 0.5f)) weg = bannerPx - jetzt
+				return weg
 			}
 		}
 	}

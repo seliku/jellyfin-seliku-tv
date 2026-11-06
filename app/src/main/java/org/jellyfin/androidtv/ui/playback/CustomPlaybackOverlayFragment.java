@@ -224,6 +224,48 @@ public class CustomPlaybackOverlayFragment extends Fragment implements LiveTvGui
         if (playbackController != null) {
             playbackController.init(new VideoManager(requireActivity(), view, helper), this);
         }
+        selikuTippEinrichten(view);
+    }
+
+    // Seliku: Beschriftung über dem gewählten Knopf der Bedienleiste – sonst weiss man nicht, was die Symbole bedeuten
+    private android.widget.TextView selikuTipp;
+    private final Runnable selikuTippWeg = () -> { if (selikuTipp != null) selikuTipp.setVisibility(View.GONE); };
+
+    private void selikuTippEinrichten(View wurzel) {
+        if (!(wurzel instanceof ViewGroup)) return;
+        float dichte = getResources().getDisplayMetrics().density;
+        selikuTipp = new android.widget.TextView(requireContext());
+        selikuTipp.setTextColor(0xFFFFFFFF);
+        selikuTipp.setTextSize(15);
+        selikuTipp.setPadding((int) (14 * dichte), (int) (6 * dichte), (int) (14 * dichte), (int) (6 * dichte));
+        android.graphics.drawable.GradientDrawable grund = new android.graphics.drawable.GradientDrawable();
+        grund.setColor(0xE6221A16);
+        grund.setCornerRadius(12 * dichte);
+        selikuTipp.setBackground(grund);
+        selikuTipp.setElevation(12 * dichte);
+        selikuTipp.setVisibility(View.GONE);
+        ((ViewGroup) wurzel).addView(selikuTipp, new android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        wurzel.getViewTreeObserver().addOnGlobalFocusChangeListener((alt, neu) -> {
+            if (selikuTipp == null) return;
+            selikuHandler.removeCallbacks(selikuTippWeg);
+            if (neu != null && neu.getId() == androidx.leanback.R.id.button && neu.getContentDescription() != null && neu.getContentDescription().length() > 0) {
+                selikuTipp.setText(neu.getContentDescription());
+                selikuTipp.setVisibility(View.INVISIBLE);
+                selikuTipp.post(() -> {
+                    if (selikuTipp == null) return;
+                    int[] knopf = new int[2];
+                    int[] basis = new int[2];
+                    neu.getLocationInWindow(knopf);
+                    wurzel.getLocationInWindow(basis);
+                    selikuTipp.setX(knopf[0] - basis[0] + neu.getWidth() / 2f - selikuTipp.getWidth() / 2f);
+                    selikuTipp.setY(knopf[1] - basis[1] - selikuTipp.getHeight() - 6 * dichte);
+                    selikuTipp.setVisibility(View.VISIBLE);
+                });
+                selikuHandler.postDelayed(selikuTippWeg, 3000);
+            } else {
+                selikuTipp.setVisibility(View.GONE);
+            }
+        });
     }
 
     @Override
@@ -233,6 +275,7 @@ public class CustomPlaybackOverlayFragment extends Fragment implements LiveTvGui
         binding = null;
         // To fix race condition in hide timer
         mIsVisible = false;
+        if (selikuTipp != null) selikuTipp.setVisibility(View.GONE);
     }
 
     @Override
@@ -302,6 +345,18 @@ public class CustomPlaybackOverlayFragment extends Fragment implements LiveTvGui
 
         // Set initial skip overlay state
         binding.skipOverlay.setSkipUiEnabled(!mIsVisible && !mGuideVisible && !mPopupPanelVisible);
+
+        // Seliku: Ohne Fokus verbraucht Android den ersten Tastendruck nur, um ihn zu setzen – Pause oder
+        // Spulen wirkten erst beim zweiten Mal. Deshalb gleich zu Beginn den Fokus in die Bedienleiste legen.
+        selikuFokusHolen(300);
+        selikuFokusHolen(1500);
+    }
+
+    private void selikuFokusHolen(long nach) {
+        selikuHandler.postDelayed(() -> {
+            if (binding == null || !isAdded() || leanbackOverlayFragment == null || leanbackOverlayFragment.getView() == null) return;
+            if (requireActivity().getCurrentFocus() == null) leanbackOverlayFragment.getView().requestFocus();
+        }, nach);
     }
 
     @Override
@@ -826,6 +881,7 @@ public class CustomPlaybackOverlayFragment extends Fragment implements LiveTvGui
         if (!mIsVisible) return;
 
         mIsVisible = false;
+        if (selikuTipp != null) selikuTipp.setVisibility(View.GONE);
         binding.topPanel.startAnimation(fadeOut);
         binding.skipOverlay.setSkipUiEnabled(!mIsVisible && !mGuideVisible && !mPopupPanelVisible);
     }
