@@ -279,6 +279,4 @@
 	<string name="seliku_rating_2">Meh</string>
 	<string name="seliku_rating_1">Bad</string>
 	<string name="seliku_rating_remove">Remove rating</string>
-	<string name="seliku_set_skip_intros">Skip intros silently</string>
-	<string name="seliku_set_skip_intros_desc">Intros and recaps are skipped without a button or notice</string>
 </resources>

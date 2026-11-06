@@ -279,6 +279,4 @@
 	<string name="seliku_rating_2">Mässig</string>
 	<string name="seliku_rating_1">Kacke</string>
 	<string name="seliku_rating_remove">Wertung löschen</string>
-	<string name="seliku_set_skip_intros">Intros still überspringen</string>
-	<string name="seliku_set_skip_intros_desc">Vorspann und «Was bisher geschah» werden ohne Knopf und Hinweis übersprungen</string>
 </resources>
