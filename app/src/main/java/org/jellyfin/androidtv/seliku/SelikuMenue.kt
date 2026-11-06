@@ -83,6 +83,10 @@ object SelikuEinstellungen {
 	fun wahreGeschichten(c: Context) = prefs(c).getBoolean("wahre_geschichten", true)
 	fun wahreGeschichten(c: Context, an: Boolean) = prefs(c).edit().putBoolean("wahre_geschichten", an).apply()
 
+	/** Intros und Rückblicke ohne Knopf und ohne Hinweis überspringen (braucht Intro Skipper auf dem Server). */
+	@JvmStatic fun introsStill(c: Context) = prefs(c).getBoolean("intros_still", true)
+	fun introsStill(c: Context, an: Boolean) = prefs(c).edit().putBoolean("intros_still", an).apply()
+
 	/** Eigene Wertung (Sterne) setzen und anzeigen. */
 	fun eigeneWertung(c: Context) = prefs(c).getBoolean("eigene_wertung", true)
 	fun eigeneWertung(c: Context, an: Boolean) = prefs(c).edit().putBoolean("eigene_wertung", an).apply()

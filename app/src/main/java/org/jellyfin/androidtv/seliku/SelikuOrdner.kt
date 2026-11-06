@@ -160,6 +160,7 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 	var wahre by remember(stand) { mutableStateOf(SelikuEinstellungen.wahreGeschichten(context)) }
 	var wertung by remember(stand) { mutableStateOf(SelikuEinstellungen.eigeneWertung(context)) }
 	var tomaten by remember(stand) { mutableStateOf(SelikuEinstellungen.tomaten(context)) }
+	var intros by remember(stand) { mutableStateOf(SelikuEinstellungen.introsStill(context)) }
 	var trailerBanner by remember(stand) { mutableStateOf(SelikuEinstellungen.trailerImBanner(context)) }
 	var zufall by remember(stand) { mutableStateOf(SelikuEinstellungen.zufallKnopf(context)) }
 	var netflix by remember(stand) { mutableStateOf(SelikuEinstellungen.netflixKacheln(context)) }
@@ -210,6 +211,9 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 		EinstellungsEintrag.Gruppe(stringResource(R.string.seliku_set_group_playback)),
 		EinstellungsEintrag.Schalter("player", umfang = "schlanker_player", stringResource(R.string.seliku_set_slim_player), stringResource(R.string.seliku_set_slim_player_desc), schlank) {
 			schlank = !schlank; SelikuEinstellungen.schlankerPlayer(context, schlank); gesetzt("schlanker_player")
+		},
+		EinstellungsEintrag.Schalter("intros", umfang = "intros_still", stringResource(R.string.seliku_set_skip_intros), stringResource(R.string.seliku_set_skip_intros_desc), intros) {
+			intros = !intros; SelikuEinstellungen.introsStill(context, intros); gesetzt("intros_still")
 		},
 		EinstellungsEintrag.Auswahl("bitrate", umfang = "max_bitrate", stringResource(R.string.seliku_set_bitrate), stringResource(R.string.seliku_set_bitrate_desc), stringResource(R.string.seliku_set_bitrate_value, bitrate)) {
 			bitrate = bitrateStufen[(bitrateStufen.indexOf(bitrate) + 1) % bitrateStufen.size]

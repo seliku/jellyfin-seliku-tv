@@ -82,6 +82,10 @@ class MediaSegmentRepositoryImpl(
 	override fun getDefaultSegmentTypeAction(type: MediaSegmentType): MediaSegmentAction {
 		// Always return no action for unsupported types
 		if (!MediaSegmentRepository.SupportedTypes.contains(type)) return MediaSegmentAction.NOTHING
+		// Seliku: Intros und «Was bisher geschah» still überspringen – kein Knopf, kein Hinweis (S 07.11.2026, abschaltbar)
+		if ((type == MediaSegmentType.INTRO || type == MediaSegmentType.RECAP) &&
+			org.jellyfin.androidtv.seliku.SelikuEinstellungen.introsStill(org.koin.java.KoinJavaComponent.get(android.content.Context::class.java)))
+			return MediaSegmentAction.SKIP
 
 		return mediaTypeActions.getOrDefault(type, MediaSegmentAction.NOTHING)
 	}

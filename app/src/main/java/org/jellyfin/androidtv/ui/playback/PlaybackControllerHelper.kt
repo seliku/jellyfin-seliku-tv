@@ -182,6 +182,19 @@ fun PlaybackController.applyMediaSegments(
 		}
 
 		callback()
+
+		// Seliku: Beginnt die Folge mitten in einem Überspring-Abschnitt (meist ein Intro ab 0:00), löst die
+		// Positionsmarke nicht aus – ExoPlayer ist schon darüber hinweg. Dann gleich ans Ende des Abschnitts springen.
+		val sofort = mediaSegments.filter { mediaSegmentRepository.getMediaSegmentAction(it) == MediaSegmentAction.SKIP }
+		if (sofort.isNotEmpty()) {
+			var pos = -1L
+			for (i in 0 until 20) {
+				kotlinx.coroutines.delay(250)
+				if (isPlaying) { pos = currentPosition; break }
+			}
+			sofort.firstOrNull { pos >= 0 && pos >= it.start.inWholeMilliseconds && pos < it.end.inWholeMilliseconds - 1_000 }
+				?.let { seek(it.end.inWholeMilliseconds, true) }
+		}
 	}
 }
 
