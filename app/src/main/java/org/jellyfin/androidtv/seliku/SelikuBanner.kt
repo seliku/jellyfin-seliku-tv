@@ -73,7 +73,7 @@ fun Banner(
 		trailer = null; trailerBereit = false
 		if (!SelikuEinstellungen.trailerImBanner(context)) return@LaunchedEffect
 		delay(3_000)
-		trailer = Trailer.adresse(api, item)
+		trailer = Trailer.adresse(api, item, SelikuEinstellungen.ausschnittOhneTrailer(context))
 	}
 	val trailerSicht by androidx.compose.animation.core.animateFloatAsState(if (trailerBereit) 1f else 0f, androidx.compose.animation.core.tween(900), label = "trailer")
 	// Fester Takt: zählt Sekunden und wechselt alle 9 s; Fokuswechsel setzen den Takt nicht zurück.

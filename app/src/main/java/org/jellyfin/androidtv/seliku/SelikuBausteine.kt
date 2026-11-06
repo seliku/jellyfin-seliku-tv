@@ -268,7 +268,7 @@ private fun AufgeklappteKachel(item: BaseItemDto) {
 	LaunchedEffect(item.id) {
 		if (!SelikuEinstellungen.trailerImBanner(context)) return@LaunchedEffect
 		kotlinx.coroutines.delay(2_500)
-		trailer = Trailer.adresse(api, item)
+		trailer = Trailer.adresse(api, item, SelikuEinstellungen.ausschnittOhneTrailer(context))
 	}
 	val sicht by androidx.compose.animation.core.animateFloatAsState(if (bereit) 1f else 0f, androidx.compose.animation.core.tween(700), label = "kacheltrailer")
 	Box(Modifier.fillMaxSize().background(Farben.Flaeche)) {

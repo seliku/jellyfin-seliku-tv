@@ -75,6 +75,10 @@ object SelikuEinstellungen {
 	@JvmStatic fun nurBeiWiedergabeWach(c: Context) = prefs(c).getBoolean("nur_bei_wiedergabe_wach", true)
 	fun nurBeiWiedergabeWach(c: Context, an: Boolean) = prefs(c).edit().putBoolean("nur_bei_wiedergabe_wach", an).apply()
 
+	/** An (Vorgabe): Gibt es keinen Trailer, zeigen Banner und Kacheln einen Ausschnitt aus dem Film bzw. einer Folge. */
+	fun ausschnittOhneTrailer(c: Context) = prefs(c).getBoolean("ausschnitt_ohne_trailer", true)
+	fun ausschnittOhneTrailer(c: Context, an: Boolean) = prefs(c).edit().putBoolean("ausschnitt_ohne_trailer", an).apply()
+
 	@JvmStatic fun untertitelNachladen(c: Context) = prefs(c).getBoolean("untertitel_nachladen", true)
 	fun untertitelNachladen(c: Context, an: Boolean) = prefs(c).edit().putBoolean("untertitel_nachladen", an).apply()
 }

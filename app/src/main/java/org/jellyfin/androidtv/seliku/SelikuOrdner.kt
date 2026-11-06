@@ -155,6 +155,7 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 	var netflix by remember { mutableStateOf(SelikuEinstellungen.netflixKacheln(context)) }
 	var musik by remember { mutableStateOf(SelikuEinstellungen.titelmusik(context)) }
 	var nachladen by remember { mutableStateOf(SelikuEinstellungen.untertitelNachladen(context)) }
+	var ausschnitt by remember { mutableStateOf(SelikuEinstellungen.ausschnittOhneTrailer(context)) }
 	var wach by remember { mutableStateOf(SelikuEinstellungen.nurBeiWiedergabeWach(context)) }
 	val userPrefs = remember { org.koin.java.KoinJavaComponent.get<org.jellyfin.androidtv.preference.UserPreferences>(org.jellyfin.androidtv.preference.UserPreferences::class.java) }
 	var bitrate by remember { mutableStateOf(userPrefs[org.jellyfin.androidtv.preference.UserPreferences.maxBitrate]) }
@@ -172,6 +173,9 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 		},
 		EinstellungsEintrag.Schalter("trailer", stringResource(R.string.seliku_set_trailer), stringResource(R.string.seliku_set_trailer_desc), trailerBanner) {
 			trailerBanner = !trailerBanner; SelikuEinstellungen.trailerImBanner(context, trailerBanner)
+		},
+		EinstellungsEintrag.Schalter("ausschnitt", stringResource(R.string.seliku_set_clip), stringResource(R.string.seliku_set_clip_desc), ausschnitt) {
+			ausschnitt = !ausschnitt; SelikuEinstellungen.ausschnittOhneTrailer(context, ausschnitt)
 		},
 		EinstellungsEintrag.Schalter("leiste", stringResource(R.string.seliku_set_sidebar_left), stringResource(R.string.seliku_set_sidebar_left_desc), links) {
 			links = !links; SelikuEinstellungen.leisteMitLinks(context, links)

@@ -17,8 +17,10 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jellyfin.sdk.api.client.ApiClient
+import org.jellyfin.sdk.api.client.extensions.hlsSegmentApi
 import org.jellyfin.sdk.api.client.extensions.itemsApi
 import org.jellyfin.sdk.api.client.extensions.libraryApi
 import org.jellyfin.sdk.api.client.extensions.userLibraryApi
@@ -39,15 +41,51 @@ object Trailer {
 	// «Kein Trailer» nur 15 Minuten merken: Trailarr lädt laufend nach, und der Fernseher hält die App tagelang am Leben
 	private val keiner = ConcurrentHashMap<UUID, Long>()
 
-	/** Adresse des ersten lokalen Trailers (bei Folgen: der Serie), sonst null. */
-	suspend fun adresse(api: ApiClient, item: BaseItemDto): String? {
+	/**
+	 * Adresse des ersten lokalen Trailers (bei Folgen: der Serie). Gibt es keinen und ist [ausschnitt] an,
+	 * ein Ausschnitt aus dem Film bzw. einer Folge (siehe [ausschnittAdresse]), sonst null.
+	 */
+	suspend fun adresse(api: ApiClient, item: BaseItemDto, ausschnitt: Boolean = false): String? {
 		val id = if (item.type == BaseItemKind.EPISODE || item.type == BaseItemKind.SEASON) item.seriesId ?: item.id else item.id
 		zwischenspeicher[id]?.let { return it }
-		keiner[id]?.let { if (System.currentTimeMillis() - it < 15 * 60_000) return null else keiner.remove(id) }
+		keiner[id]?.let {
+			if (System.currentTimeMillis() - it < 15 * 60_000) return if (ausschnitt) ausschnittAdresse(api, item, id) else null
+			keiner.remove(id)
+		}
 		val t = runCatching { withContext(Dispatchers.IO) { api.userLibraryApi.getLocalTrailers(itemId = id).content.firstOrNull() } }
 			.onFailure { Timber.d(it, "Trailer suchen") }.getOrNull()
 		val url = t?.let { "${api.baseUrl?.trimEnd('/')}/Videos/${it.id}/stream?static=true" }
-		if (url != null) zwischenspeicher[id] = url else keiner[id] = System.currentTimeMillis()
+		if (url != null) { zwischenspeicher[id] = url; return url }
+		keiner[id] = System.currentTimeMillis()
+		return if (ausschnitt) ausschnittAdresse(api, item, id) else null
+	}
+
+	private val ausschnitte = ConcurrentHashMap<UUID, String>()
+
+	/**
+	 * Ohne Trailer: 90 s aus dem Film selbst (bei Serien aus einer zufälligen Folge), ab einem Viertel der Laufzeit –
+	 * nach dem Vorspann, weit vor dem Ende. Der Server wandelt in 720p/h264 um, das läuft auf jedem Gerät und auch bei
+	 * langsamem Internet. Der Startpunkt steht als SelikuAbMs in der Adresse (der Server ignoriert ihn).
+	 */
+	private suspend fun ausschnittAdresse(api: ApiClient, item: BaseItemDto, id: UUID): String? {
+		ausschnitte[id]?.let { return it }
+		val quelle = runCatching {
+			withContext(Dispatchers.IO) {
+				when (item.type) {
+					BaseItemKind.MOVIE, BaseItemKind.EPISODE -> item.takeIf { it.runTimeTicks != null } ?: api.userLibraryApi.getItem(itemId = item.id).content
+					BaseItemKind.SERIES, BaseItemKind.SEASON -> api.itemsApi.getItems(parentId = id, recursive = true, includeItemTypes = listOf(BaseItemKind.EPISODE),
+						isMissing = false, sortBy = listOf(ItemSortBy.RANDOM), limit = 1).content.items.firstOrNull()
+					else -> null
+				}
+			}
+		}.onFailure { Timber.d(it, "Ausschnitt suchen") }.getOrNull() ?: return null
+		val laufzeitMs = (quelle.runTimeTicks ?: return null) / 10_000
+		if (laufzeitMs < 5 * 60_000) return null
+		val q = quelle.id.toString().replace("-", "")
+		val url = "${api.baseUrl?.trimEnd('/')}/Videos/$q/main.m3u8?MediaSourceId=$q&DeviceId=${api.deviceInfo.id}" +
+			"&PlaySessionId=seliku-ausschnitt-${UUID.randomUUID().toString().take(8)}&VideoCodec=h264&AudioCodec=aac&MaxWidth=1280" +
+			"&VideoBitrate=3000000&AudioBitrate=128000&MaxAudioChannels=2&SegmentContainer=ts&BreakOnNonKeyFrames=true&SelikuAbMs=${laufzeitMs / 4}"
+		ausschnitte[id] = url
 		return url
 	}
 
@@ -105,7 +143,10 @@ fun TrailerVideo(url: String, modifier: Modifier = Modifier, mitTon: Boolean = f
 			setAudioAttributes(androidx.media3.common.AudioAttributes.Builder().setUsage(androidx.media3.common.C.USAGE_MEDIA)
 				.setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MOVIE).build(), false)
 			volume = if (ton) 1f else 0f
-			setMediaItem(MediaItem.fromUri(url))
+			// Ausschnitt statt Trailer: ab SelikuAbMs 90 Sekunden lang
+			val abMs = android.net.Uri.parse(url).getQueryParameter("SelikuAbMs")?.toLongOrNull()
+			setMediaItem(if (abMs == null) MediaItem.fromUri(url) else MediaItem.Builder().setUri(url)
+				.setClippingConfiguration(MediaItem.ClippingConfiguration.Builder().setStartPositionMs(abMs).setEndPositionMs(abMs + 90_000).build()).build())
 			addListener(object : Player.Listener {
 				override fun onRenderedFirstFrame() { bereit() }
 				override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) { zuschneiden(videoSize.width, videoSize.height) }
@@ -115,7 +156,18 @@ fun TrailerVideo(url: String, modifier: Modifier = Modifier, mitTon: Boolean = f
 			prepare(); playWhenReady = true
 		}
 	}
-	DisposableEffect(spieler) { onDispose { spieler.release() } }
+	DisposableEffect(spieler) {
+		onDispose {
+			spieler.release()
+			// Beim Ausschnitt die Umwandlung auf dem Server beenden, sonst läuft sie noch eine Weile weiter
+			val adresse = android.net.Uri.parse(url)
+			val sitzung = adresse.getQueryParameter("PlaySessionId")
+			if (sitzung != null && adresse.getQueryParameter("SelikuAbMs") != null) kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+				runCatching { api.hlsSegmentApi.stopEncodingProcess(deviceId = adresse.getQueryParameter("DeviceId").orEmpty(), playSessionId = sitzung) }
+					.onFailure { Timber.d(it, "Ausschnitt beenden") }
+			}
+		}
+	}
 	AndroidView(factory = {
 		TextureView(it).also { v ->
 			ansicht[0] = v

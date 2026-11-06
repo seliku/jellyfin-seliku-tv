@@ -182,6 +182,8 @@
 	<string name="seliku_set_bitrate">Max. Streaming-Bitrate</string>
 	<string name="seliku_set_bitrate_desc">Tiefer bei langsamem Internet – weniger Unterbrüche. Nur dieses Gerät</string>
 	<string name="seliku_set_bitrate_value">%1$s Mbit/s</string>
+	<string name="seliku_set_clip">Ausschnitt, wenn kein Trailer</string>
+	<string name="seliku_set_clip_desc">Stattdessen 90 Sekunden aus dem Film oder einer Folge</string>
 	<string name="seliku_set_keep_awake">Fernseher nur bei Wiedergabe wach</string>
 	<string name="seliku_set_keep_awake_desc">Solange Film, Musik, Podcast oder Radio läuft – sonst darf er schlafen</string>
 	<string name="seliku_set_subtitles_later">Untertitel nachladen</string>
