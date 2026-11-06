@@ -112,13 +112,15 @@ fun SerienSeite(vm: SelikuViewModel, seite: Seite.Serie, oeffnen: (BaseItemDto) 
 	// «Abspielen» ist der erste Platz der Seite: die Startlogik holt den Fokus dorthin, nicht zu «Ähnliche Titel»
 	val start = remember(seite.schluessel) { vm.ersteAnfrageFuer(seite.schluessel, "abspielen") }
 
-	LaunchedEffect(seite.id, neuLaden) {
+	// Auch nach Änderungen im Titelmenü (Favorit, Gesehen) neu laden
+	LaunchedEffect(seite.id, neuLaden, vm.datenStand) {
 		runCatching {
+			val zuerst = serie == null
 			serie = daten.item(seite.id)
 			naechste = daten.naechsteFolge(seite.id)
 			staffeln = daten.staffeln(seite.id)
 			if (staffel == null || staffeln.none { it.id == staffel }) staffel = naechste?.seasonId ?: staffeln.firstOrNull()?.id
-			if (neuLaden == 0 && vm.fokus[seite.schluessel] == null) runCatching { start.requestFocus() }
+			if (zuerst && vm.fokus[seite.schluessel] == null) runCatching { start.requestFocus() }
 			aehnlich = daten.aehnlich(seite.id)
 		}.onFailure { Timber.w(it, "Serie laden"); if (istWeg(it)) fehltSerie = true }
 	}
@@ -151,6 +153,7 @@ fun SerienSeite(vm: SelikuViewModel, seite: Seite.Serie, oeffnen: (BaseItemDto) 
 					Knopf(stringResource(if (gesehen) R.string.seliku_mark_unwatched else R.string.seliku_mark_watched), symbol = if (gesehen) "○" else "✓", onClick = {
 						scope.launch { runCatching { daten.gesehen(sr.id, !gesehen) }; neuLaden++ }
 					})
+					FavoritKnopf(sr) { vm.datenStand++ }
 					TrailerKnopf(sr)
 					MehrKnopf { vm.menue = sr }
 				}
@@ -209,10 +212,11 @@ fun TitelSeite(vm: SelikuViewModel, seite: Seite.Titel, oeffnen: (BaseItemDto) -
 	// «Abspielen» ist der erste Platz der Seite: die Startlogik holt den Fokus dorthin, nicht zu «Ähnliche Titel»
 	val start = remember(seite.schluessel) { vm.ersteAnfrageFuer(seite.schluessel, "abspielen") }
 
-	LaunchedEffect(seite.id, neuLaden) {
+	LaunchedEffect(seite.id, neuLaden, vm.datenStand) {
 		runCatching {
+			val zuerst = titel == null
 			titel = daten.item(seite.id)
-			if (neuLaden == 0 && vm.fokus[seite.schluessel] == null) runCatching { start.requestFocus() }
+			if (zuerst && vm.fokus[seite.schluessel] == null) runCatching { start.requestFocus() }
 			aehnlich = daten.aehnlich(seite.id)
 		}.onFailure { Timber.w(it, "Titel laden"); if (istWeg(it)) fehltTitel = true }
 	}
@@ -232,6 +236,7 @@ fun TitelSeite(vm: SelikuViewModel, seite: Seite.Titel, oeffnen: (BaseItemDto) -
 					Knopf(stringResource(if (gesehen) R.string.seliku_mark_unwatched else R.string.seliku_mark_watched), symbol = if (gesehen) "○" else "✓", onClick = {
 						scope.launch { runCatching { daten.gesehen(t.id, !gesehen) }; neuLaden++ }
 					})
+					FavoritKnopf(t) { vm.datenStand++ }
 					TrailerKnopf(t)
 					MehrKnopf { vm.menue = t }
 				}
@@ -261,7 +266,25 @@ fun MehrKnopf(onClick: () -> Unit) {
 	}
 }
 
-/** Kleiner runder Trailer-Knopf (nur wenn ein Trailer auf dem Server liegt): spielt ihn mit Ton im Vollbild. */
+/** «Favorit»: Herz gefüllt, wenn der Titel unter den Favoriten ist; eine kurze Meldung sagt, wo man ihn findet. */
+@Composable
+fun FavoritKnopf(item: BaseItemDto, geaendert: () -> Unit) {
+	val daten = koinInject<SelikuDaten>()
+	val context = LocalContext.current
+	val scope = rememberCoroutineScope()
+	var favorit by remember(item.id, item.userData?.isFavorite) { mutableStateOf(item.userData?.isFavorite == true) }
+	Knopf(stringResource(R.string.seliku_favorite), symbol = if (favorit) "♥" else "♡", aktiv = favorit, onClick = {
+		val neu = !favorit
+		favorit = neu
+		scope.launch {
+			runCatching { daten.favorit(item.id, neu) }
+				.onSuccess { favoritMeldung(context, neu); geaendert() }
+				.onFailure { favorit = !neu; android.widget.Toast.makeText(context, context.getString(R.string.seliku_failed, it.message?.take(80).toString()), android.widget.Toast.LENGTH_SHORT).show() }
+		}
+	})
+}
+
+/** Trailer-Knopf (nur wenn ein Trailer auf dem Server liegt): spielt ihn mit Ton im Vollbild. */
 @Composable
 fun TrailerKnopf(item: BaseItemDto) {
 	val api = koinInject<org.jellyfin.sdk.api.client.ApiClient>()
@@ -270,12 +293,5 @@ fun TrailerKnopf(item: BaseItemDto) {
 	var trailer by remember(item.id) { mutableStateOf<BaseItemDto?>(null) }
 	LaunchedEffect(item.id) { trailer = Trailer.eintrag(api, item) }
 	val t = trailer ?: return
-	Waehlbar(onClick = { abspielen.video(context, t) }, vergroessern = false, shape = androidx.compose.foundation.shape.CircleShape) { fokussiert ->
-		Box(Modifier.size(44.dp).background(if (fokussiert) Farben.Text else Farben.Flaeche), contentAlignment = Alignment.Center) {
-			androidx.compose.foundation.Image(
-				painter = androidx.compose.ui.res.painterResource(org.jellyfin.androidtv.R.drawable.ic_trailer), contentDescription = stringResource(R.string.seliku_trailer),
-				colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(if (fokussiert) androidx.compose.ui.graphics.Color.Black else Farben.Text),
-				modifier = Modifier.size(22.dp))
-		}
-	}
+	Knopf(stringResource(R.string.seliku_trailer), symbol = "▸", onClick = { abspielen.video(context, t) })
 }

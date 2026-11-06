@@ -511,7 +511,17 @@ public class CustomPlaybackOverlayFragment extends Fragment implements LiveTvGui
                     leanbackOverlayFragment.setShouldShowOverlay(false);
                     PlaybackController pc = playbackControllerContainer.getValue().getPlaybackController();
                     if (pc.isLiveTv()) {
-                        if (event.getRepeatCount() == 0) selikuZappen(keyCode == KeyEvent.KEYCODE_DPAD_RIGHT ? 1 : -1);
+                        // Kurz drücken zappt (mit kleiner Verzögerung, um Halten zu erkennen), Halten springt 30 s zurück bzw. vor
+                        int richtung = keyCode == KeyEvent.KEYCODE_DPAD_RIGHT ? 1 : -1;
+                        if (event.getRepeatCount() == 0) {
+                            if (selikuZapAusstehend != null) selikuHandler.removeCallbacks(selikuZapAusstehend);
+                            selikuZapAusstehend = () -> { selikuZapAusstehend = null; selikuZappen(richtung); };
+                            selikuHandler.postDelayed(selikuZapAusstehend, 650);
+                        } else {
+                            if (selikuZapAusstehend != null) { selikuHandler.removeCallbacks(selikuZapAusstehend); selikuZapAusstehend = null; }
+                            long jetzt = android.os.SystemClock.uptimeMillis();
+                            if (jetzt - selikuLetzterSprung > 700) { selikuLetzterSprung = jetzt; selikuZeitsprung(richtung * 30_000L); }
+                        }
                     } else if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) pc.fastForward();
                     else pc.rewind();
                     return true;
@@ -629,6 +639,16 @@ public class CustomPlaybackOverlayFragment extends Fragment implements LiveTvGui
                             }
                         }
 
+                        // Seliku: Live-TV mit OK anhalten und später zeitversetzt weiterschauen
+                        if ((keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER)
+                                && playbackControllerContainer.getValue().getPlaybackController().isLiveTv()
+                                && org.jellyfin.androidtv.seliku.SelikuEinstellungen.schlankerPlayer(requireContext())) {
+                            leanbackOverlayFragment.setShouldShowOverlay(false);
+                            if (playbackControllerContainer.getValue().getPlaybackController().selikuAnhalten()) selikuMelden(getString(R.string.seliku_live_paused));
+                            else selikuStandMelden();
+                            return true;
+                        }
+
                         if ((keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER)
                                 && playbackControllerContainer.getValue().getPlaybackController().canSeek()) {
                             // if the player is playing and the overlay is hidden, this will pause
@@ -661,6 +681,30 @@ public class CustomPlaybackOverlayFragment extends Fragment implements LiveTvGui
 
     public LocalDateTime getCurrentLocalEndDate() {
         return mCurrentGuideEnd;
+    }
+
+    private final android.os.Handler selikuHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private Runnable selikuZapAusstehend;
+    private long selikuLetzterSprung;
+    private android.widget.Toast selikuMeldung;
+
+    private void selikuMelden(String text) {
+        if (selikuMeldung != null) selikuMeldung.cancel();
+        selikuMeldung = android.widget.Toast.makeText(requireContext(), text, android.widget.Toast.LENGTH_SHORT);
+        selikuMeldung.show();
+    }
+
+    /** Seliku: Live-TV 30 s zurück/vor und anzeigen, wie weit hinter live man ist. */
+    private void selikuZeitsprung(long ms) {
+        PlaybackController pc = playbackControllerContainer.getValue().getPlaybackController();
+        if (!pc.selikuZeitversatz(ms)) { selikuMelden(getString(R.string.seliku_live_no_timeshift)); return; }
+        selikuHandler.postDelayed(this::selikuStandMelden, 300);
+    }
+
+    private void selikuStandMelden() {
+        long hinter = playbackControllerContainer.getValue().getPlaybackController().selikuHinterLive();
+        if (hinter < 10_000) selikuMelden(getString(R.string.seliku_live_now));
+        else selikuMelden(getString(R.string.seliku_live_behind, (int) (hinter / 60_000), (int) (hinter / 1000 % 60)));
     }
 
     /** Seliku: vorigen/nächsten Sender nach Sendernummer, im Kreis. */

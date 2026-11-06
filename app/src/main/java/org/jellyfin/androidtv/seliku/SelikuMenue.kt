@@ -75,6 +75,10 @@ object SelikuEinstellungen {
 	@JvmStatic fun nurBeiWiedergabeWach(c: Context) = prefs(c).getBoolean("nur_bei_wiedergabe_wach", true)
 	fun nurBeiWiedergabeWach(c: Context, an: Boolean) = prefs(c).edit().putBoolean("nur_bei_wiedergabe_wach", an).apply()
 
+	/** An (Vorgabe): Reihe «Deine Favoriten» auf der Startseite (nur, wenn es Favoriten gibt). */
+	fun favoritenReihe(c: Context) = prefs(c).getBoolean("favoriten_reihe", true)
+	fun favoritenReihe(c: Context, an: Boolean) = prefs(c).edit().putBoolean("favoriten_reihe", an).apply()
+
 	/** An (Vorgabe): Gibt es keinen Trailer, zeigen Banner und Kacheln einen Ausschnitt aus dem Film bzw. einer Folge. */
 	fun ausschnittOhneTrailer(c: Context) = prefs(c).getBoolean("ausschnitt_ohne_trailer", true)
 	fun ausschnittOhneTrailer(c: Context, an: Boolean) = prefs(c).edit().putBoolean("ausschnitt_ohne_trailer", an).apply()
@@ -115,7 +119,12 @@ fun TitelMenue(vm: SelikuViewModel, item: BaseItemDto, geaendert: () -> Unit) {
 			scope.launch { runCatching { daten.gesehen(item.id, !gesehen) }; schliessen(); geaendert() }
 		})
 		add(Punkt(stringResource(if (favorit) R.string.seliku_remove_favorite else R.string.seliku_add_favorite), if (favorit) "☆" else "★") {
-			scope.launch { runCatching { daten.favorit(item.id, !favorit) }; schliessen(); geaendert() }
+			scope.launch {
+				runCatching { daten.favorit(item.id, !favorit) }
+					.onSuccess { favoritMeldung(context, !favorit) }
+					.onFailure { android.widget.Toast.makeText(context, context.getString(R.string.seliku_failed, it.message?.take(80).toString()), android.widget.Toast.LENGTH_SHORT).show() }
+				schliessen(); geaendert()
+			}
 		})
 		seiteFuer(item)?.let { s -> add(Punkt(stringResource(R.string.seliku_details), "ⓘ") { schliessen(); vm.zu(s) }) }
 	}
@@ -150,4 +159,9 @@ fun TitelMenue(vm: SelikuViewModel, item: BaseItemDto, geaendert: () -> Unit) {
 		}
 	}
 	LaunchedEffect(item.id) { runCatching { erstes.requestFocus() } }
+}
+
+/** Kurze Bestätigung, damit man sieht, dass der Favorit gesetzt ist – und wo man ihn findet. */
+fun favoritMeldung(context: Context, hinzugefuegt: Boolean) {
+	android.widget.Toast.makeText(context, context.getString(if (hinzugefuegt) R.string.seliku_favorite_added else R.string.seliku_favorite_removed), android.widget.Toast.LENGTH_LONG).show()
 }

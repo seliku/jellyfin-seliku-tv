@@ -60,24 +60,25 @@ fun BibliothekSeite(vm: SelikuViewModel, seite: Seite.Bibliothek, oeffnen: (Base
 	var sortierung by remember { mutableStateOf(vm.wahl["${seite.schluessel}|sort"] as? Sortierung ?: Sortierung.NEU) }
 	var ungesehen by remember { mutableStateOf(vm.wahl["${seite.schluessel}|ungesehen"] as? Boolean ?: false) }
 	var genre by remember { mutableStateOf(vm.wahl["${seite.schluessel}|genre"] as? String) }
+	var favoriten by remember { mutableStateOf(vm.wahl["${seite.schluessel}|favoriten"] as? Boolean ?: false) }
 	var genres by remember { mutableStateOf<List<String>>(emptyList()) }
 	LaunchedEffect(bib.id) { genres = runCatching { daten.genres(bib, typen) }.getOrDefault(emptyList()) }
 	@Suppress("UNCHECKED_CAST")
-	val items = remember(sortierung, ungesehen, genre) {
-		mutableStateListOf<BaseItemDto>().apply { addAll(vm.wahl["${seite.schluessel}|items|$sortierung|$ungesehen|$genre"] as? List<BaseItemDto> ?: emptyList()) }
+	val items = remember(sortierung, ungesehen, genre, favoriten) {
+		mutableStateListOf<BaseItemDto>().apply { addAll(vm.wahl["${seite.schluessel}|items|$sortierung|$ungesehen|$genre|$favoriten"] as? List<BaseItemDto> ?: emptyList()) }
 	}
-	var gesamt by remember(sortierung, ungesehen, genre) { mutableStateOf<Int?>(null) }
-	var laedt by remember(sortierung, ungesehen, genre) { mutableStateOf(false) }
+	var gesamt by remember(sortierung, ungesehen, genre, favoriten) { mutableStateOf<Int?>(null) }
+	var laedt by remember(sortierung, ungesehen, genre, favoriten) { mutableStateOf(false) }
 
 	fun nachladen() {
 		if (laedt || (gesamt != null && items.size >= gesamt!!)) return
 		laedt = true
 		scope.launch {
-			runCatching { daten.inhalt(bib, typen, sortierung, ungesehen, items.size, SEITENGROESSE, genre) }
+			runCatching { daten.inhalt(bib, typen, sortierung, ungesehen, items.size, SEITENGROESSE, genre, favoriten) }
 				.onSuccess { r ->
 					items.addAll(r.items.filter { n -> items.none { it.id == n.id } })
 					gesamt = r.totalRecordCount
-					vm.wahl["${seite.schluessel}|items|$sortierung|$ungesehen|$genre"] = items.toList()
+					vm.wahl["${seite.schluessel}|items|$sortierung|$ungesehen|$genre|$favoriten"] = items.toList()
 				}
 				.onFailure { Timber.w(it, "Bibliothek laden") }
 			laedt = false
@@ -90,8 +91,8 @@ fun BibliothekSeite(vm: SelikuViewModel, seite: Seite.Bibliothek, oeffnen: (Base
 	LaunchedEffect(items.isNotEmpty()) {
 		if (items.isNotEmpty() && vm.fokus[seite.schluessel] == null) { kotlinx.coroutines.delay(100); runCatching { erstes.requestFocus() } }
 	}
-	LaunchedEffect(sortierung, ungesehen, genre) { if (items.isEmpty()) nachladen() }
-	LaunchedEffect(raster, sortierung, ungesehen, genre) {
+	LaunchedEffect(sortierung, ungesehen, genre, favoriten) { if (items.isEmpty()) nachladen() }
+	LaunchedEffect(raster, sortierung, ungesehen, genre, favoriten) {
 		snapshotFlow { raster.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }
 			.distinctUntilChanged()
 			.collect { letzter -> if (letzter >= items.size - 18) nachladen() }
@@ -119,6 +120,12 @@ fun BibliothekSeite(vm: SelikuViewModel, seite: Seite.Bibliothek, oeffnen: (Base
 				Knopf(stringResource(if (ungesehen) R.string.seliku_unwatched_only else R.string.seliku_all), onClick = {
 					ungesehen = !ungesehen; vm.wahl["${seite.schluessel}|ungesehen"] = ungesehen; scope.launch { raster.scrollToItem(0) }
 				}, aktiv = ungesehen, symbol = "◐")
+			}
+			// Nur Favoriten (Herz auf der Detailseite oder im Titelmenü)
+			item {
+				Knopf(stringResource(R.string.seliku_favorites), onClick = {
+					favoriten = !favoriten; vm.wahl["${seite.schluessel}|favoriten"] = favoriten; scope.launch { raster.scrollToItem(0) }
+				}, aktiv = favoriten, symbol = if (favoriten) "♥" else "♡")
 			}
 			item {
 				Knopf(stringResource(R.string.seliku_shuffle), onClick = {

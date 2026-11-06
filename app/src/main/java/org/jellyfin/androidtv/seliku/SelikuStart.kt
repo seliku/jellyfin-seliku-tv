@@ -35,7 +35,7 @@ import androidx.compose.ui.res.stringResource
 import org.jellyfin.androidtv.R
 
 /** Art der Startseiten-Reihe (die Überschrift ist übersetzt und taugt nicht als Unterscheidung). */
-private enum class StartArt { WEITER, TV, NEU, ANDERE }
+private enum class StartArt { WEITER, TV, NEU, FAVORITEN, ANDERE }
 
 private data class StartReihe(val titel: String, val items: List<BaseItemDto>, val loeschdatum: Map<java.util.UUID, String> = emptyMap(), val art: StartArt = StartArt.ANDERE)
 
@@ -71,6 +71,8 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 			val bibs = daten.bibliotheken()
 			buildList {
 				add(StartReihe(context.getString(R.string.seliku_continue_watching), daten.weiterschauen(), art = StartArt.WEITER))
+				if (SelikuEinstellungen.favoritenReihe(context))
+					add(StartReihe(context.getString(R.string.seliku_your_favorites), runCatching { daten.favoriten() }.getOrDefault(emptyList()), art = StartArt.FAVORITEN))
 				if (bibs.any { it.istLiveTv() }) add(StartReihe(context.getString(R.string.seliku_on_tv_now), daten.sender().filter { it.currentProgram != null }.take(20), art = StartArt.TV))
 				// Sonderreihen wie «Diese Filme werden bald gelöscht» (Maintainerr, gespiegelt als Jellyfin-Sammlung)
 				runCatching { daten.startseitenSammlungen() }.getOrDefault(emptyList()).forEach { (name, items, datum) -> add(StartReihe(name, items, datum)) }
@@ -100,8 +102,7 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 		if (r.isEmpty()) { Hinweis(stringResource(R.string.seliku_nothing_yet)); return@Box }
 
 		Column(Modifier.fillMaxSize()) {
-			// Banner oben bleibt sichtbar, solange die gewählte Reihe ganz auf den Bildschirm passt
-			SeitlichRollen(rand = 24.dp) { LazyColumn(
+			BannerRollen(vm.liste(seite), banner.isNotEmpty()) { LazyColumn(
 				state = vm.liste(seite),
 				contentPadding = PaddingValues(bottom = 40.dp),
 				modifier = Modifier.fillMaxSize(),
@@ -125,15 +126,7 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 						items = reihe.items,
 						vm = vm,
 						seite = seite,
-						onFokus = {
-							gewaehlt = it
-							// Erste Reihe gewählt (auch beim Zurückkommen): Seite ganz oben halten, damit der Banner sichtbar bleibt
-							if (ersteReihe) rollScope.launch {
-								kotlinx.coroutines.delay(60)
-								val l = vm.liste(seite)
-								if (l.firstVisibleItemIndex > 0 || l.firstVisibleItemScrollOffset > 0) runCatching { l.animateScrollToItem(0) }
-							}
-						},
+						onFokus = { gewaehlt = it },
 						onClick = { item ->
 							when {
 								reihe.art == StartArt.TV -> abspielen.sender(context, item)
@@ -150,7 +143,12 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 							val tag = reihe.loeschdatum[item.id]?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() }
 							val wann = tag?.let { stringResource(R.string.seliku_deleted_on, it.format(java.time.format.DateTimeFormatter.ofPattern(stringResource(R.string.seliku_date_short_pattern)))) } ?: stringResource(R.string.seliku_deleted_soon)
 							QuerKachel(item, klick, merken = merken, onFokus = fokus, zeilen = item.name.orEmpty() to wann)
+						} else if (reihe.art == StartArt.FAVORITEN) { item, klick, merken, fokus ->
+							PosterKachel(item, klick, breite = 120.dp, merken = merken, onFokus = fokus, onMenue = { vm.menue = item }, aufklappen = true)
 						} else if (reihe.art == StartArt.NEU && reihe.items.none { it.type == BaseItemKind.MUSIC_ALBUM || it.type == BaseItemKind.AUDIO }) { item, klick, merken, fokus ->
+							PosterKachel(item, klick, breite = 120.dp, merken = merken, onFokus = fokus, onMenue = { vm.menue = item }, aufklappen = true)
+						} else if (reihe.items.all { it.type == BaseItemKind.MOVIE || it.type == BaseItemKind.SERIES }) { item, klick, merken, fokus ->
+							// Sammlungen (z. B. «Diese Filme werden bald gelöscht») wie die anderen Reihen
 							PosterKachel(item, klick, breite = 120.dp, merken = merken, onFokus = fokus, onMenue = { vm.menue = item }, aufklappen = true)
 						} else null,
 					)

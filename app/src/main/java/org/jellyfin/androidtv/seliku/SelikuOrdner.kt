@@ -156,6 +156,7 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 	var doppel by remember(stand) { mutableStateOf(SelikuEinstellungen.doppelZurueck(context)) }
 	var schlank by remember(stand) { mutableStateOf(SelikuEinstellungen.schlankerPlayer(context)) }
 	var links by remember(stand) { mutableStateOf(SelikuEinstellungen.leisteMitLinks(context)) }
+	var favoritenReihe by remember(stand) { mutableStateOf(SelikuEinstellungen.favoritenReihe(context)) }
 	var trailerBanner by remember(stand) { mutableStateOf(SelikuEinstellungen.trailerImBanner(context)) }
 	var zufall by remember(stand) { mutableStateOf(SelikuEinstellungen.zufallKnopf(context)) }
 	var netflix by remember(stand) { mutableStateOf(SelikuEinstellungen.netflixKacheln(context)) }
@@ -177,6 +178,9 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 		EinstellungsEintrag.Gruppe(stringResource(R.string.seliku_set_group_home)),
 		EinstellungsEintrag.Schalter("kacheln", umfang = "netflix_kacheln", stringResource(R.string.seliku_set_tiles), stringResource(R.string.seliku_set_tiles_desc), netflix) {
 			netflix = !netflix; SelikuEinstellungen.netflixKacheln(context, netflix); gesetzt("netflix_kacheln")
+		},
+		EinstellungsEintrag.Schalter("favoriten", umfang = "favoriten_reihe", stringResource(R.string.seliku_set_favorites_row), stringResource(R.string.seliku_set_favorites_row_desc), favoritenReihe) {
+			favoritenReihe = !favoritenReihe; SelikuEinstellungen.favoritenReihe(context, favoritenReihe); gesetzt("favoriten_reihe"); vm.datenStand++
 		},
 		EinstellungsEintrag.Schalter("trailer", umfang = "trailer_banner", stringResource(R.string.seliku_set_trailer), stringResource(R.string.seliku_set_trailer_desc), trailerBanner) {
 			trailerBanner = !trailerBanner; SelikuEinstellungen.trailerImBanner(context, trailerBanner); gesetzt("trailer_banner")

@@ -169,9 +169,9 @@
 	<string name="seliku_seerr_state_not_connected">not connected</string>
 	<string name="seliku_set_group_home">Home &amp; navigation</string>
 	<string name="seliku_set_tiles">Expand tiles</string>
-	<string name="seliku_set_tiles_desc">The selected tile shows artwork and info after a moment</string>
+	<string name="seliku_set_tiles_desc">The first spot of each row shows artwork and info; the row slides through it</string>
 	<string name="seliku_set_trailer">Trailers in banner and tiles</string>
-	<string name="seliku_set_trailer_desc">Starts after a few seconds, muted while music is playing</string>
+	<string name="seliku_set_trailer_desc">Plays in the selected tile, and in the banner while you are in it</string>
 	<string name="seliku_set_sidebar_left">Open sidebar with Left too</string>
 	<string name="seliku_set_sidebar_left_desc">Otherwise the sidebar only opens with Back</string>
 	<string name="seliku_set_double_back">Press Back twice to exit</string>
@@ -251,4 +251,15 @@
 	<string name="seliku_set_autoplay_next">Play next episode automatically</string>
 	<string name="seliku_set_autoplay_next_desc">When an episode ends, the next one starts. Off: playback stops after the episode</string>
 	<string name="seliku_set_scope_hint">Menu key (or hold OK): ☁ all devices ↔ 📺 this device only</string>
+	<string name="seliku_favorite">Favorite</string>
+	<string name="seliku_favorite_added">Added to favorites – on the home screen under “Your favorites”</string>
+	<string name="seliku_favorite_removed">Removed from favorites</string>
+	<string name="seliku_set_favorites_row">“Your favorites” row</string>
+	<string name="seliku_set_favorites_row_desc">Your favorite movies and series on the home screen</string>
+	<string name="seliku_seerr_no_youtube">Could not open YouTube on this device</string>
+	<string name="seliku_live_no_timeshift">This channel cannot be rewound</string>
+	<string name="seliku_live_now">Live</string>
+	<string name="seliku_live_behind">%1$d:%2$02d behind live</string>
+	<string name="seliku_live_paused">Paused – OK continues</string>
+	<string name="seliku_favorites">Favorites</string>
 </resources>

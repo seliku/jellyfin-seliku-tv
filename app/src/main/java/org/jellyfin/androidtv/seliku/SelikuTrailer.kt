@@ -110,12 +110,19 @@ object Trailer {
 	}
 }
 
+/** Es läuft nie mehr als ein Trailer: der zuletzt gestartete gewinnt, der vorige hört auf ([TrailerVideo] onWeg). */
+object TrailerWaechter {
+	val aktiv = androidx.compose.runtime.mutableStateOf<Any?>(null)
+}
+
 /**
- * Spielt einen Trailer stumm in einer Fläche ab. [onBereit] kommt mit dem ersten Bild (zum Überblenden),
- * [onEnde] am Schluss oder bei einem Fehler.
+ * Spielt einen Trailer in einer Fläche ab. [onBereit] kommt, sobald wirklich etwas zu sehen ist (zum Überblenden),
+ * [onEnde] am Schluss oder bei einem Fehler, [onWeg], wenn ein anderer Trailer übernimmt (Vorgabe: wie [onEnde]).
  */
 @Composable
-fun TrailerVideo(url: String, modifier: Modifier = Modifier, mitTon: Boolean = false, onBereit: () -> Unit = {}, onEnde: () -> Unit = {}) {
+fun TrailerVideo(url: String, modifier: Modifier = Modifier, mitTon: Boolean = false, onBereit: () -> Unit = {}, onEnde: () -> Unit = {}, onWeg: (() -> Unit)? = null) {
+	val ich = remember(url) { Any() }
+	val weg by rememberUpdatedState(onWeg ?: onEnde)
 	// Ton nur, wenn gerade keine Musik und kein Radio läuft – die sollen nicht unterbrochen werden
 	val mediaManager = koinInject<org.jellyfin.androidtv.ui.playback.MediaManager>()
 	val ton = mitTon && !mediaManager.isPlayingAudio && !RadioSpieler.spielt.value
@@ -148,7 +155,9 @@ fun TrailerVideo(url: String, modifier: Modifier = Modifier, mitTon: Boolean = f
 			setMediaItem(if (abMs == null) MediaItem.fromUri(url) else MediaItem.Builder().setUri(url)
 				.setClippingConfiguration(MediaItem.ClippingConfiguration.Builder().setStartPositionMs(abMs).setEndPositionMs(abMs + 90_000).build()).build())
 			addListener(object : Player.Listener {
-				override fun onRenderedFirstFrame() { bereit() }
+				// Trailer beginnen meist mit schwarzen Bildern: erst nach gut einer Sekunde Laufzeit überblenden,
+				// sonst wird das Standbild für einen Moment schwarz
+				override fun onRenderedFirstFrame() { android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ if (isPlaying) bereit() }, 1_200) }
 				override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) { zuschneiden(videoSize.width, videoSize.height) }
 				override fun onPlaybackStateChanged(state: Int) { if (state == Player.STATE_ENDED) ende() }
 				override fun onPlayerError(error: androidx.media3.common.PlaybackException) { Timber.d(error, "Trailer"); ende() }
@@ -156,8 +165,22 @@ fun TrailerVideo(url: String, modifier: Modifier = Modifier, mitTon: Boolean = f
 			prepare(); playWhenReady = true
 		}
 	}
+	androidx.compose.runtime.LaunchedEffect(ich) {
+		TrailerWaechter.aktiv.value = ich
+		androidx.compose.runtime.snapshotFlow { TrailerWaechter.aktiv.value }.collect { if (it !== ich) { spieler.volume = 0f; spieler.pause(); weg() } }
+	}
+	// Geht die App in den Hintergrund oder startet der Player, sofort still sein
+	val lebenszyklus = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+	DisposableEffect(spieler, lebenszyklus) {
+		val beobachter = androidx.lifecycle.LifecycleEventObserver { _, e ->
+			if (e == androidx.lifecycle.Lifecycle.Event.ON_PAUSE) { spieler.volume = 0f; spieler.pause(); weg() }
+		}
+		lebenszyklus.addObserver(beobachter)
+		onDispose { lebenszyklus.removeObserver(beobachter) }
+	}
 	DisposableEffect(spieler) {
 		onDispose {
+			if (TrailerWaechter.aktiv.value === ich) TrailerWaechter.aktiv.value = null
 			spieler.release()
 			// Beim Ausschnitt die Umwandlung auf dem Server beenden, sonst läuft sie noch eine Weile weiter
 			val adresse = android.net.Uri.parse(url)

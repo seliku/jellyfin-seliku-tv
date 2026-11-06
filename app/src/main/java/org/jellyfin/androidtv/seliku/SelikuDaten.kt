@@ -196,6 +196,7 @@ class SelikuDaten(private val api: ApiClient) {
 		start: Int,
 		anzahl: Int,
 		genre: String? = null,
+		nurFavoriten: Boolean = false,
 	): BaseItemDtoQueryResult = io {
 		api.itemsApi.getItems(
 			parentId = bibliothek.id,
@@ -203,7 +204,7 @@ class SelikuDaten(private val api: ApiClient) {
 			recursive = true,
 			sortBy = sortierung.nach,
 			sortOrder = listOf(sortierung.reihenfolge),
-			filters = if (nurUngesehen) setOf(ItemFilter.IS_UNPLAYED) else emptySet(),
+			filters = setOfNotNull(ItemFilter.IS_UNPLAYED.takeIf { nurUngesehen }, ItemFilter.IS_FAVORITE.takeIf { nurFavoriten }),
 			genres = setOfNotNull(genre),
 			fields = felder,
 			enableUserData = true,
@@ -353,6 +354,19 @@ class SelikuDaten(private val api: ApiClient) {
 
 	suspend fun musikTitel(bib: BaseItemDto, sortBy: ItemSortBy, absteigend: Boolean, filter: Set<ItemFilter> = emptySet(), anzahl: Int = 100) = io {
 		liste(bib, setOf(BaseItemKind.AUDIO), listOf(sortBy), absteigend, filter, anzahl = anzahl)
+	}
+
+	/** Eigene Favoriten (Filme und Serien), nach Name. */
+	suspend fun favoriten(): List<BaseItemDto> = io {
+		api.itemsApi.getItems(
+			recursive = true,
+			includeItemTypes = setOf(BaseItemKind.MOVIE, BaseItemKind.SERIES),
+			filters = setOf(ItemFilter.IS_FAVORITE),
+			sortBy = listOf(ItemSortBy.SORT_NAME),
+			fields = felder,
+			enableUserData = true,
+			limit = 60,
+		).content.items
 	}
 
 	suspend fun favorit(id: UUID, ja: Boolean) = io {

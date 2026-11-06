@@ -59,6 +59,7 @@ object SelikuSync {
 	val eintraege = listOf(
 		// Vorgabe ☁ alle Geräte
 		schalter("netflix_kacheln", true, SelikuEinstellungen::netflixKacheln, SelikuEinstellungen::netflixKacheln),
+		schalter("favoriten_reihe", true, SelikuEinstellungen::favoritenReihe, SelikuEinstellungen::favoritenReihe),
 		schalter("trailer_banner", true, SelikuEinstellungen::trailerImBanner, SelikuEinstellungen::trailerImBanner),
 		schalter("ausschnitt_ohne_trailer", true, SelikuEinstellungen::ausschnittOhneTrailer, SelikuEinstellungen::ausschnittOhneTrailer),
 		schalter("titelmusik", true, SelikuEinstellungen::titelmusik, SelikuEinstellungen::titelmusik),

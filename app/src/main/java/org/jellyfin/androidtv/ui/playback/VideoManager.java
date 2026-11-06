@@ -337,6 +337,34 @@ public class VideoManager {
         return canSeek;
     }
 
+    /**
+     * Seliku: Live-TV ein Stück zurück bzw. vor (Zeitversatz), soweit der Server den Strom vorhält.
+     * Nie über «live» hinaus. false, wenn der Strom kein Spulen kennt.
+     */
+    public boolean selikuZeitversatz(long deltaMs) {
+        if (!isInitialized() || !mExoPlayer.isCurrentMediaItemSeekable()) return false;
+        long dauer = mExoPlayer.getDuration();
+        long ziel = Math.max(0, mExoPlayer.getCurrentPosition() + deltaMs);
+        if (dauer > 0) ziel = Math.min(ziel, Math.max(0, dauer - 5_000));
+        mExoPlayer.seekTo(ziel);
+        mExoPlayer.setPlayWhenReady(true);
+        return true;
+    }
+
+    /** Seliku: Live-TV anhalten bzw. weiterlaufen lassen. Liefert true, wenn jetzt angehalten. */
+    public boolean selikuAnhalten() {
+        if (!isInitialized()) return false;
+        mExoPlayer.setPlayWhenReady(!mExoPlayer.getPlayWhenReady());
+        return !mExoPlayer.getPlayWhenReady();
+    }
+
+    /** Seliku: Wie weit hinter «live» (ms), 0 = live. */
+    public long selikuHinterLive() {
+        if (!isInitialized() || !mExoPlayer.isCurrentMediaItemLive()) return 0;
+        long dauer = mExoPlayer.getDuration();
+        return dauer > 0 ? Math.max(0, dauer - mExoPlayer.getCurrentPosition()) : 0;
+    }
+
     public long seekTo(long pos) {
         if (!isInitialized())
             return -1;

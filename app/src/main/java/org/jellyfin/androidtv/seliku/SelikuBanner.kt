@@ -29,6 +29,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
@@ -69,15 +71,23 @@ fun Banner(
 	val api = koinInject<org.jellyfin.sdk.api.client.ApiClient>()
 	var trailer by remember { mutableStateOf<String?>(null) }
 	var trailerBereit by remember { mutableStateOf(false) }
-	LaunchedEffect(item.id) {
+	// Der Trailer läuft nur, solange der Fokus im Banner steht (ein paar Sekunden nach dem Hineingehen)
+	LaunchedEffect(item.id, hatFokus) {
 		trailer = null; trailerBereit = false
-		if (!SelikuEinstellungen.trailerImBanner(context)) return@LaunchedEffect
-		delay(3_000)
+		if (!hatFokus || !SelikuEinstellungen.trailerImBanner(context)) return@LaunchedEffect
+		delay(2_000)
 		trailer = Trailer.adresse(api, item, SelikuEinstellungen.ausschnittOhneTrailer(context))
 	}
 	val trailerSicht by androidx.compose.animation.core.animateFloatAsState(if (trailerBereit) 1f else 0f, androidx.compose.animation.core.tween(900), label = "trailer")
-	// Fester Takt: zählt Sekunden und wechselt alle 9 s; Fokuswechsel setzen den Takt nicht zurück.
-	// Steht der Fokus im Banner (Knöpfe oder Punkte), wird nur pausiert.
+	// Läuft der Trailer, verschwindet die Schrift nach ein paar Sekunden; jede Taste holt sie zurück
+	var tasten by remember { mutableIntStateOf(0) }
+	var schrift by remember { mutableStateOf(true) }
+	LaunchedEffect(trailerBereit, tasten) {
+		schrift = true
+		if (trailerBereit) { delay(4_000); schrift = false }
+	}
+	val schriftSicht by androidx.compose.animation.core.animateFloatAsState(if (schrift) 1f else 0f, androidx.compose.animation.core.tween(700), label = "schrift")
+	// Fester Takt: alle 9 s die nächste Empfehlung, aber nur, solange man nicht im Banner ist
 	LaunchedEffect(items) {
 		var sekunden = 0
 		while (items.size > 1) {
@@ -89,19 +99,21 @@ fun Banner(
 	// Eigene Karte mit eigenem Bild: der Seitenhintergrund folgt den Reihen, der Banner bleibt für sich
 	Box(modifier.fillMaxWidth().height(290.dp).padding(start = 40.dp, end = 40.dp, top = 16.dp, bottom = 28.dp)
 		.clip(androidx.compose.foundation.shape.RoundedCornerShape(18.dp)).background(Farben.Flaeche)
-		.onFocusChanged { hatFokus = it.hasFocus }) {
+		.onFocusChanged { hatFokus = it.hasFocus }
+		.onPreviewKeyEvent { if (it.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) tasten++; false }) {
 		Bild(bilder.hintergrund(item, 1280), Modifier.matchParentSize())
 		trailer?.let { url ->
 			key(url) {
 				TrailerVideo(url, Modifier.matchParentSize().graphicsLayer { alpha = trailerSicht }, mitTon = true, onBereit = { trailerBereit = true },
-					onEnde = { trailer = null; trailerBereit = false; if (items.size > 1) nr = (nr + 1) % items.size })
+					onEnde = { trailer = null; trailerBereit = false; if (items.size > 1) nr = (nr + 1) % items.size },
+					onWeg = { trailer = null; trailerBereit = false })
 			}
 		}
-		Box(Modifier.matchParentSize().background(androidx.compose.ui.graphics.Brush.horizontalGradient(
+		Box(Modifier.matchParentSize().graphicsLayer { alpha = 0.25f + 0.75f * schriftSicht }.background(androidx.compose.ui.graphics.Brush.horizontalGradient(
 			listOf(androidx.compose.ui.graphics.Color(0xF0120D0B), androidx.compose.ui.graphics.Color(0x99120D0B), androidx.compose.ui.graphics.Color.Transparent))))
-	Column(Modifier.fillMaxWidth().padding(start = 28.dp, top = 22.dp, end = 340.dp)) {
+	Column(Modifier.fillMaxWidth().padding(start = 28.dp, top = 22.dp, end = 340.dp).graphicsLayer { alpha = schriftSicht }) {
 		val logo = bilder.logo(item)
-		if (logo != null) Bild(logo, Modifier.height(76.dp).width(320.dp), ContentScale.Fit, grund = androidx.compose.ui.graphics.Color.Transparent)
+		if (logo != null) Bild(logo, Modifier.height(76.dp).width(320.dp), ContentScale.Fit, grund = androidx.compose.ui.graphics.Color.Transparent, ausrichtung = androidx.compose.ui.Alignment.CenterStart)
 		else Text(item.name.orEmpty(), style = Schrift.Riesig, maxLines = 1, overflow = TextOverflow.Ellipsis)
 		Spacer(Modifier.height(8.dp))
 		Text(item.metazeile(), style = Schrift.Leise, maxLines = 1)

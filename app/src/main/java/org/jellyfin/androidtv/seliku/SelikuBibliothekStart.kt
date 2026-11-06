@@ -142,7 +142,7 @@ private fun BibliothekEmpfohlen(vm: SelikuViewModel, seite: Seite.Bibliothek, oe
 			.onSuccess { l -> fehlend = l.filter { it.zustand != SeerrZustand.ANSEHEN }.take(30); vm.wahl["${seite.schluessel}|seerr"] = fehlend }
 	}
 	Box(Modifier.fillMaxSize()) {
-	SeitlichRollen(rand = 24.dp) {
+	BannerRollen(vm.liste(unterSeite), banner.isNotEmpty()) {
 		LazyColumn(state = vm.liste(unterSeite), contentPadding = PaddingValues(top = 0.dp, bottom = 48.dp), modifier = Modifier.fillMaxSize()) {
 			item(key = "banner") { Banner(banner, oeffnen = oeffnen, zeigt = { }, fokus = bannerAnfrage) }
 			items(r, key = { it.titel }) { reihe ->

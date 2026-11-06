@@ -184,6 +184,7 @@ data class SeerrMehr(
 	val macher: String?,     // Regie bzw. Idee
 	val firmen: String?,     // Studios bzw. Sender
 	val besetzung: List<SeerrPerson>,
+	val youtube: String? = null, // Schlüssel des Trailers auf YouTube
 ) {
 	companion object {
 		fun ausJson(o: JSONObject, typ: String): SeerrMehr {
@@ -205,6 +206,8 @@ data class SeerrMehr(
 					SeerrPerson(it.optInt("id"), it.optString("name"), it.optString("character"),
 						it.optString("profilePath").takeIf { p -> p.startsWith("/") }?.let { p -> TMDB_BILD + "w185" + p })
 				}.filter { it.id > 0 && it.name.isNotBlank() },
+				youtube = liste(o.optJSONArray("relatedVideos")).filter { it.optString("site").equals("YouTube", true) && it.optString("key").isNotBlank() }
+					.sortedBy { if (it.optString("type") == "Trailer") 0 else 1 }.firstOrNull()?.optString("key"),
 			)
 		}
 	}
@@ -639,6 +642,15 @@ fun SeerrDetailSeite(vm: SelikuViewModel, seite: Seite.SeerrDetail, oeffnen: (Ba
 										val item = daten.inJellyfin(x)
 										if (item != null) oeffnen(item) else meldung = context.getString(R.string.seliku_seerr_not_in_jellyfin)
 									}
+								})
+							}
+							// Trailer von YouTube: in der YouTube-App (die läuft auf jedem Google TV), sonst im Browser
+							m?.youtube?.let { key ->
+								Knopf(stringResource(R.string.seliku_trailer), symbol = "▸", onFokus = knopfFokus, onClick = {
+									val app = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("vnd.youtube:$key"))
+									val web = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://www.youtube.com/watch?v=$key"))
+									runCatching { context.startActivity(app) }.recoverCatching { context.startActivity(web) }
+										.onFailure { meldung = context.getString(R.string.seliku_seerr_no_youtube) }
 								})
 							}
 							if (x.anfrageVonMir && x.zustand in setOf(SeerrZustand.ANGEFRAGT, SeerrZustand.WIRD_GESUCHT, SeerrZustand.NOCH_NICHT))

@@ -210,6 +210,20 @@ public class PlaybackController implements PlaybackControllerNotifiable {
         return isLiveTv;
     }
 
+    /** Seliku: Live-TV-Zeitversatz (siehe VideoManager.selikuZeitversatz). */
+    public boolean selikuZeitversatz(long deltaMs) {
+        return isLiveTv && hasInitializedVideoManager() && mVideoManager.selikuZeitversatz(deltaMs);
+    }
+
+    /** Seliku: Live-TV anhalten/weiter; true = jetzt angehalten. */
+    public boolean selikuAnhalten() {
+        return isLiveTv && hasInitializedVideoManager() && mVideoManager.selikuAnhalten();
+    }
+
+    public long selikuHinterLive() {
+        return isLiveTv && hasInitializedVideoManager() ? mVideoManager.selikuHinterLive() : 0;
+    }
+
     public int getSubtitleStreamIndex() {
         return (mCurrentOptions != null && mCurrentOptions.getSubtitleStreamIndex() != null) ? mCurrentOptions.getSubtitleStreamIndex() : -1;
     }
