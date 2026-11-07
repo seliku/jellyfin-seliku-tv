@@ -525,6 +525,21 @@ class SelikuDaten(private val api: ApiClient) {
 		).content.items.sortedBy { (it.channelNumber ?: it.number)?.toDoubleOrNull() ?: Double.MAX_VALUE }
 	}
 
+	/** Nächste Sendung je Sender (die erste, die nach jetzt beginnt) – für «Danach» in der Senderliste. */
+	suspend fun naechsteSendungen(sender: List<BaseItemDto>): Map<UUID, BaseItemDto> = io {
+		if (sender.isEmpty()) emptyMap()
+		else {
+			val jetzt = java.time.LocalDateTime.now()
+			api.liveTvApi.getLiveTvPrograms(
+				channelIds = sender.map { it.id },
+				enableImages = false,
+				sortBy = setOf(ItemSortBy.START_DATE),
+				minStartDate = jetzt,
+				maxStartDate = jetzt.plusHours(8),
+			).content.items.filter { it.channelId != null }.groupBy { it.channelId!! }.mapValues { it.value.minBy { p -> p.startDate ?: jetzt } }
+		}
+	}
+
 	/**
 	 * Namen der Senderblöcke, im Konto gespeichert (Anzeige-Einstellung «seliku-livetv», Wert «gruppen»):
 	 * eine Zeile je Block, «Startnummer=Name», z. B. «1=Deutsch», «100=Shqip», «200=Ελληνικά».

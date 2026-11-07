@@ -169,11 +169,12 @@ fun LiveTvSeite(vm: SelikuViewModel) {
 	val abspielen = koinInject<Abspielen>()
 	val context = LocalContext.current
 	val seite = Seite.LiveTv
-	val scope = rememberCoroutineScope()
 	@Suppress("UNCHECKED_CAST")
 	var sender by remember { mutableStateOf(vm.wahl["livetv|sender"] as? List<BaseItemDto>) }
 	@Suppress("UNCHECKED_CAST")
 	var namen by remember { mutableStateOf(vm.wahl["livetv|gruppen"] as? Map<Int, String> ?: emptyMap()) }
+	@Suppress("UNCHECKED_CAST")
+	var danach by remember { mutableStateOf(vm.wahl["livetv|danach"] as? Map<java.util.UUID, BaseItemDto> ?: emptyMap()) }
 	val gruppenAn = remember { SelikuEinstellungen.senderGruppen(context) }
 	var block by remember { mutableStateOf(SelikuEinstellungen.senderBlock(context)) }
 
@@ -181,6 +182,7 @@ fun LiveTvSeite(vm: SelikuViewModel) {
 		if (gruppenAn) runCatching { daten.senderGruppenNamen() }.onSuccess { namen = it; vm.wahl["livetv|gruppen"] = it }
 		while (true) {
 			runCatching { daten.sender() }.onSuccess { sender = it; vm.wahl["livetv|sender"] = it }.onFailure { Timber.w(it, "Sender laden") }
+			sender?.let { s -> runCatching { daten.naechsteSendungen(s) }.onSuccess { danach = it; vm.wahl["livetv|danach"] = it }.onFailure { Timber.w(it, "Nächste Sendungen laden") } }
 			delay(60_000)
 		}
 	}
@@ -193,10 +195,11 @@ fun LiveTvSeite(vm: SelikuViewModel) {
 		namen[b] ?: if (b == Int.MAX_VALUE) context.getString(R.string.seliku_channel_block_other)
 		else context.getString(R.string.seliku_channel_block, maxOf(1, b * 100), b * 100 + 99)
 	}
-	val waehlen = { b: Int ->
-		block = b; SelikuEinstellungen.senderBlock(context, b)
-		scope.launch { runCatching { vm.liste(seite).scrollToItem(0) } }
-	}
+	// Nach einem Reiterwechsel nach oben – erst wenn die neue Liste steht (sonst hält die Liste die alte Position
+	// am Schlüssel des obersten Senders fest und springt z. B. von «Ελληνικά» nach «Alle» mitten in die griechischen)
+	var gewechselt by remember { mutableStateOf(false) }
+	val waehlen = { b: Int -> block = b; gewechselt = true; SelikuEinstellungen.senderBlock(context, b) }
+	LaunchedEffect(block) { if (gewechselt) runCatching { vm.liste(seite).scrollToItem(0) } }
 
 	// Zurück aus der Senderliste springt erst hier hinauf (wie bei Filmen und Serien): auf den gewählten Senderblock,
 	// ohne Blöcke auf den Programmführer; erst das nächste Zurück öffnet die Leiste
@@ -233,10 +236,10 @@ fun LiveTvSeite(vm: SelikuViewModel) {
 							Text(pluralStringResource(R.plurals.seliku_channel_count, imBlock.size, imBlock.size), style = Schrift.Klein)
 						}
 					}
-					items(imBlock, key = { it.id }) { k -> SenderZeile(vm, k) }
+					items(imBlock, key = { it.id }) { k -> SenderZeile(vm, k, danach[k.id]) }
 				}
 			} else {
-				items(if (gewaehlt == -1) s else s.filter { it.senderBlock() == gewaehlt }, key = { it.id }) { k -> SenderZeile(vm, k) }
+				items(if (gewaehlt == -1) s else s.filter { it.senderBlock() == gewaehlt }, key = { it.id }) { k -> SenderZeile(vm, k, danach[k.id]) }
 			}
 		}
 	}
@@ -244,7 +247,7 @@ fun LiveTvSeite(vm: SelikuViewModel) {
 
 /** Eine Zeile der Senderliste: Logo, Bild der Sendung, Name und Nummer, laufende Sendung mit Fortschritt. */
 @Composable
-private fun SenderZeile(vm: SelikuViewModel, k: BaseItemDto) {
+private fun SenderZeile(vm: SelikuViewModel, k: BaseItemDto, danach: BaseItemDto?) {
 	val bilder = koinInject<Bilder>()
 	val abspielen = koinInject<Abspielen>()
 	val context = LocalContext.current
@@ -273,6 +276,12 @@ private fun SenderZeile(vm: SelikuViewModel, k: BaseItemDto) {
 						Text("${p.startDate!!.format(UHR)}–${p.endDate!!.format(UHR)}", style = Schrift.Klein)
 						Fortschritt(vorbei.toFloat() / gesamt, Modifier.width(240.dp))
 					}
+				}
+				// Was danach kommt: Beginn und Titel der nächsten Sendung
+				danach?.let { n ->
+					Spacer(Modifier.height(4.dp))
+					Text(stringResource(R.string.seliku_next_program, n.startDate?.format(UHR).orEmpty(), n.name.orEmpty()),
+						style = Schrift.Klein, maxLines = 1, overflow = TextOverflow.Ellipsis)
 				}
 			}
 		}

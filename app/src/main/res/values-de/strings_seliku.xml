@@ -294,4 +294,5 @@
 		<item quantity="one">%1$d Sender</item>
 		<item quantity="other">%1$d Sender</item>
 	</plurals>
+	<string name="seliku_next_program">Danach %1$s · %2$s</string>
 </resources>

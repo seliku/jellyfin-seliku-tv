@@ -294,4 +294,5 @@
 		<item quantity="one">%1$d channel</item>
 		<item quantity="other">%1$d channels</item>
 	</plurals>
+	<string name="seliku_next_program">Next %1$s · %2$s</string>
 </resources>
