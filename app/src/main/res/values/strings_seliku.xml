@@ -285,4 +285,5 @@
 	<string name="seliku_set_music_favorites">Music favorites in the overview</string>
 	<string name="seliku_set_music_favorites_desc">Favorite playlists, mixes, albums and radio stations first in Music. Long-press marks them</string>
 	<string name="seliku_screen_trailer_of">Trailer: %1$s</string>
+	<string name="seliku_read_more">Read more</string>
 </resources>

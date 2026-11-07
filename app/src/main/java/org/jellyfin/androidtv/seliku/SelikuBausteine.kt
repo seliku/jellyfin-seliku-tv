@@ -1,5 +1,10 @@
 package org.jellyfin.androidtv.seliku
 
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.gestures.animateScrollBy
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -478,6 +483,42 @@ fun Band(
 				androidx.compose.runtime.CompositionLocalProvider(LocalBuehne provides fokus) { buehne(nr) }
 			}
 		}
+	}
+}
+
+/**
+ * Beschreibung, die abgeschnitten sein kann. Ist sie es, wird sie anwählbar («Weiterlesen») und OK zeigt den ganzen
+ * Text in einem Fenster (Hoch/Runter rollt darin). Passt sie ganz, ist sie gewöhnlicher Text.
+ */
+@Composable
+fun Beschreibung(text: String, titel: String, maxZeilen: Int, modifier: Modifier = Modifier, stil: androidx.compose.ui.text.TextStyle = Schrift.Normal) {
+	if (text.isBlank()) return
+	var abgeschnitten by remember(text) { mutableStateOf(false) }
+	var offen by remember { mutableStateOf(false) }
+	val inhalt: @Composable (Boolean) -> Unit = { fokussiert ->
+		Column {
+			Text(text, style = stil, maxLines = maxZeilen, overflow = TextOverflow.Ellipsis, onTextLayout = { if (it.hasVisualOverflow) abgeschnitten = true })
+			if (abgeschnitten) Text("› " + stringResource(R.string.seliku_read_more), style = Schrift.Klein.copy(color = if (fokussiert) Farben.Akzent else Farben.TextLeise, fontWeight = FontWeight.Bold))
+		}
+	}
+	if (abgeschnitten) Waehlbar(onClick = { offen = true }, modifier = modifier, vergroessern = false) { f -> Box(Modifier.padding(horizontal = 6.dp, vertical = 4.dp)) { inhalt(f) } }
+	else Box(modifier.padding(horizontal = 6.dp, vertical = 4.dp)) { inhalt(false) }
+	if (offen) androidx.compose.ui.window.Dialog(onDismissRequest = { offen = false }) {
+		val rollen = androidx.compose.foundation.rememberScrollState()
+		val fokus = remember { FocusRequester() }
+		val scope = androidx.compose.runtime.rememberCoroutineScope()
+		Column(Modifier.width(780.dp).heightIn(max = 600.dp).background(Farben.Flaeche, RoundedCornerShape(18.dp)).padding(28.dp)) {
+			Text(titel, style = Schrift.Reihe, maxLines = 2, overflow = TextOverflow.Ellipsis)
+			Spacer(Modifier.height(14.dp))
+			Text(text, style = Schrift.Normal.copy(lineHeight = Schrift.Normal.fontSize * 1.45f),
+				modifier = Modifier.focusRequester(fokus).focusable().verticalScroll(rollen).onPreviewKeyEvent { e ->
+					val schritt = when (e.key) { Key.DirectionDown -> 220f; Key.DirectionUp -> -220f; else -> 0f }
+					if (schritt != 0f && e.type == KeyEventType.KeyDown) { scope.launch { rollen.animateScrollBy(schritt) }; true }
+					else if (e.key == Key.DirectionCenter || e.key == Key.Enter) { if (e.type == KeyEventType.KeyUp) offen = false; true }
+					else schritt != 0f
+				})
+		}
+		LaunchedEffect(Unit) { runCatching { fokus.requestFocus() } }
 	}
 }
 

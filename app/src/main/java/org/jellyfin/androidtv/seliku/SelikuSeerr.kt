@@ -1,5 +1,6 @@
 package org.jellyfin.androidtv.seliku
 
+import androidx.compose.foundation.layout.offset
 import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -678,7 +679,7 @@ fun SeerrDetailSeite(vm: SelikuViewModel, seite: Seite.SeerrDetail, oeffnen: (Ba
 							Text(wertung.joinToString("   ·   "), style = Schrift.Leise.copy(color = Farben.Akzent))
 						}
 						Spacer(Modifier.height(12.dp))
-						Text(x.text, style = Schrift.Normal, maxLines = 5, overflow = TextOverflow.Ellipsis)
+						Beschreibung(x.text, x.titel, 5, Modifier.offset(x = (-6).dp))
 						Spacer(Modifier.height(18.dp))
 						val tun: (suspend () -> Unit) -> Unit = { aktion ->
 							if (!arbeitet) scope.launch {

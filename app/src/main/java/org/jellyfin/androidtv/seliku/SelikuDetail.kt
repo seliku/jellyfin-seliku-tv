@@ -1,5 +1,6 @@
 package org.jellyfin.androidtv.seliku
 
+import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.Alignment
 
 import androidx.compose.foundation.background
@@ -75,7 +76,7 @@ private fun Kopf(
 			if (zusatz != null) { Spacer(Modifier.height(4.dp)); Text(zusatz, style = Schrift.Leise, maxLines = 1) }
 			item.taglines?.firstOrNull()?.let { Spacer(Modifier.height(10.dp)); Text(it, style = Schrift.Normal.copy(color = Farben.Akzent), maxLines = 1) }
 			Spacer(Modifier.height(10.dp))
-			Text(item.overview.orEmpty().takeUnless { it.trimStart().startsWith("http") }.orEmpty(), style = Schrift.Normal, maxLines = 4, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(end = 160.dp))
+			Beschreibung(item.overview.orEmpty().takeUnless { it.trimStart().startsWith("http") }.orEmpty(), item.name.orEmpty(), 4, Modifier.padding(end = 154.dp).offset(x = (-6).dp))
 			Spacer(Modifier.height(20.dp))
 			// Steht der Fokus auf den Knöpfen, bleibt die Seite ganz oben (sonst schiebt die Rollregel den Titel hinaus)
 			// Zu viele Knöpfe für eine Zeile (Fortsetzen, Von vorn, Trailer …): in die zweite Zeile umbrechen statt zusammendrücken
@@ -198,10 +199,8 @@ fun SerienSeite(vm: SelikuViewModel, seite: Seite.Serie, oeffnen: (BaseItemDto) 
 						},
 					)
 					val g = gewaehlteFolge
-					if (g != null && f.any { it.id == g.id }) Text(
-						g.overview.orEmpty(), style = Schrift.Leise, maxLines = 3, overflow = TextOverflow.Ellipsis,
-						modifier = Modifier.padding(start = 48.dp, end = 300.dp).heightIn(min = 54.dp),
-					)
+					if (g != null && f.any { it.id == g.id }) Beschreibung(g.overview.orEmpty(), folgenTitel(g), 3,
+						Modifier.padding(start = 42.dp, end = 294.dp).heightIn(min = 54.dp), stil = Schrift.Leise)
 				}
 			}
 			item { Spacer(Modifier.height(12.dp)); GemischteReihe(stringResource(R.string.seliku_similar_series), aehnlich, seerrFehlendeAehnliche(sr, vm, seite), vm, seite, oeffnen) }

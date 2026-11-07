@@ -285,4 +285,5 @@
 	<string name="seliku_set_music_favorites">Musik-Favoriten in der Übersicht</string>
 	<string name="seliku_set_music_favorites_desc">Lieblings-Playlists, -Mixe, -Alben und -Radiosender zuoberst unter Musik. Langer Druck markiert sie</string>
 	<string name="seliku_screen_trailer_of">Trailer: %1$s</string>
+	<string name="seliku_read_more">Weiterlesen</string>
 </resources>
