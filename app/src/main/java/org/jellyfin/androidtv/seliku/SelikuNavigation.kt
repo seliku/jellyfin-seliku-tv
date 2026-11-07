@@ -212,7 +212,10 @@ class Abspielen(
 	fun zufall(context: Context, item: BaseItemDto) {
 		playbackHelper.getItemsToPlay(context, item, false, true, object : Response<List<BaseItemDto>>() {
 			override fun onResponse(response: List<BaseItemDto>) {
-				playbackLauncher.launch(context, response, 0, shuffle = true)
+				// «Nächste Folge automatisch» aus: eine zufällige Folge, nicht die ganze Serie hintereinander (S 08.11.)
+				val eine = (item.type == BaseItemKind.SERIES || item.type == BaseItemKind.SEASON) &&
+					!org.koin.java.KoinJavaComponent.get<org.jellyfin.androidtv.preference.UserPreferences>(org.jellyfin.androidtv.preference.UserPreferences::class.java)[org.jellyfin.androidtv.preference.UserPreferences.mediaQueuingEnabled]
+				if (eine) playbackLauncher.launch(context, response.take(1), 0) else playbackLauncher.launch(context, response, 0, shuffle = true)
 			}
 		})
 	}

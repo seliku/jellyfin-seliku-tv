@@ -180,8 +180,23 @@ class SelikuDaten(private val api: ApiClient) {
 			enableResumable = false,
 		).content.items
 		val serien = angefangen.mapNotNull { it.seriesId }.toSet()
+		// Serien der letzten 30 Tage, für die Jellyfin keine nächste Folge kennt (siehe folgeNachZuletztGeschauter)
+		val bekannt = serien + naechste.mapNotNull { it.seriesId }
+		val grenze = java.time.LocalDateTime.now().minusDays(30)
+		val ohneNaechste = api.itemsApi.getItems(
+			recursive = true,
+			includeItemTypes = setOf(BaseItemKind.EPISODE),
+			filters = setOf(ItemFilter.IS_PLAYED),
+			sortBy = listOf(ItemSortBy.DATE_PLAYED),
+			sortOrder = listOf(SortOrder.DESCENDING),
+			enableUserData = true,
+			limit = 40,
+		).content.items
+			.filter { (it.userData?.lastPlayedDate ?: grenze) > grenze }
+			.mapNotNull { it.seriesId }.distinct().filter { it !in bekannt }.take(8)
+			.mapNotNull { runCatching { folgeNachZuletztGeschauter(it) }.getOrNull() }
 		val (mitDatum, ohneDatum) = angefangen.partition { it.userData?.lastPlayedDate != null }
-		ohneAusgeblendete((mitDatum + naechste.filter { it.seriesId !in serien } + ohneDatum).distinctBy { it.seriesId ?: it.id }).take(40)
+		ohneAusgeblendete((mitDatum + ohneNaechste + naechste.filter { it.seriesId !in serien } + ohneDatum).distinctBy { it.seriesId ?: it.id }).take(40)
 	}
 
 	/** «Wahre Geschichten»: Filme und Serien mit den TMDb-Schlagwörtern für wahre Begebenheiten und Biografien. */
@@ -430,6 +445,22 @@ class SelikuDaten(private val api: ApiClient) {
 
 	suspend fun naechsteFolge(serie: UUID): BaseItemDto? = io {
 		api.tvShowsApi.getNextUp(seriesId = serie, limit = 1, fields = felder, enableUserData = true).content.items.firstOrNull()
+			?: folgeNachZuletztGeschauter(serie)
+	}
+
+	/**
+	 * Jellyfin nimmt für «Als Nächstes» die höchste gesehene Folgennummer: Ist die letzte Folge der Serie gesehen
+	 * (quer geschaut, aus Plex übernommen), kommt nichts – Hubert und Staller, Gipfeltreffen (S 08.11.). Dann zählt die
+	 * zuletzt geschaute Folge: ist sie angefangen, die; sonst die nächste ungesehene danach. Nie geschaut: die erste ungesehene.
+	 */
+	private suspend fun folgeNachZuletztGeschauter(serie: UUID): BaseItemDto? {
+		val alle = api.tvShowsApi.getEpisodes(seriesId = serie, isMissing = false, fields = felder, enableUserData = true).content.items
+		val folgen = alle.filter { it.parentIndexNumber != 0 }.ifEmpty { alle }
+		val zuletzt = folgen.filter { it.userData?.lastPlayedDate != null }.maxByOrNull { it.userData!!.lastPlayedDate!! }
+			?: return folgen.firstOrNull { it.userData?.played != true }
+		if (zuletzt.userData?.played != true) return zuletzt
+		val nr = folgen.indexOf(zuletzt)
+		return (folgen.drop(nr + 1) + folgen.take(nr)).firstOrNull { it.userData?.played != true }
 	}
 
 	suspend fun aehnlich(id: UUID): List<BaseItemDto> = io {
