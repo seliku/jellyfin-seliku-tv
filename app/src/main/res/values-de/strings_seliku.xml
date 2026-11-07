@@ -279,4 +279,10 @@
 	<string name="seliku_rating_2">Mässig</string>
 	<string name="seliku_rating_1">Kacke</string>
 	<string name="seliku_rating_remove">Wertung löschen</string>
+	<string name="seliku_radio">Radio</string>
+	<string name="seliku_music_favorite_added">%1$s steht jetzt unter «Deine Favoriten» in der Übersicht</string>
+	<string name="seliku_music_favorite_removed">%1$s aus den Favoriten entfernt</string>
+	<string name="seliku_set_music_favorites">Musik-Favoriten in der Übersicht</string>
+	<string name="seliku_set_music_favorites_desc">Lieblings-Playlists, -Mixe, -Alben und -Radiosender zuoberst unter Musik. Langer Druck markiert sie</string>
+	<string name="seliku_screen_trailer_of">Trailer: %1$s</string>
 </resources>

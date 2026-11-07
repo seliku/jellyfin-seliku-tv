@@ -517,7 +517,7 @@ private fun LaeuftEintrag(offen: Boolean, anteil: Float) {
 	radio?.let { r ->
 		Waehlbar(onClick = { RadioSpieler.umschalten() }, onMenue = { RadioSpieler.stoppen() }, modifier = modifier, vergroessern = false, shape = RoundedCornerShape(14.dp)) { fokussiert ->
 			Row(
-				Modifier.fillMaxWidth().background(if (fokussiert) Farben.Text else Farben.FlaecheHell).padding(horizontal = 4.dp, vertical = 4.dp),
+				Modifier.fillMaxWidth().background(if (fokussiert) Farben.Text else Farben.FlaecheHell).padding(start = 4.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
 				verticalAlignment = Alignment.CenterVertically,
 				horizontalArrangement = Arrangement.spacedBy(12.dp),
 			) {
@@ -540,7 +540,7 @@ private fun LaeuftEintrag(offen: Boolean, anteil: Float) {
 
 	Waehlbar(onClick = { abspielen.jetztLaeuft() }, modifier = modifier, vergroessern = false, shape = RoundedCornerShape(14.dp)) { fokussiert ->
 		Row(
-			Modifier.fillMaxWidth().background(if (fokussiert) Farben.Text else Farben.FlaecheHell).padding(horizontal = 4.dp, vertical = 4.dp),
+			Modifier.fillMaxWidth().background(if (fokussiert) Farben.Text else Farben.FlaecheHell).padding(start = 4.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
 			verticalAlignment = Alignment.CenterVertically,
 			horizontalArrangement = Arrangement.spacedBy(12.dp),
 		) {

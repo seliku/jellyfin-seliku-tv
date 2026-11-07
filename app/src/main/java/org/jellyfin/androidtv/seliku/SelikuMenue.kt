@@ -83,6 +83,10 @@ object SelikuEinstellungen {
 	fun wahreGeschichten(c: Context) = prefs(c).getBoolean("wahre_geschichten", true)
 	fun wahreGeschichten(c: Context, an: Boolean) = prefs(c).edit().putBoolean("wahre_geschichten", an).apply()
 
+	/** Musik-Übersicht: oben «Deine Favoriten» (Playlists, Mixe, Alben, Radiosender). */
+	fun musikFavoriten(c: Context) = prefs(c).getBoolean("musik_favoriten", true)
+	fun musikFavoriten(c: Context, an: Boolean) = prefs(c).edit().putBoolean("musik_favoriten", an).apply()
+
 	/** Eigene Wertung (Sterne) setzen und anzeigen. */
 	fun eigeneWertung(c: Context) = prefs(c).getBoolean("eigene_wertung", true)
 	fun eigeneWertung(c: Context, an: Boolean) = prefs(c).edit().putBoolean("eigene_wertung", an).apply()

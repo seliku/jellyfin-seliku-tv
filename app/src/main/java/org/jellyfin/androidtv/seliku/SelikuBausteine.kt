@@ -94,6 +94,7 @@ fun Waehlbar(
 	content: @Composable (fokussiert: Boolean) -> Unit,
 ) {
 	var fokussiert by remember { mutableStateOf(false) }
+	val ohneRahmen = LocalOhneRahmen.current
 	val anfrage = remember(merken?.second) { merken?.let { (vm, wo) -> vm.ersteAnfrageFuer(wo.first, wo.second) } ?: FocusRequester() }
 	if (merken != null) {
 		val (vm, wo) = merken
@@ -126,11 +127,11 @@ fun Waehlbar(
 				if (onMenue != null && e.type == KeyEventType.KeyUp && e.key == Key.Menu) { onMenue(); true } else false
 			}
 			.graphicsLayer {
-				val s = if (fokussiert && vergroessern) 1.06f else 1f
+				val s = if (fokussiert && vergroessern && !ohneRahmen) 1.06f else 1f
 				scaleX = s; scaleY = s
 			}
 			.clip(shape)
-			.border(if (fokussiert) 3.dp else 0.dp, if (fokussiert) Farben.Akzent else Color.Transparent, shape)
+			.border(if (fokussiert && !ohneRahmen) 3.dp else 0.dp, if (fokussiert && !ohneRahmen) Farben.Akzent else Color.Transparent, shape)
 			// Langes Drücken (OK halten) oder Menütaste öffnet das Titelmenü
 			.combinedClickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick, onLongClick = onMenue)
 	) {
@@ -165,13 +166,16 @@ val LocalKachelOffen = androidx.compose.runtime.compositionLocalOf<Boolean?> { n
  */
 val LocalBuehne = androidx.compose.runtime.compositionLocalOf<Boolean?> { null }
 
+/** In Reihen mit Bühne: die Kacheln zeigen keinen eigenen Rahmen – den zeigt die Bühne (sonst springt er kurz aufs nächste Poster). */
+val LocalOhneRahmen = androidx.compose.runtime.compositionLocalOf { false }
+
 /** Der feste erste Platz einer Reihe: steht still, nur der Inhalt blendet über. */
 @Composable
 fun Buehne(breite: Dp, aktiv: Boolean, zeilen: Pair<String, String>, inhalt: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit) {
 	val hoehe = breite * 1.5f
 	val form = RoundedCornerShape(8.dp)
 	Column(Modifier.width(hoehe * 16f / 9f)) {
-		Box(Modifier.fillMaxWidth().height(hoehe).clip(form).then(if (aktiv) Modifier.border(3.dp, Color.White, form) else Modifier)) { inhalt() }
+		Box(Modifier.fillMaxWidth().height(hoehe).clip(form).then(if (aktiv) Modifier.border(3.dp, Farben.Akzent, form) else Modifier)) { inhalt() }
 		Spacer(Modifier.height(6.dp))
 		Text(zeilen.first, style = Schrift.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
 		Text(zeilen.second, style = Schrift.Klein, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -301,6 +305,7 @@ private fun AufgeklappteKachel(item: BaseItemDto, spielen: Boolean) {
 			TrailerVideo(url, Modifier.fillMaxSize().graphicsLayer { alpha = sicht }, mitTon = true, onBereit = { bereit = true }, onEnde = { trailer = null; bereit = false })
 		}
 		Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color(0x22000000), Color(0xE0000000)))))
+		Abzeichen(item, Modifier.align(Alignment.TopEnd))
 		Column(Modifier.align(Alignment.BottomStart).padding(10.dp).graphicsLayer { alpha = 1f - sicht * 0.6f }) {
 			val logo = bilder.logo(item, 400)
 			if (logo != null) Bild(logo, Modifier.height(34.dp).width(160.dp), ContentScale.Fit, grund = Color.Transparent)
@@ -349,12 +354,17 @@ fun QuadratKachel(
 	rund: Boolean = false,
 	merken: Pair<SelikuViewModel, Pair<String, String>>? = null,
 	onFokus: () -> Unit = {},
+	onMenue: (() -> Unit)? = null,
 ) {
 	val bilder = koinInject<Bilder>()
 	val form = if (rund) CircleShape else RoundedCornerShape(8.dp)
 	Column(Modifier.width(breite), horizontalAlignment = if (rund) Alignment.CenterHorizontally else Alignment.Start) {
-		Waehlbar(onClick = onClick, shape = form, merken = merken, onFokus = onFokus) {
-			Bild(bilder.poster(item, 300), Modifier.fillMaxWidth().aspectRatio(1f), ersatz = if (rund) initialen(item.name) else "♫")
+		Waehlbar(onClick = onClick, shape = form, merken = merken, onFokus = onFokus, onMenue = onMenue) {
+			Box {
+				Bild(bilder.poster(item, 300), Modifier.fillMaxWidth().aspectRatio(1f), ersatz = if (rund) initialen(item.name) else "♫")
+				if (item.userData?.isFavorite == true && item.type == BaseItemKind.PLAYLIST)
+					Text("♥", style = Schrift.Titel.copy(color = Farben.Akzent), modifier = Modifier.align(Alignment.TopEnd).padding(8.dp))
+			}
 		}
 		Spacer(Modifier.height(6.dp))
 		Text(item.name.orEmpty(), style = Schrift.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -458,7 +468,7 @@ fun Band(
 				items(anzahl, key = schluessel) { nr ->
 					// Letzte Kachel: «rechts» schlucken – rechts davon ist nur Leerraum, sonst springt der Fokus nach oben
 					Box(if (nr == anzahl - 1) Modifier.onPreviewKeyEvent { e -> e.key == Key.DirectionRight } else Modifier) {
-						androidx.compose.runtime.CompositionLocalProvider(LocalKachelOffen provides (!mitBuehne && nr == offenNr)) { kachel(nr) }
+						androidx.compose.runtime.CompositionLocalProvider(LocalKachelOffen provides (!mitBuehne && nr == offenNr), LocalOhneRahmen provides mitBuehne) { kachel(nr) }
 					}
 				}
 			}

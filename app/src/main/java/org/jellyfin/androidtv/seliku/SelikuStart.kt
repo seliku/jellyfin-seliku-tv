@@ -90,7 +90,18 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 					add(StartReihe(context.getString(R.string.seliku_true_stories), runCatching { daten.wahreGeschichten() }.getOrDefault(emptyList()), art = StartArt.WAHR))
 			}.filter { it.items.isNotEmpty() }
 		}.onFailure { Timber.w(it, "Startseite laden") }.getOrNull()
-		if (neu != null) {
+		// Zufällig gemischte Reihen (Wahre Geschichten) beim Neuladen nicht neu mischen: sonst springt alles und man
+		// sieht nicht, dass z. B. «Gesehen» gewirkt hat
+		// (die Reihenfolge liegt im ViewModel, sie übersteht auch das Neuaufbauen der Seite nach dem Titelmenü)
+		@Suppress("UNCHECKED_CAST")
+		val vorher = vm.wahl["wahr-reihenfolge"] as? List<java.util.UUID>
+		val geordnet = neu?.map { r ->
+			if (r.art != StartArt.WAHR) r
+			else if (vorher == null) r.also { vm.wahl["wahr-reihenfolge"] = it.items.map { i -> i.id } }
+			else r.copy(items = r.items.sortedBy { i -> vorher.indexOf(i.id).let { if (it < 0) Int.MAX_VALUE else it } })
+		}
+		if (geordnet != null) {
+			val neu = geordnet
 			reihen = neu
 			vm.wahl["start-reihen"] = neu
 			// Hintergründe für die Anmeldeseite merken (neu hinzugefügte zuerst)

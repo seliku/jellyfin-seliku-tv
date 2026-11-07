@@ -19,6 +19,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -151,28 +154,35 @@ object SelikuMusikBildschirm {
 		}
 		Box(Modifier.fillMaxSize().background(Color.Black)) {
 			if (modus == MusikBildschirm.HINTERGRUENDE) Diashow()
-			if (modus == MusikBildschirm.TRAILER) TrailerSchleife()
+			var trailerTitel by remember { mutableStateOf("") }
+			if (modus == MusikBildschirm.TRAILER) TrailerSchleife { trailerTitel = it }
 			// Titel klein unten links; im Dunkel-Modus kaum sichtbar, damit nichts einbrennt
 			Column(Modifier.align(Alignment.BottomStart).padding(start = 64.dp, bottom = 56.dp)) {
 				val a = if (modus == MusikBildschirm.DUNKEL) 0.35f else 0.9f
 				Text(uhr, style = Schrift.Riesig.copy(color = Color.White.copy(alpha = a)))
 				Text(titel, style = Schrift.Titel.copy(color = Color.White.copy(alpha = a)))
 				Text(wer, style = Schrift.Normal.copy(color = Color.White.copy(alpha = a * 0.75f)))
+				// Welcher Trailer gerade läuft
+				if (modus == MusikBildschirm.TRAILER && trailerTitel.isNotEmpty()) {
+					Spacer(Modifier.height(10.dp))
+					Text(stringResource(R.string.seliku_screen_trailer_of, trailerTitel), style = Schrift.Klein.copy(color = Color.White.copy(alpha = 0.6f)))
+				}
 			}
 		}
 	}
 
 	/** Zufällige Trailer nacheinander, stumm; gibt es (noch) keine, bleibt es bei der Diashow. */
 	@Composable
-	private fun TrailerSchleife() {
+	private fun TrailerSchleife(titel: (String) -> Unit) {
 		val api = koinInject<org.jellyfin.sdk.api.client.ApiClient>()
-		var liste by remember { mutableStateOf<List<String>?>(null) }
+		var liste by remember { mutableStateOf<List<Pair<String, String>>?>(null) }
 		var nr by remember { mutableStateOf(0) }
-		LaunchedEffect(Unit) { liste = Trailer.zufaellige(api) }
+		LaunchedEffect(Unit) { liste = Trailer.zufaelligeMitTitel(api) }
 		val l = liste
-		if (l.isNullOrEmpty()) { Diashow(); return }
+		if (l.isNullOrEmpty()) { titel(""); Diashow(); return }
+		LaunchedEffect(nr, l) { titel(l[nr % l.size].first) }
 		androidx.compose.runtime.key(nr) {
-			TrailerVideo(l[nr % l.size], Modifier.fillMaxSize(), onEnde = { nr++ })
+			TrailerVideo(l[nr % l.size].second, Modifier.fillMaxSize(), onEnde = { nr++ })
 		}
 		// Abdunkeln, damit Uhr und Titel lesbar bleiben
 		Box(Modifier.fillMaxSize().background(Color(0x66000000)))

@@ -425,7 +425,9 @@ fun SeerrAbzeichen(z: SeerrZustand, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun SeerrKachel(t: SeerrTitel, onClick: () -> Unit, breite: Dp = 120.dp, merken: Pair<SelikuViewModel, Pair<String, String>>? = null, onFokus: () -> Unit = {}) {
+fun SeerrKachel(t: SeerrTitel, onClick: () -> Unit, breite: Dp = 120.dp, merken: Pair<SelikuViewModel, Pair<String, String>>? = null, onFokus: () -> Unit = {}, anfragenZeichen: Boolean? = null) {
+	// «+ Anfragen» nur in gemischten Reihen (eigene und fehlende Titel); unter Entdecken fehlt ohnehin alles
+	val zeichen = anfragenZeichen ?: (LocalKachelOffen.current != null)
 	val jahrUndArt = listOf(t.jahr, stringResource(if (t.typ == "tv") R.string.seliku_series else R.string.seliku_movie)).filter { it.isNotBlank() }.joinToString(" · ")
 	LocalBuehne.current?.let { aktiv ->
 		Buehne(breite, aktiv, t.titel to jahrUndArt) {
@@ -433,7 +435,7 @@ fun SeerrKachel(t: SeerrTitel, onClick: () -> Unit, breite: Dp = 120.dp, merken:
 			Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Transparent, Color(0x22000000), Color(0xE0000000)))))
 			Text(t.titel, style = Schrift.Reihe, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.align(Alignment.BottomStart).padding(10.dp))
 			SeerrAbzeichen(t.zustand, Modifier.align(Alignment.TopStart))
-			if (t.zustand == SeerrZustand.ANFRAGEN)
+			if (zeichen && t.zustand == SeerrZustand.ANFRAGEN)
 				Box(Modifier.align(Alignment.TopEnd).padding(6.dp).background(Color(0xE0221A16), RoundedCornerShape(8.dp)).padding(horizontal = 7.dp, vertical = 2.dp)) {
 					Text("+ " + stringResource(R.string.seliku_seerr_request), style = Schrift.Klein.copy(color = Farben.Text, fontWeight = FontWeight.Bold))
 				}
@@ -456,7 +458,7 @@ fun SeerrKachel(t: SeerrTitel, onClick: () -> Unit, breite: Dp = 120.dp, merken:
 					SeerrAbzeichen(t.zustand, Modifier.align(Alignment.BottomStart))
 				}
 				// Noch nicht da: kleines «+» oben rechts, damit man fehlende Titel in gemischten Reihen erkennt
-				if (LocalKachelOffen.current != null && t.zustand == SeerrZustand.ANFRAGEN)
+				if (zeichen && t.zustand == SeerrZustand.ANFRAGEN)
 					Box(Modifier.align(Alignment.TopEnd).padding(6.dp).background(Color(0xE0221A16), RoundedCornerShape(8.dp)).padding(horizontal = 7.dp, vertical = 2.dp)) {
 						Text("+ " + stringResource(R.string.seliku_seerr_request), style = Schrift.Klein.copy(color = Farben.Text, fontWeight = FontWeight.Bold))
 					}
@@ -470,12 +472,28 @@ fun SeerrKachel(t: SeerrTitel, onClick: () -> Unit, breite: Dp = 120.dp, merken:
 
 /** [nachladen]: wird aufgerufen, wenn der Fokus gegen das Ende der Reihe läuft (nächste Seite holen). */
 @Composable
-fun SeerrReihe(titel: String, liste: List<SeerrTitel>, vm: SelikuViewModel, seite: Seite, nachladen: (() -> Unit)? = null, onFokus: (SeerrTitel) -> Unit = {}) {
+fun SeerrReihe(titel: String, liste: List<SeerrTitel>, vm: SelikuViewModel, seite: Seite, nachladen: (() -> Unit)? = null, onFokus: (SeerrTitel) -> Unit = {}, buehne: Boolean = false) {
 	if (liste.isEmpty()) return
 	Column(Modifier.fillMaxWidth().padding(bottom = 18.dp)) {
 		Text(titel, style = Schrift.Reihe, modifier = Modifier.padding(start = 48.dp, bottom = 8.dp))
 		// Rollstand merken: nach dem Zurückkommen steht die Reihe wieder dort, wo die gewählte Kachel ist
 		val zustand = remember(seite.schluessel, titel) { vm.listen.getOrPut("${seite.schluessel}|$titel") { androidx.compose.foundation.lazy.LazyListState() } }
+		// Wie auf der Startseite: fester grosser erster Platz, die Reihe gleitet darunter durch
+		if (buehne && SelikuEinstellungen.netflixKacheln(LocalContext.current)) {
+			val offenSchluessel = "${seite.schluessel}|$titel|offen"
+			var offenNr by remember(offenSchluessel) { mutableStateOf(vm.wahl[offenSchluessel] as? Int ?: 0) }
+			Band(liste.size, zustand, offenNr.coerceIn(0, liste.lastIndex), true, schluessel = { titel + liste[it].schluessel },
+				buehne = { nr -> SeerrKachel(liste[nr], onClick = {}, anfragenZeichen = false) },
+			) { i ->
+				val t = liste[i]
+				SeerrKachel(t, onClick = { vm.zu(Seite.SeerrDetail(t.typ, t.tmdb)) }, merken = vm to (seite.schluessel to titel + t.schluessel), anfragenZeichen = false, onFokus = {
+					offenNr = i; vm.wahl[offenSchluessel] = i
+					onFokus(t)
+					if (nachladen != null && i >= liste.size - 6) nachladen()
+				})
+			}
+			return@Column
+		}
 		SeitlichRollen {
 			LazyRow(state = zustand, contentPadding = PaddingValues(horizontal = 48.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
 				itemsIndexed(liste, key = { _, t -> titel + t.schluessel }) { i, t ->
@@ -491,10 +509,10 @@ fun SeerrReihe(titel: String, liste: List<SeerrTitel>, vm: SelikuViewModel, seit
 
 /** Reihe, die beim Weiterblättern die nächsten Seiten nachlädt. */
 @Composable
-fun SeerrReihe(titel: String, quelle: SeerrBlaettern, vm: SelikuViewModel, seite: Seite, onFokus: (SeerrTitel) -> Unit = {}) {
+fun SeerrReihe(titel: String, quelle: SeerrBlaettern, vm: SelikuViewModel, seite: Seite, onFokus: (SeerrTitel) -> Unit = {}, buehne: Boolean = false) {
 	val daten = koinInject<SeerrDaten>()
 	val scope = rememberCoroutineScope()
-	SeerrReihe(titel, quelle.liste, vm, seite, nachladen = { scope.launch { quelle.mehr(daten) } }, onFokus = onFokus)
+	SeerrReihe(titel, quelle.liste, vm, seite, nachladen = { scope.launch { quelle.mehr(daten) } }, onFokus = onFokus, buehne = buehne)
 }
 
 // ───────────────────────── Seiten ─────────────────────────
@@ -560,7 +578,7 @@ fun EntdeckenSeite(vm: SelikuViewModel) {
 					item { Text(stringResource(R.string.seliku_discover), style = Schrift.Titel, modifier = Modifier.padding(start = 48.dp, bottom = 16.dp)) }
 					items(r, key = { it.titel }) { reihe ->
 						when (reihe) {
-							is EntdeckenReihe.Titel -> SeerrReihe(reihe.titel, reihe.quelle, vm, seite) { hero = it.hintergrund }
+							is EntdeckenReihe.Titel -> SeerrReihe(reihe.titel, reihe.quelle, vm, seite, onFokus = { hero = it.hintergrund }, buehne = true)
 							is EntdeckenReihe.Rubriken -> SeerrRubrikReihe(reihe.titel, reihe.liste, vm, seite) { rb -> rb.bild?.let { hero = it } }
 						}
 					}

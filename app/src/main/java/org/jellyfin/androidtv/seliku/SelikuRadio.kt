@@ -218,11 +218,20 @@ fun RadioReiter(vm: SelikuViewModel) {
 				if (!suchen && suchtext.isEmpty()) Knopf(stringResource(R.string.seliku_radio_search), symbol = "⌕", modifier = Modifier.padding(start = 48.dp, bottom = 12.dp), onClick = { suchen = true })
 				else Box(Modifier.padding(start = 48.dp, bottom = 12.dp).width(520.dp).background(Farben.Flaeche, RoundedCornerShape(10.dp)).padding(horizontal = 16.dp, vertical = 12.dp)) {
 					val feld = remember { androidx.compose.ui.focus.FocusRequester() }
-					LaunchedEffect(Unit) { if (suchen) runCatching { feld.requestFocus() } }
+					val tastatur = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+					// Erst zuklappen, wenn das Feld den Fokus schon einmal hatte – beim Erscheinen meldet es zuerst «kein Fokus»
+					// (deshalb klappte es sofort wieder zu und der Knopf schien nichts zu tun)
+					var hatteFokus by remember { mutableStateOf(false) }
+					LaunchedEffect(Unit) { if (suchen) { kotlinx.coroutines.delay(50); runCatching { feld.requestFocus() }; tastatur?.show() } }
 					if (suchtext.isEmpty()) Text(stringResource(R.string.seliku_radio_search_hint), style = Schrift.Leise)
 					androidx.compose.foundation.text.BasicTextField(value = suchtext, onValueChange = { suchtext = it }, singleLine = true, textStyle = Schrift.Normal,
 						cursorBrush = androidx.compose.ui.graphics.SolidColor(Farben.Akzent),
-						modifier = Modifier.fillMaxWidth().focusRequester(feld).onFocusChanged { if (!it.isFocused && suchtext.isEmpty()) suchen = false })
+						keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
+						keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { tastatur?.hide() }),
+						modifier = Modifier.fillMaxWidth().focusRequester(feld).onFocusChanged {
+							if (it.isFocused) hatteFokus = true
+							else if (hatteFokus && suchtext.isEmpty()) suchen = false
+						})
 				}
 			}
 			if (treffer.isNotEmpty()) item { SenderReihe(stringResource(R.string.seliku_results), treffer, favoriten, vm, seite, spielen, favoritUmschalten) }
@@ -259,6 +268,22 @@ private fun SenderReihe(
 				}
 			}
 		}
+	}
+}
+
+/** Radiosender als quadratische Kachel (für die Favoriten in der Musik-Übersicht). */
+@Composable
+fun RadioKachel(s: RadioSender, merken: Pair<SelikuViewModel, Pair<String, String>>, onClick: () -> Unit) {
+	Column(Modifier.width(150.dp)) {
+		Waehlbar(onClick = onClick, merken = merken) {
+			Box(Modifier.fillMaxWidth().aspectRatio(1f).background(Farben.FlaecheHell), contentAlignment = Alignment.Center) {
+				if (s.logo != null) Bild(s.logo, Modifier.fillMaxSize().padding(14.dp), ContentScale.Fit, grund = androidx.compose.ui.graphics.Color.Transparent)
+				else Text(initialen(s.name), style = Schrift.Riesig.copy(color = Farben.TextLeise))
+			}
+		}
+		Spacer(Modifier.height(6.dp))
+		Text(s.name, style = Schrift.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
+		Text(stringResource(R.string.seliku_radio), style = Schrift.Klein, maxLines = 1)
 	}
 }
 

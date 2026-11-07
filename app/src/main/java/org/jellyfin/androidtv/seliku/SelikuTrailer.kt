@@ -96,7 +96,10 @@ object Trailer {
 	}
 
 	/** Zufällige Trailer aus Filmen und Serien (für den Bildschirm bei Musik). */
-	suspend fun zufaellige(api: ApiClient, anzahl: Int = 20): List<String> {
+	suspend fun zufaellige(api: ApiClient, anzahl: Int = 20): List<String> = zufaelligeMitTitel(api, anzahl).map { it.second }
+
+	/** Wie [zufaellige], mit dem Namen des Films bzw. der Serie (Name to Adresse). */
+	suspend fun zufaelligeMitTitel(api: ApiClient, anzahl: Int = 20): List<Pair<String, String>> {
 		val kandidaten = runCatching {
 			withContext(Dispatchers.IO) {
 				api.itemsApi.getItems(recursive = true, includeItemTypes = listOf(BaseItemKind.MOVIE, BaseItemKind.SERIES),
@@ -105,7 +108,7 @@ object Trailer {
 		}.getOrDefault(emptyList())
 		// Jellyfin liefert die Trailer-Anzahl in Listen nicht mit: pro Titel nachfragen, aber gleichzeitig
 		return kotlinx.coroutines.coroutineScope {
-			kandidaten.map { k -> async { adresse(api, k) } }.mapNotNull { it.await() }.take(anzahl)
+			kandidaten.map { k -> async { adresse(api, k)?.let { k.name.orEmpty() to it } } }.mapNotNull { it.await() }.take(anzahl)
 		}
 	}
 }

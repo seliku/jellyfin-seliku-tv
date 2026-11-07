@@ -279,4 +279,10 @@
 	<string name="seliku_rating_2">Meh</string>
 	<string name="seliku_rating_1">Bad</string>
 	<string name="seliku_rating_remove">Remove rating</string>
+	<string name="seliku_radio">Radio</string>
+	<string name="seliku_music_favorite_added">%1$s is now under “Your favorites” in the overview</string>
+	<string name="seliku_music_favorite_removed">%1$s removed from favorites</string>
+	<string name="seliku_set_music_favorites">Music favorites in the overview</string>
+	<string name="seliku_set_music_favorites_desc">Favorite playlists, mixes, albums and radio stations first in Music. Long-press marks them</string>
+	<string name="seliku_screen_trailer_of">Trailer: %1$s</string>
 </resources>

@@ -365,7 +365,30 @@ class SelikuDaten(private val api: ApiClient) {
 	/** Eigene Playlists; Playlist-Dateien aus den Medienordnern (z. B. .m3u in Album-Ordnern) bleiben aussen vor. */
 	suspend fun playlists(): List<BaseItemDto> = io {
 		api.itemsApi.getItems(includeItemTypes = setOf(BaseItemKind.PLAYLIST), recursive = true, sortBy = listOf(ItemSortBy.SORT_NAME),
-			fields = felder + ItemFields.PATH).content.items.filter { it.path?.startsWith("/mnt/") != true }
+			fields = felder + ItemFields.PATH, enableUserData = true).content.items.filter { it.path?.startsWith("/mnt/") != true }
+	}
+
+	/** Musik-Favoriten: Alben und Interpreten der Bibliothek, dazu die eigenen Playlists mit Herz. */
+	suspend fun musikFavoriten(bib: BaseItemDto): List<BaseItemDto> = io {
+		val alben = api.itemsApi.getItems(parentId = bib.id, recursive = true, includeItemTypes = setOf(BaseItemKind.MUSIC_ALBUM, BaseItemKind.MUSIC_ARTIST),
+			filters = setOf(ItemFilter.IS_FAVORITE), sortBy = listOf(ItemSortBy.SORT_NAME), fields = felder, enableUserData = true).content.items
+		val listen = api.itemsApi.getItems(includeItemTypes = setOf(BaseItemKind.PLAYLIST), recursive = true, filters = setOf(ItemFilter.IS_FAVORITE),
+			sortBy = listOf(ItemSortBy.SORT_NAME), fields = felder + ItemFields.PATH, enableUserData = true).content.items.filter { it.path?.startsWith("/mnt/") != true }
+		listen + alben
+	}
+
+	/** Favoriten unter den automatischen Mixen (Schlüssel), im Konto gespeichert wie die Radio-Favoriten. */
+	suspend fun mixFavoriten(): Set<String> = io {
+		runCatching {
+			api.displayPreferencesApi.getDisplayPreferences(displayPreferencesId = "seliku-musik", client = "seliku").content
+				.customPrefs["mixfavoriten"].orEmpty().split("\n").filter { it.isNotBlank() }.toSet()
+		}.getOrDefault(emptySet())
+	}
+
+	suspend fun mixFavoritenSetzen(schluessel: Set<String>) = io {
+		val alt = api.displayPreferencesApi.getDisplayPreferences(displayPreferencesId = "seliku-musik", client = "seliku").content
+		api.displayPreferencesApi.updateDisplayPreferences(displayPreferencesId = "seliku-musik", client = "seliku",
+			data = alt.copy(customPrefs = alt.customPrefs + ("mixfavoriten" to schluessel.joinToString("\n"))))
 	}
 
 	suspend fun playlistTitel(id: UUID): List<BaseItemDto> = io {

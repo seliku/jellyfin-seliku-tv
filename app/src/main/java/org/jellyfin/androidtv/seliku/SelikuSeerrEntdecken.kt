@@ -82,6 +82,16 @@ val SeerrStudios = listOf(
 	SeerrRubrik("studio", 521, "DreamWorks"),
 	SeerrRubrik("studio", 420, "Marvel Studios"),
 	SeerrRubrik("studio", 9993, "DC"),
+	// Nicht in Seerrs eigener Liste, aber gross (S 07.11.: «warum fehlt MGM?»)
+	SeerrRubrik("studio", 21, "MGM"),
+	SeerrRubrik("studio", 1632, "Lionsgate"),
+	SeerrRubrik("studio", 5, "Columbia Pictures"),
+	SeerrRubrik("studio", 12, "New Line Cinema"),
+	SeerrRubrik("studio", 1, "Lucasfilm"),
+	SeerrRubrik("studio", 923, "Legendary"),
+	SeerrRubrik("studio", 41077, "A24"),
+	SeerrRubrik("studio", 3172, "Blumhouse"),
+	SeerrRubrik("studio", 10342, "Studio Ghibli"),
 )
 
 /** Sender und Streamingdienste (TMDB-Sendernummern). */

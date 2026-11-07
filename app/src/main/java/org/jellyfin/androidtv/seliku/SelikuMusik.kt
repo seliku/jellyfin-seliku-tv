@@ -120,15 +120,50 @@ private fun MusikUebersicht(vm: SelikuViewModel, seite: Seite.Musik, oeffnen: (B
 	var neu by remember { mutableStateOf(vm.wahl["$k|neu"] as? List<BaseItemDto> ?: emptyList()) }
 	@Suppress("UNCHECKED_CAST")
 	var eigene by remember { mutableStateOf(vm.wahl["musik-playlists"] as? List<BaseItemDto> ?: emptyList()) }
-	LaunchedEffect(Unit) {
+	@Suppress("UNCHECKED_CAST")
+	var favItems by remember { mutableStateOf(vm.wahl["$k|fav"] as? List<BaseItemDto> ?: emptyList()) }
+	@Suppress("UNCHECKED_CAST")
+	var favRadio by remember { mutableStateOf(vm.wahl["$k|radio"] as? List<RadioSender> ?: emptyList()) }
+	val radioDaten = koinInject<RadioDaten>()
+	val mediaManager = koinInject<org.jellyfin.androidtv.ui.playback.MediaManager>()
+	val mitFavoriten = SelikuEinstellungen.musikFavoriten(context)
+	LaunchedEffect(vm.datenStand) {
+		if (mitFavoriten) {
+			runCatching { daten.musikFavoriten(bib) }.onSuccess { favItems = it; vm.wahl["$k|fav"] = it }
+			runCatching { radioDaten.favoriten() }.onSuccess { favRadio = it; vm.wahl["$k|radio"] = it }
+		}
 		runCatching { daten.musikTitel(bib, ItemSortBy.DATE_PLAYED, true, setOf(ItemFilter.IS_PLAYED), anzahl = 30) }.onSuccess { zuletzt = it; vm.wahl["$k|zuletzt"] = it }
 		runCatching { daten.neuIn(bib) }.onSuccess { neu = it; vm.wahl["$k|neu"] = it }
 		runCatching { daten.playlists() }.onSuccess { eigene = it; vm.wahl["musik-playlists"] = it }
 	}
 	val mixe = grundMixe(daten, bib)
+	val (mixFav, mixUmschalten) = mixFavoriten(vm)
+	val favMixe = if (mitFavoriten) mixFav.sorted().mapNotNull { mixAusSchluessel(it, daten, bib) } else emptyList()
 	val unterSeite = Seite.Ordner(bib.id, "musik-uebersicht")
 	SenkrechtRollen {
 		LazyColumn(state = vm.liste(unterSeite), contentPadding = PaddingValues(top = 8.dp, bottom = 48.dp), modifier = Modifier.fillMaxSize()) {
+			// Schnell zum Lieblingszeug: Playlists, Mixe, Alben und Radiosender mit Herz bzw. Stern
+			if (mitFavoriten && (favItems.isNotEmpty() || favMixe.isNotEmpty() || favRadio.isNotEmpty())) item(key = "favoriten") {
+				Text(stringResource(R.string.seliku_your_favorites), style = Schrift.Reihe, modifier = Modifier.padding(start = 48.dp, top = 6.dp, bottom = 8.dp))
+				SeitlichRollen { LazyRow(contentPadding = PaddingValues(horizontal = 48.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+					items(favItems, key = { "j" + it.id }) { item ->
+						QuadratKachel(item, {
+							if (item.type == BaseItemKind.PLAYLIST) scope.launch { abspielen.musik(context, runCatching { daten.playlistTitel(item.id) }.getOrDefault(emptyList())) }
+							else oeffnen(item)
+						}, rund = item.type == BaseItemKind.MUSIC_ARTIST, merken = vm to (unterSeite.schluessel to "fav|" + item.id), onMenue = { vm.menue = item })
+					}
+					itemsIndexed(favMixe, key = { _, m -> "m" + m.schluessel }) { n, m ->
+						MixKachel(m.name, m.unter, n, merken = vm to (unterSeite.schluessel to "favmix|" + m.schluessel), favorit = true, onMenue = { mixUmschalten(m) }) {
+							scope.launch { abspielen.musik(context, runCatching { m.laden() }.getOrDefault(emptyList())) }
+						}
+					}
+					items(favRadio, key = { "r" + it.id }) { s ->
+						RadioKachel(s, merken = vm to (unterSeite.schluessel to "favradio|" + s.id)) {
+							mediaManager.stopAudio(true); RadioSpieler.spielen(context, s, favRadio, context.getString(R.string.seliku_your_favorites))
+						}
+					}
+				} }
+			}
 			if (zuletzt.isNotEmpty()) item {
 				Reihe(stringResource(R.string.seliku_music_recently_played), zuletzt, vm, unterSeite, onClick = { t -> abspielen.musik(context, zuletzt, zuletzt.indexOf(t).coerceAtLeast(0)) },
 					kachel = { item, klick, merken, fokus -> QuadratKachel(item, klick, merken = merken, onFokus = fokus) })
@@ -138,7 +173,7 @@ private fun MusikUebersicht(vm: SelikuViewModel, seite: Seite.Musik, oeffnen: (B
 				Text(stringResource(R.string.seliku_music_auto_mixes), style = Schrift.Reihe, modifier = Modifier.padding(start = 48.dp, top = 6.dp, bottom = 8.dp))
 				androidx.compose.foundation.lazy.LazyRow(contentPadding = PaddingValues(horizontal = 48.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
 					itemsIndexed(mixe, key = { _, m -> m.name }) { n, m ->
-						MixKachel(m.name, m.unter, n, merken = vm to (unterSeite.schluessel to "mix|" + m.name)) {
+						MixKachel(m.name, m.unter, n, merken = vm to (unterSeite.schluessel to "mix|" + m.name), favorit = m.schluessel in mixFav, onMenue = { mixUmschalten(m) }) {
 							scope.launch { abspielen.musik(context, runCatching { m.laden() }.getOrDefault(emptyList())) }
 						}
 					}
@@ -147,7 +182,7 @@ private fun MusikUebersicht(vm: SelikuViewModel, seite: Seite.Musik, oeffnen: (B
 			if (eigene.isNotEmpty()) item {
 				Reihe(stringResource(R.string.seliku_music_your_playlists), eigene.take(20), vm, unterSeite, onClick = { p ->
 					scope.launch { abspielen.musik(context, runCatching { daten.playlistTitel(p.id) }.getOrDefault(emptyList())) }
-				}, kachel = { item, klick, merken, fokus -> QuadratKachel(item, klick, merken = merken, onFokus = fokus) })
+				}, kachel = { item, klick, merken, fokus -> QuadratKachel(item, klick, merken = merken, onFokus = fokus, onMenue = { vm.menue = item }) })
 			}
 		}
 	}
@@ -159,10 +194,10 @@ private class PlaylistEintrag(val name: String, val unter: String, val eigen: Ba
 /** Die festen automatischen Mixe (ohne Genre-Mixe). */
 @Composable
 private fun grundMixe(daten: SelikuDaten, bib: BaseItemDto) = listOf(
-	Mix(stringResource(R.string.seliku_mix_random), stringResource(R.string.seliku_mix_random_sub)) { daten.musikTitel(bib, ItemSortBy.RANDOM, true) },
-	Mix(stringResource(R.string.seliku_recently_added), stringResource(R.string.seliku_mix_new_sub)) { daten.musikTitel(bib, ItemSortBy.DATE_CREATED, true) },
-	Mix(stringResource(R.string.seliku_mix_most_played), stringResource(R.string.seliku_mix_most_played_sub)) { daten.musikTitel(bib, ItemSortBy.PLAY_COUNT, true, setOf(ItemFilter.IS_PLAYED)) },
-	Mix(stringResource(R.string.seliku_mix_not_heard), stringResource(R.string.seliku_rediscover)) { daten.musikTitel(bib, ItemSortBy.DATE_PLAYED, false, setOf(ItemFilter.IS_PLAYED)) },
+	Mix(stringResource(R.string.seliku_mix_random), stringResource(R.string.seliku_mix_random_sub), "zufall") { daten.musikTitel(bib, ItemSortBy.RANDOM, true) },
+	Mix(stringResource(R.string.seliku_recently_added), stringResource(R.string.seliku_mix_new_sub), "neu") { daten.musikTitel(bib, ItemSortBy.DATE_CREATED, true) },
+	Mix(stringResource(R.string.seliku_mix_most_played), stringResource(R.string.seliku_mix_most_played_sub), "meist") { daten.musikTitel(bib, ItemSortBy.PLAY_COUNT, true, setOf(ItemFilter.IS_PLAYED)) },
+	Mix(stringResource(R.string.seliku_mix_not_heard), stringResource(R.string.seliku_rediscover), "lange") { daten.musikTitel(bib, ItemSortBy.DATE_PLAYED, false, setOf(ItemFilter.IS_PLAYED)) },
 )
 
 /** Alle Playlists: eigene und automatische (auch alle Genre-Mixe), nach Name, mit Buchstabenleiste. */
@@ -177,15 +212,16 @@ private fun AllePlaylists(vm: SelikuViewModel, seite: Seite.Musik) {
 	var eigene by remember { mutableStateOf(vm.wahl["musik-playlists"] as? List<BaseItemDto> ?: emptyList()) }
 	@Suppress("UNCHECKED_CAST")
 	var genres by remember { mutableStateOf(vm.wahl["${seite.schluessel}|alle-genres"] as? List<String> ?: emptyList()) }
-	LaunchedEffect(Unit) {
+	LaunchedEffect(vm.datenStand) {
 		runCatching { daten.playlists() }.onSuccess { eigene = it; vm.wahl["musik-playlists"] = it }
 		runCatching { daten.genres(bib, setOf(BaseItemKind.MUSIC_ALBUM, BaseItemKind.AUDIO)) }.onSuccess { genres = it; vm.wahl["${seite.schluessel}|alle-genres"] = it }
 	}
 	// Eigene Playlists und Mixe gemeinsam alphabetisch
 	val alle = (eigene.map { PlaylistEintrag(it.name.orEmpty(), stringResource(R.string.seliku_music_playlist), it, null) } +
 		grundMixe(daten, bib).map { PlaylistEintrag(it.name, it.unter, null, it) } +
-		genres.map { g -> stringResource(R.string.seliku_mix_genre, g.replaceFirstChar { it.uppercase() }).let { name -> PlaylistEintrag(name, stringResource(R.string.seliku_mix_genre_sub), null, Mix(name, "") { daten.genreMix(g) }) } })
+		genres.map { g -> stringResource(R.string.seliku_mix_genre, g.replaceFirstChar { it.uppercase() }).let { name -> PlaylistEintrag(name, stringResource(R.string.seliku_mix_genre_sub), null, Mix(name, "", "genre:$g") { daten.genreMix(g) }) } })
 		.sortedBy { it.name.lowercase() }
+	val (mixFav, mixUmschalten) = mixFavoriten(vm)
 	val schluessel = Seite.Ordner(bib.id, "musik-alle-playlists")
 	val raster = vm.raster(schluessel)
 	if (alle.isEmpty()) { Hinweis(stringResource(R.string.seliku_loading)); return }
@@ -199,7 +235,9 @@ private fun AllePlaylists(vm: SelikuViewModel, seite: Seite.Musik) {
 			modifier = Modifier.weight(1f),
 		) {
 			itemsIndexed(alle, key = { _: Int, e: PlaylistEintrag -> e.name + (e.eigen?.id ?: "") }) { n: Int, e: PlaylistEintrag ->
-				MixKachel(e.name, e.unter, n, merken = vm to (schluessel.schluessel to e.name)) {
+				MixKachel(e.name, e.unter, n, merken = vm to (schluessel.schluessel to e.name),
+					favorit = e.eigen?.userData?.isFavorite == true || e.mix?.schluessel in mixFav,
+					onMenue = { e.eigen?.let { vm.menue = it } ?: e.mix?.let(mixUmschalten) }) {
 					scope.launch {
 						val titel = e.eigen?.let { runCatching { daten.playlistTitel(it.id) }.getOrDefault(emptyList()) }
 							?: runCatching { e.mix!!.laden() }.getOrDefault(emptyList())
@@ -242,11 +280,38 @@ fun AlphabetLeiste(namen: List<String>, raster: androidx.compose.foundation.lazy
 }
 
 /** Ein automatischer Mix: Name, Untertitel und wie er seine Titel holt. */
-private class Mix(val name: String, val unter: String, val laden: suspend () -> List<BaseItemDto>)
+/** [schluessel]: sprachunabhängig, für die Favoriten. */
+private class Mix(val name: String, val unter: String, val schluessel: String = name, val laden: suspend () -> List<BaseItemDto>)
+
+/** Favoriten unter den Mixen: gemerkt im Konto; langer Druck auf eine Mix-Kachel schaltet um. */
+@Composable
+private fun mixFavoriten(vm: SelikuViewModel): Pair<Set<String>, (Mix) -> Unit> {
+	val daten = koinInject<SelikuDaten>()
+	val context = LocalContext.current
+	val scope = rememberCoroutineScope()
+	@Suppress("UNCHECKED_CAST")
+	var favoriten by remember { mutableStateOf(vm.wahl["musik-mixfav"] as? Set<String> ?: emptySet()) }
+	LaunchedEffect(Unit) { runCatching { daten.mixFavoriten() }.onSuccess { favoriten = it; vm.wahl["musik-mixfav"] = it } }
+	return favoriten to { m ->
+		val dabei = m.schluessel !in favoriten
+		val neu = if (dabei) favoriten + m.schluessel else favoriten - m.schluessel
+		favoriten = neu; vm.wahl["musik-mixfav"] = neu
+		scope.launch { runCatching { daten.mixFavoritenSetzen(neu) }.onFailure { Timber.w(it, "Mix-Favoriten speichern") } }
+		android.widget.Toast.makeText(context, context.getString(if (dabei) R.string.seliku_music_favorite_added else R.string.seliku_music_favorite_removed, m.name), android.widget.Toast.LENGTH_SHORT).show()
+	}
+}
+
+/** Mix zu einem gemerkten Schlüssel (Grund-Mix oder «genre:…»). */
+@Composable
+private fun mixAusSchluessel(schluessel: String, daten: SelikuDaten, bib: BaseItemDto): Mix? =
+	grundMixe(daten, bib).firstOrNull { it.schluessel == schluessel }
+		?: schluessel.removePrefix("genre:").takeIf { schluessel.startsWith("genre:") }?.let { g ->
+			stringResource(R.string.seliku_mix_genre, g.replaceFirstChar { it.uppercase() }).let { name -> Mix(name, stringResource(R.string.seliku_mix_genre_sub), schluessel) { daten.genreMix(g) } }
+		}
 
 /** Quadratische Mix-Kachel mit warmem Verlauf (je Nummer ein anderer Farbton) und Namen darauf. */
 @Composable
-private fun MixKachel(name: String, unter: String, nr: Int, merken: Pair<SelikuViewModel, Pair<String, String>>, onClick: () -> Unit) {
+private fun MixKachel(name: String, unter: String, nr: Int, merken: Pair<SelikuViewModel, Pair<String, String>>, favorit: Boolean = false, onMenue: (() -> Unit)? = null, onClick: () -> Unit) {
 	val toene = listOf(
 		androidx.compose.ui.graphics.Color(0xFFF08A4B) to androidx.compose.ui.graphics.Color(0xFF8E3B2E),
 		androidx.compose.ui.graphics.Color(0xFFE9B44C) to androidx.compose.ui.graphics.Color(0xFF9B4F1F),
@@ -256,8 +321,9 @@ private fun MixKachel(name: String, unter: String, nr: Int, merken: Pair<SelikuV
 		androidx.compose.ui.graphics.Color(0xFF5FA8B8) to androidx.compose.ui.graphics.Color(0xFF243E52),
 	)
 	val (hell, dunkel) = toene[nr % toene.size]
-	Waehlbar(onClick = onClick, merken = merken, modifier = Modifier.width(150.dp)) {
+	Waehlbar(onClick = onClick, merken = merken, onMenue = onMenue, modifier = Modifier.width(150.dp)) {
 		Box(Modifier.fillMaxWidth().aspectRatio(1f).background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(hell, dunkel)))) {
+			if (favorit) Text("♥", style = Schrift.Titel.copy(color = Farben.Text), modifier = Modifier.align(Alignment.TopEnd).padding(10.dp))
 			Column(Modifier.align(Alignment.BottomStart).padding(12.dp)) {
 				Text(name, style = Schrift.Reihe, maxLines = 2, overflow = TextOverflow.Ellipsis)
 				Text(unter, style = Schrift.Klein.copy(color = Farben.Text.copy(alpha = 0.8f)), maxLines = 1)

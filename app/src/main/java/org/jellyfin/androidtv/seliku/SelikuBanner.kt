@@ -116,7 +116,11 @@ fun Banner(
 		if (logo != null) Bild(logo, Modifier.height(76.dp).width(320.dp), ContentScale.Fit, grund = androidx.compose.ui.graphics.Color.Transparent, ausrichtung = androidx.compose.ui.Alignment.CenterStart)
 		else Text(item.name.orEmpty(), style = Schrift.Riesig, maxLines = 1, overflow = TextOverflow.Ellipsis)
 		Spacer(Modifier.height(8.dp))
-		Text(item.metazeile(), style = Schrift.Leise, maxLines = 1)
+		// Gesehen: Häkchen vor der Infozeile (wie auf den Postern)
+		Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+			if (item.userData?.played == true) Abzeichen(item, Modifier.padding(end = 4.dp))
+			Text(item.metazeile(), style = Schrift.Leise, maxLines = 1)
+		}
 		Spacer(Modifier.height(6.dp))
 		Text(item.overview.orEmpty(), style = Schrift.Normal, maxLines = 2, overflow = TextOverflow.Ellipsis)
 		Spacer(Modifier.height(12.dp))

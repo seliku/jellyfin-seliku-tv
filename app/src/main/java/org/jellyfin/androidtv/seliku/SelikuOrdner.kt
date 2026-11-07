@@ -160,6 +160,7 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 	var wahre by remember(stand) { mutableStateOf(SelikuEinstellungen.wahreGeschichten(context)) }
 	var wertung by remember(stand) { mutableStateOf(SelikuEinstellungen.eigeneWertung(context)) }
 	var tomaten by remember(stand) { mutableStateOf(SelikuEinstellungen.tomaten(context)) }
+	var musikFav by remember(stand) { mutableStateOf(SelikuEinstellungen.musikFavoriten(context)) }
 	var trailerBanner by remember(stand) { mutableStateOf(SelikuEinstellungen.trailerImBanner(context)) }
 	var zufall by remember(stand) { mutableStateOf(SelikuEinstellungen.zufallKnopf(context)) }
 	var netflix by remember(stand) { mutableStateOf(SelikuEinstellungen.netflixKacheln(context)) }
@@ -190,6 +191,9 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 		},
 		EinstellungsEintrag.Schalter("wertung", umfang = "eigene_wertung", stringResource(R.string.seliku_set_own_rating), stringResource(R.string.seliku_set_own_rating_desc), wertung) {
 			wertung = !wertung; SelikuEinstellungen.eigeneWertung(context, wertung); gesetzt("eigene_wertung")
+		},
+		EinstellungsEintrag.Schalter("musikfav", umfang = "musik_favoriten", stringResource(R.string.seliku_set_music_favorites), stringResource(R.string.seliku_set_music_favorites_desc), musikFav) {
+			musikFav = !musikFav; SelikuEinstellungen.musikFavoriten(context, musikFav); gesetzt("musik_favoriten")
 		},
 		EinstellungsEintrag.Schalter("tomaten", umfang = "tomaten", stringResource(R.string.seliku_set_tomatoes), stringResource(R.string.seliku_set_tomatoes_desc), tomaten) {
 			tomaten = !tomaten; SelikuEinstellungen.tomaten(context, tomaten); gesetzt("tomaten")
