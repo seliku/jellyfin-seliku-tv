@@ -286,4 +286,12 @@
 	<string name="seliku_set_music_favorites_desc">Favorite playlists, mixes, albums and radio stations first in Music. Long-press marks them</string>
 	<string name="seliku_screen_trailer_of">Trailer: %1$s</string>
 	<string name="seliku_read_more">Read more</string>
+	<string name="seliku_set_channel_groups">Group TV channels</string>
+	<string name="seliku_set_channel_groups_desc">Tabs per channel block (1–99, 100–199 …), e.g. one per language. Left/right in the player stays in the block.</string>
+	<string name="seliku_channel_block">Channels %1$d–%2$d</string>
+	<string name="seliku_channel_block_other">More channels</string>
+	<plurals name="seliku_channel_count">
+		<item quantity="one">%1$d channel</item>
+		<item quantity="other">%1$d channels</item>
+	</plurals>
 </resources>

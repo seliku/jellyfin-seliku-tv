@@ -40,6 +40,10 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.lazy.LazyRow
 import org.jellyfin.androidtv.ui.base.Text
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
@@ -150,23 +154,48 @@ fun SuchSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 
 private val UHR = DateTimeFormatter.ofPattern("HH:mm")
 
-/** Live-TV: Senderliste mit laufender Sendung und Fortschritt; Klick schaltet um. Oben der Weg zum Programmführer. */
+/** Senderblock einer Kanalnummer: 1–99 → 0, 100–199 → 1 …; ohne Nummer ganz hinten. */
+fun senderBlock(nummer: String?): Int = nummer?.toDoubleOrNull()?.let { (it / 100).toInt() } ?: Int.MAX_VALUE
+fun BaseItemDto.senderBlock() = senderBlock(channelNumber ?: number)
+
+/**
+ * Live-TV: Senderliste mit laufender Sendung und Fortschritt; Klick schaltet um. Oben der Weg zum Programmführer.
+ * Gibt es mehrere Senderblöcke (z. B. je Sprache), stehen darunter Reiter: «Alle» zeigt die Blöcke mit Überschrift,
+ * ein Reiter nur seinen Block. Die Wahl bleibt auf dem Gerät; Namen der Blöcke kommen aus dem Konto (sonst «Sender 100–199»).
+ */
 @Composable
 fun LiveTvSeite(vm: SelikuViewModel) {
 	val daten = koinInject<SelikuDaten>()
-	val bilder = koinInject<Bilder>()
 	val abspielen = koinInject<Abspielen>()
 	val context = LocalContext.current
 	val seite = Seite.LiveTv
+	val scope = rememberCoroutineScope()
 	@Suppress("UNCHECKED_CAST")
 	var sender by remember { mutableStateOf(vm.wahl["livetv|sender"] as? List<BaseItemDto>) }
-	val start = remember { FocusRequester() }
+	@Suppress("UNCHECKED_CAST")
+	var namen by remember { mutableStateOf(vm.wahl["livetv|gruppen"] as? Map<Int, String> ?: emptyMap()) }
+	val gruppenAn = remember { SelikuEinstellungen.senderGruppen(context) }
+	var block by remember { mutableStateOf(SelikuEinstellungen.senderBlock(context)) }
 
 	LaunchedEffect(Unit) {
+		if (gruppenAn) runCatching { daten.senderGruppenNamen() }.onSuccess { namen = it; vm.wahl["livetv|gruppen"] = it }
 		while (true) {
 			runCatching { daten.sender() }.onSuccess { sender = it; vm.wahl["livetv|sender"] = it }.onFailure { Timber.w(it, "Sender laden") }
 			delay(60_000)
 		}
+	}
+
+	val s = sender
+	val bloecke = if (gruppenAn && s != null) s.map { it.senderBlock() }.distinct().sorted() else emptyList()
+	val mitReitern = bloecke.size > 1
+	val gewaehlt = if (mitReitern && block in bloecke) block else -1
+	val name = { b: Int ->
+		namen[b] ?: if (b == Int.MAX_VALUE) context.getString(R.string.seliku_channel_block_other)
+		else context.getString(R.string.seliku_channel_block, maxOf(1, b * 100), b * 100 + 99)
+	}
+	val waehlen = { b: Int ->
+		block = b; SelikuEinstellungen.senderBlock(context, b)
+		scope.launch { runCatching { vm.liste(seite).scrollToItem(0) } }
 	}
 
 	Column(Modifier.fillMaxSize().background(Farben.Hintergrund)) {
@@ -176,37 +205,67 @@ fun LiveTvSeite(vm: SelikuViewModel) {
 			Knopf(stringResource(R.string.seliku_guide), symbol = "▦", onClick = { abspielen.programmfuehrer() })
 			Knopf(stringResource(R.string.seliku_recordings), symbol = "●", onClick = { abspielen.aufnahmen() })
 		}
-		val s = sender
 		if (s == null) { Hinweis(stringResource(R.string.seliku_loading)); return@Column }
+		if (mitReitern) LazyRow(
+			contentPadding = PaddingValues(start = 48.dp, end = 48.dp, bottom = 10.dp),
+			horizontalArrangement = Arrangement.spacedBy(10.dp),
+		) {
+			item { Knopf(stringResource(R.string.seliku_all), onClick = { waehlen(-1) }, aktiv = gewaehlt == -1) }
+			items(bloecke) { b -> Knopf(name(b), onClick = { waehlen(b) }, aktiv = gewaehlt == b) }
+		}
 		LazyColumn(state = vm.liste(seite), contentPadding = PaddingValues(start = 40.dp, end = 48.dp, bottom = 40.dp), modifier = Modifier.fillMaxSize()) {
-			items(s, key = { it.id }) { k ->
-				val p = k.currentProgram
-				Waehlbar(onClick = { abspielen.sender(context, k) }, vergroessern = false, merken = vm to (seite.schluessel to k.id.toString()),
-					modifier = Modifier.padding(vertical = 3.dp)) { fokussiert ->
-					Row(
-						Modifier.fillMaxWidth().background(if (fokussiert) Farben.FlaecheHell else Farben.Flaeche).padding(horizontal = 16.dp, vertical = 10.dp),
-						verticalAlignment = Alignment.CenterVertically,
-						horizontalArrangement = Arrangement.spacedBy(18.dp),
-					) {
-						Bild(bilder.eigenesBild(k, 200), Modifier.width(96.dp).aspectRatio(16f / 9f), ContentScale.Fit, grund = androidx.compose.ui.graphics.Color.Transparent)
-						Bild(bilder.sendung(k, 300), Modifier.width(120.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(6.dp)))
-						Column(Modifier.width(200.dp)) {
-							Text(k.name.orEmpty(), style = Schrift.Normal.copy(fontWeight = FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
-							k.channelNumber?.let { Text(stringResource(R.string.seliku_channel_number, it), style = Schrift.Klein) }
+			if (mitReitern && gewaehlt == -1) {
+				bloecke.forEachIndexed { index, b ->
+					val imBlock = s.filter { it.senderBlock() == b }
+					item(key = "kopf$b") {
+						Row(
+							Modifier.padding(start = 8.dp, top = if (index == 0) 4.dp else 24.dp, bottom = 8.dp),
+							verticalAlignment = Alignment.CenterVertically,
+							horizontalArrangement = Arrangement.spacedBy(12.dp),
+						) {
+							Text(name(b), style = Schrift.Reihe)
+							Text(pluralStringResource(R.plurals.seliku_channel_count, imBlock.size, imBlock.size), style = Schrift.Klein)
 						}
-						Column(Modifier.weight(1f)) {
-							Text(p?.name ?: stringResource(R.string.seliku_no_program), style = Schrift.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
-							if (p?.startDate != null && p.endDate != null) {
-								val jetzt = LocalDateTime.now()
-								val gesamt = java.time.Duration.between(p.startDate, p.endDate).seconds.coerceAtLeast(1)
-								val vorbei = java.time.Duration.between(p.startDate, jetzt).seconds
-								Spacer(Modifier.height(4.dp))
-								Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-									Text("${p.startDate!!.format(UHR)}–${p.endDate!!.format(UHR)}", style = Schrift.Klein)
-									Fortschritt(vorbei.toFloat() / gesamt, Modifier.width(240.dp))
-								}
-							}
-						}
+					}
+					items(imBlock, key = { it.id }) { k -> SenderZeile(vm, k) }
+				}
+			} else {
+				items(if (gewaehlt == -1) s else s.filter { it.senderBlock() == gewaehlt }, key = { it.id }) { k -> SenderZeile(vm, k) }
+			}
+		}
+	}
+}
+
+/** Eine Zeile der Senderliste: Logo, Bild der Sendung, Name und Nummer, laufende Sendung mit Fortschritt. */
+@Composable
+private fun SenderZeile(vm: SelikuViewModel, k: BaseItemDto) {
+	val bilder = koinInject<Bilder>()
+	val abspielen = koinInject<Abspielen>()
+	val context = LocalContext.current
+	val p = k.currentProgram
+	Waehlbar(onClick = { abspielen.sender(context, k) }, vergroessern = false, merken = vm to (Seite.LiveTv.schluessel to k.id.toString()),
+		modifier = Modifier.padding(vertical = 3.dp)) { fokussiert ->
+		Row(
+			Modifier.fillMaxWidth().background(if (fokussiert) Farben.FlaecheHell else Farben.Flaeche).padding(horizontal = 16.dp, vertical = 10.dp),
+			verticalAlignment = Alignment.CenterVertically,
+			horizontalArrangement = Arrangement.spacedBy(18.dp),
+		) {
+			Bild(bilder.eigenesBild(k, 200), Modifier.width(96.dp).aspectRatio(16f / 9f), ContentScale.Fit, grund = androidx.compose.ui.graphics.Color.Transparent)
+			Bild(bilder.sendung(k, 300), Modifier.width(120.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(6.dp)))
+			Column(Modifier.width(200.dp)) {
+				Text(k.name.orEmpty(), style = Schrift.Normal.copy(fontWeight = FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
+				k.channelNumber?.let { Text(stringResource(R.string.seliku_channel_number, it), style = Schrift.Klein) }
+			}
+			Column(Modifier.weight(1f)) {
+				Text(p?.name ?: stringResource(R.string.seliku_no_program), style = Schrift.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
+				if (p?.startDate != null && p.endDate != null) {
+					val jetzt = LocalDateTime.now()
+					val gesamt = java.time.Duration.between(p.startDate, p.endDate).seconds.coerceAtLeast(1)
+					val vorbei = java.time.Duration.between(p.startDate, jetzt).seconds
+					Spacer(Modifier.height(4.dp))
+					Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+						Text("${p.startDate!!.format(UHR)}–${p.endDate!!.format(UHR)}", style = Schrift.Klein)
+						Fortschritt(vorbei.toFloat() / gesamt, Modifier.width(240.dp))
 					}
 				}
 			}

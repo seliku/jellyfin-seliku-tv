@@ -60,6 +60,12 @@ object SelikuEinstellungen {
 
 	/** Aus (Vorgabe): Knopf «Zufällig» auf Serienseiten (sonst im Menü «⋯ Mehr»). */
 	fun zufallKnopf(c: Context) = prefs(c).getBoolean("zufall_knopf", false)
+	/** An (Vorgabe): Live-TV nach Senderblöcken getrennt (1–99, 100–199 …, z. B. je Sprache) – Reiter auf der Seite, Zappen bleibt im Block. */
+	@JvmStatic fun senderGruppen(c: Context) = prefs(c).getBoolean("sender_gruppen", true)
+	fun senderGruppen(c: Context, an: Boolean) = prefs(c).edit().putBoolean("sender_gruppen", an).apply()
+	/** Zuletzt gewählter Senderblock auf der Live-TV-Seite (-1 = alle), nur auf diesem Gerät. */
+	fun senderBlock(c: Context) = prefs(c).getInt("sender_block", -1)
+	fun senderBlock(c: Context, block: Int) = prefs(c).edit().putInt("sender_block", block).apply()
 	fun zufallKnopf(c: Context, an: Boolean) = prefs(c).edit().putBoolean("zufall_knopf", an).apply()
 
 	/** An (Vorgabe): im Banner läuft nach ein paar Sekunden stumm der Trailer (falls auf dem Server einer liegt). */

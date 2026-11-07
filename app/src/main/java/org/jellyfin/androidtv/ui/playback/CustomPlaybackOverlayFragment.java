@@ -774,6 +774,15 @@ public class CustomPlaybackOverlayFragment extends Fragment implements LiveTvGui
             sortiert.sort(java.util.Comparator.comparingDouble(CustomPlaybackOverlayFragment::selikuNummer));
             int i = -1;
             for (int k = 0; k < sortiert.size(); k++) if (sortiert.get(k).getId().equals(jetzt.getId())) { i = k; break; }
+            // Sender gruppiert (z. B. je Sprache): nur innerhalb des Blocks zappen
+            if (i >= 0 && getContext() != null && org.jellyfin.androidtv.seliku.SelikuEinstellungen.senderGruppen(getContext())) {
+                BaseItemDto ich = sortiert.get(i);
+                int block = org.jellyfin.androidtv.seliku.SelikuSucheTvKt.senderBlock(ich.getNumber());
+                java.util.List<BaseItemDto> imBlock = new java.util.ArrayList<>();
+                for (BaseItemDto c : sortiert) if (org.jellyfin.androidtv.seliku.SelikuSucheTvKt.senderBlock(c.getNumber()) == block) imBlock.add(c);
+                sortiert = imBlock;
+                i = sortiert.indexOf(ich);
+            }
             int n = sortiert.size();
             int ziel = i < 0 ? 0 : ((i + schritt) % n + n) % n;
             switchChannel(sortiert.get(ziel).getId());

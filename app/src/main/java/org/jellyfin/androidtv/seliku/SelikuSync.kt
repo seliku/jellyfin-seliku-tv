@@ -68,6 +68,7 @@ object SelikuSync {
 		schalter("ausschnitt_ohne_trailer", true, SelikuEinstellungen::ausschnittOhneTrailer, SelikuEinstellungen::ausschnittOhneTrailer),
 		schalter("titelmusik", true, SelikuEinstellungen::titelmusik, SelikuEinstellungen::titelmusik),
 		schalter("zufall_knopf", true, SelikuEinstellungen::zufallKnopf, SelikuEinstellungen::zufallKnopf),
+		schalter("sender_gruppen", true, SelikuEinstellungen::senderGruppen, SelikuEinstellungen::senderGruppen),
 		schalter("doppel_zurueck", true, SelikuEinstellungen::doppelZurueck, SelikuEinstellungen::doppelZurueck),
 		schalter("leiste_mit_links", true, SelikuEinstellungen::leisteMitLinks, SelikuEinstellungen::leisteMitLinks),
 		schalter("untertitel_nachladen", true, SelikuEinstellungen::untertitelNachladen, SelikuEinstellungen::untertitelNachladen),

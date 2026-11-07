@@ -522,7 +522,21 @@ class SelikuDaten(private val api: ApiClient) {
 			enableUserData = true,
 			sortBy = listOf(ItemSortBy.SORT_NAME),
 			sortOrder = SortOrder.ASCENDING,
-		).content.items
+		).content.items.sortedBy { (it.channelNumber ?: it.number)?.toDoubleOrNull() ?: Double.MAX_VALUE }
+	}
+
+	/**
+	 * Namen der Senderblöcke, im Konto gespeichert (Anzeige-Einstellung «seliku-livetv», Wert «gruppen»):
+	 * eine Zeile je Block, «Startnummer=Name», z. B. «1=Deutsch», «100=Shqip», «200=Ελληνικά».
+	 */
+	suspend fun senderGruppenNamen(): Map<Int, String> = io {
+		runCatching {
+			api.displayPreferencesApi.getDisplayPreferences(displayPreferencesId = "seliku-livetv", client = "seliku").content
+				.customPrefs["gruppen"].orEmpty().lines().mapNotNull { z ->
+					val (nr, name) = z.split("=", limit = 2).takeIf { it.size == 2 } ?: return@mapNotNull null
+					nr.trim().toIntOrNull()?.let { senderBlock(it.toString()) to name.trim() }
+				}.toMap()
+		}.getOrDefault(emptyMap())
 	}
 
 	suspend fun gesehen(id: UUID, ja: Boolean) = io {

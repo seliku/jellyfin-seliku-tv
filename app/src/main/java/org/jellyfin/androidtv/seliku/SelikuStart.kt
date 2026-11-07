@@ -80,7 +80,10 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 				add(StartReihe(context.getString(R.string.seliku_continue_watching), daten.weiterschauen(), art = StartArt.WEITER))
 				if (SelikuEinstellungen.favoritenReihe(context))
 					add(StartReihe(context.getString(R.string.seliku_your_favorites), runCatching { daten.favoriten() }.getOrDefault(emptyList()), art = StartArt.FAVORITEN))
-				if (bibs.any { it.istLiveTv() }) add(StartReihe(context.getString(R.string.seliku_on_tv_now), daten.sender().filter { it.currentProgram != null }.take(20), art = StartArt.TV))
+				if (bibs.any { it.istLiveTv() }) add(StartReihe(context.getString(R.string.seliku_on_tv_now), daten.sender().filter { it.currentProgram != null }.let { s ->
+					val b = SelikuEinstellungen.senderBlock(context)
+					if (SelikuEinstellungen.senderGruppen(context) && b >= 0) s.sortedBy { if (it.senderBlock() == b) 0 else 1 } else s
+				}.take(20), art = StartArt.TV))
 				// Sonderreihen wie «Diese Filme werden bald gelöscht» (Maintainerr, gespiegelt als Jellyfin-Sammlung)
 				runCatching { daten.startseitenSammlungen() }.getOrDefault(emptyList()).forEach { (name, items, datum) -> add(StartReihe(name, items, datum)) }
 				bibs.filter { !it.istLiveTv() }.forEach { bib ->

@@ -163,6 +163,7 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 	var musikFav by remember(stand) { mutableStateOf(SelikuEinstellungen.musikFavoriten(context)) }
 	var trailerBanner by remember(stand) { mutableStateOf(SelikuEinstellungen.trailerImBanner(context)) }
 	var zufall by remember(stand) { mutableStateOf(SelikuEinstellungen.zufallKnopf(context)) }
+	var senderGruppen by remember(stand) { mutableStateOf(SelikuEinstellungen.senderGruppen(context)) }
 	var netflix by remember(stand) { mutableStateOf(SelikuEinstellungen.netflixKacheln(context)) }
 	var musik by remember(stand) { mutableStateOf(SelikuEinstellungen.titelmusik(context)) }
 	var nachladen by remember(stand) { mutableStateOf(SelikuEinstellungen.untertitelNachladen(context)) }
@@ -209,6 +210,9 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 		},
 		EinstellungsEintrag.Schalter("zurueck", umfang = "doppel_zurueck", stringResource(R.string.seliku_set_double_back), stringResource(R.string.seliku_set_double_back_desc), doppel) {
 			doppel = !doppel; SelikuEinstellungen.doppelZurueck(context, doppel); gesetzt("doppel_zurueck")
+		},
+		EinstellungsEintrag.Schalter("sendergruppen", umfang = "sender_gruppen", stringResource(R.string.seliku_set_channel_groups), stringResource(R.string.seliku_set_channel_groups_desc), senderGruppen) {
+			senderGruppen = !senderGruppen; SelikuEinstellungen.senderGruppen(context, senderGruppen); gesetzt("sender_gruppen")
 		},
 
 		EinstellungsEintrag.Gruppe(stringResource(R.string.seliku_set_group_playback)),

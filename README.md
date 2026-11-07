@@ -28,6 +28,9 @@ streaming-service style home screen, built for our own living room – and share
 - **Player**: optional "slim" controls – OK pauses, left/right seeks (live TV: switch channel) without popping up the
   overlay; controls come with Up. Previous/next episode in the main bar, tooltips on the buttons. Intros and credits
   are skipped as set in the player settings (with the Intro Skipper plugin on the server).
+- **Live TV by language**: channels in number blocks (1–99, 100–199 …) get tabs on the Live TV page, e.g. one per
+  language; holding left/right in the player zaps within the block. Block names come from the Jellyfin account
+  (see Server setup), otherwise "Channels 100–199".
 - **Series pages**: theme music (if `theme.mp3` exists), trailer button, ⋮ menu, "Remove from Continue Watching"
   (also for Next Up). Long descriptions open in full with "Read more".
 - Every addition can be switched off in the app's own settings.
@@ -84,6 +87,10 @@ The bridge checks each request's Jellyfin token, acts in Seerr as the Seerr user
 Seerr's default permissions if missing) and lets through only what the app needs. The Seerr API key never leaves the
 server. To give a Jellyfin user a different Seerr account, or read-only access, add
 `/etc/seliku-seerr/mapping.json`: `{"jellyfin-name": 5, "guest": null}`.
+
+**Live TV tab names.** Number your channels in blocks (e.g. German 1–99, Albanian 100–199, Greek 200–299) and store the
+names per user as Jellyfin display preference `seliku-livetv` (client `seliku`), custom pref `gruppen`, one line per block:
+`1=Deutsch`, `100=Shqip`, `200=Ελληνικά`. Without it the tabs read "Channels 100–199".
 
 **Jellyfin in Docker.** Run the script on the Docker host and tell it how the media paths inside the container map to
 the host, so theme music and lyrics land in the right folders:
