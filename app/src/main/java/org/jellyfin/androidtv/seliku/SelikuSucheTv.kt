@@ -198,21 +198,27 @@ fun LiveTvSeite(vm: SelikuViewModel) {
 		scope.launch { runCatching { vm.liste(seite).scrollToItem(0) } }
 	}
 
+	// Zurück aus der Senderliste springt erst hier hinauf (wie bei Filmen und Serien): auf den gewählten Senderblock,
+	// ohne Blöcke auf den Programmführer; erst das nächste Zurück öffnet die Leiste
+	val reiter = vm.reiter(seite)
+	val anReiter = { aktiv: Boolean -> if (aktiv) Modifier.focusRequester(reiter) else Modifier }
 	Column(Modifier.fillMaxSize().background(Farben.Hintergrund)) {
-		Row(Modifier.padding(start = 48.dp, top = 28.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-			Text(stringResource(R.string.seliku_live_tv), style = Schrift.Titel)
-			Spacer(Modifier.width(12.dp))
-			Knopf(stringResource(R.string.seliku_guide), symbol = "▦", onClick = { abspielen.programmfuehrer() })
-			Knopf(stringResource(R.string.seliku_recordings), symbol = "●", onClick = { abspielen.aufnahmen() })
+		Column(Modifier.onFocusChanged { vm.reiterFokus = it.hasFocus }) {
+			Row(Modifier.padding(start = 48.dp, top = 28.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+				Text(stringResource(R.string.seliku_live_tv), style = Schrift.Titel)
+				Spacer(Modifier.width(12.dp))
+				Knopf(stringResource(R.string.seliku_guide), symbol = "▦", onClick = { abspielen.programmfuehrer() }, modifier = anReiter(!mitReitern))
+				Knopf(stringResource(R.string.seliku_recordings), symbol = "●", onClick = { abspielen.aufnahmen() })
+			}
+			if (mitReitern) LazyRow(
+				contentPadding = PaddingValues(start = 48.dp, end = 48.dp, bottom = 10.dp),
+				horizontalArrangement = Arrangement.spacedBy(10.dp),
+			) {
+				item { Knopf(stringResource(R.string.seliku_all), onClick = { waehlen(-1) }, aktiv = gewaehlt == -1, modifier = anReiter(gewaehlt == -1)) }
+				items(bloecke) { b -> Knopf(name(b), onClick = { waehlen(b) }, aktiv = gewaehlt == b, modifier = anReiter(gewaehlt == b)) }
+			}
 		}
 		if (s == null) { Hinweis(stringResource(R.string.seliku_loading)); return@Column }
-		if (mitReitern) LazyRow(
-			contentPadding = PaddingValues(start = 48.dp, end = 48.dp, bottom = 10.dp),
-			horizontalArrangement = Arrangement.spacedBy(10.dp),
-		) {
-			item { Knopf(stringResource(R.string.seliku_all), onClick = { waehlen(-1) }, aktiv = gewaehlt == -1) }
-			items(bloecke) { b -> Knopf(name(b), onClick = { waehlen(b) }, aktiv = gewaehlt == b) }
-		}
 		LazyColumn(state = vm.liste(seite), contentPadding = PaddingValues(start = 40.dp, end = 48.dp, bottom = 40.dp), modifier = Modifier.fillMaxSize()) {
 			if (mitReitern && gewaehlt == -1) {
 				bloecke.forEachIndexed { index, b ->
