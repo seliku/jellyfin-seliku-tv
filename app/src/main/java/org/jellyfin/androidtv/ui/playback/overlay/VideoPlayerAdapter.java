@@ -62,7 +62,8 @@ public class VideoPlayerAdapter extends PlayerAdapter {
     public void previous() {
         // Seliku: wie bei jedem Player – läuft die Folge schon ein paar Sekunden, springt der erste Druck an den
         // Anfang; erst ein weiterer Druck (innert 5 Sekunden) geht zur vorherigen Folge
-        if (playbackController.getCurrentPosition() > 5_000) playbackController.seek(0);
+        // Als Anfang gilt das Ende eines übersprungenen Rückblicks/Intros ab 0:00, sonst käme man nie zur vorherigen Folge
+        if (playbackController.getCurrentPosition() > playbackController.selikuStartMs + 5_000) playbackController.seek(0);
         else playbackController.prev();
     }
 

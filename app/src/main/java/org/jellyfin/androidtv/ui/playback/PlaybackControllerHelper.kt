@@ -166,6 +166,7 @@ fun PlaybackController.applyMediaSegments(
 	val mediaSegmentRepository by fragment.inject<MediaSegmentRepository>()
 
 	fragment?.clearSkipOverlay()
+	selikuStartMs = 0
 	fragment.lifecycleScope.launch {
 		val mediaSegments = runCatching {
 			mediaSegmentRepository.getSegmentsForItem(item)
@@ -186,6 +187,11 @@ fun PlaybackController.applyMediaSegments(
 		// Seliku: Beginnt die Folge mitten in einem Überspring-Abschnitt (meist ein Intro ab 0:00), löst die
 		// Positionsmarke nicht aus – ExoPlayer ist schon darüber hinweg. Dann gleich ans Ende des Abschnitts springen.
 		val sofort = mediaSegments.filter { mediaSegmentRepository.getMediaSegmentAction(it) == MediaSegmentAction.SKIP }
+		// Für «Vorherige Folge»: Beginnt ein übersprungener Abschnitt ganz vorne, ist sein Ende der Anfang der Folge
+		// (auch zusammenhängend, z. B. Rückblick bis 0:32 und Intro direkt danach)
+		var start = 0L
+		for (seg in sofort.sortedBy { it.start }) if (seg.start.inWholeMilliseconds <= start + 1_000) start = maxOf(start, seg.end.inWholeMilliseconds)
+		selikuStartMs = start
 		if (sofort.isNotEmpty()) {
 			var pos = -1L
 			for (i in 0 until 20) {
@@ -200,7 +206,9 @@ fun PlaybackController.applyMediaSegments(
 
 @OptIn(UnstableApi::class)
 private fun PlaybackController.addSkipAction(mediaSegment: MediaSegmentDto) {
-	mVideoManager.mExoPlayer
+	// Seliku: Kommen die Abschnitte erst an, wenn der Player schon wieder zu ist, nichts tun (Absturz 08.11.)
+	val exo = mVideoManager?.mExoPlayer ?: return
+	exo
 		.createMessage { _, _ ->
 			// We can't seek directly on the ExoPlayer instance as not all media is seekable
 			// the seek function in the PlaybackController checks this and optionally starts a transcode
@@ -217,7 +225,9 @@ private fun PlaybackController.addSkipAction(mediaSegment: MediaSegmentDto) {
 
 @OptIn(UnstableApi::class)
 private fun PlaybackController.addAskToSkipAction(mediaSegment: MediaSegmentDto) {
-	mVideoManager.mExoPlayer
+	// Seliku: Kommen die Abschnitte erst an, wenn der Player schon wieder zu ist, nichts tun (Absturz 08.11.)
+	val exo = mVideoManager?.mExoPlayer ?: return
+	exo
 		.createMessage { _, _ ->
 			fragment?.askToSkip(mediaSegment.end)
 		}

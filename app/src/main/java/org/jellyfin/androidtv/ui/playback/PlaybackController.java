@@ -102,6 +102,8 @@ public class PlaybackController implements PlaybackControllerNotifiable {
     private LocalDateTime mCurrentProgramStart = null;
     private long mCurrentTranscodeStartTime;
     private boolean isLiveTv = false;
+    /** Seliku: Wo die Folge nach automatisch übersprungenem Rückblick/Intro ab 0:00 wirklich beginnt (ms), sonst 0. */
+    public long selikuStartMs = 0;
     private boolean directStreamLiveTv;
     private int playbackRetries = 0;
     private long lastPlaybackError = 0;
@@ -1200,6 +1202,8 @@ public class PlaybackController implements PlaybackControllerNotifiable {
 
     @Override
     public void onPrepared() {
+        // Seliku: Wird eine Wiedergabe gleich nach dem Start wieder beendet, kann ExoPlayer noch melden, obwohl es keinen Stream mehr gibt
+        if (mCurrentStreamInfo == null) return;
         if (mPlaybackState == PlaybackState.BUFFERING) {
             if (mFragment != null) {
                 mFragment.setFadingEnabled(true);
