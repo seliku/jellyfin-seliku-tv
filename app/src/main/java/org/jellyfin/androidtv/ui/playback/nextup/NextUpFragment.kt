@@ -94,8 +94,6 @@ fun NextUpScreen(
 		}
 	}
 
-	val focusRequester = remember { FocusRequester() }
-
 	Box {
 		AppBackground()
 
@@ -115,17 +113,13 @@ fun NextUpScreen(
 		// Overlay
 		NextUpOverlay(
 			modifier = Modifier
-				.align(Alignment.BottomCenter)
-				.focusRequester(focusRequester),
+				.align(Alignment.BottomCenter),
 			item = requireNotNull(item),
 			onConfirm = { viewModel.playNext() },
 			onCancel = { viewModel.close() },
 		)
 	}
 
-	LaunchedEffect(focusRequester) {
-		focusRequester.requestFocus()
-	}
 }
 
 @Composable
@@ -158,6 +152,9 @@ fun NextUpOverlay(
 	}
 
 	val focusRequester = remember { FocusRequester() }
+	// Seliku: «Weiterschauen» direkt vorauswählen. Der Fokus auf die ganze Leiste landete je nach Ablauf auf «Abbrechen»,
+	// und weil der Countdown beim Verlassen des Knopfs stoppt, lief dann auch die nächste Folge nicht automatisch an.
+	LaunchedEffect(Unit) { focusRequester.requestFocus() }
 	Row(
 		horizontalArrangement = Arrangement.spacedBy(16.dp),
 		modifier = modifier

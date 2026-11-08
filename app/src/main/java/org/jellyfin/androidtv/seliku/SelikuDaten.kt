@@ -172,7 +172,10 @@ class SelikuDaten(private val api: ApiClient) {
 			mediaTypes = setOf(MediaType.VIDEO),
 			fields = felder,
 			enableUserData = true,
-		).content.items.distinctBy { it.seriesId ?: it.id }
+		).content.items
+			// Seliku: je Serie die zuletzt geschaute angefangene Folge, nicht eine ältere mit liegengebliebener Position (S 08.11.)
+			.sortedByDescending { it.userData?.lastPlayedDate ?: java.time.LocalDateTime.MIN }
+			.distinctBy { it.seriesId ?: it.id }
 		val naechste = api.tvShowsApi.getNextUp(
 			limit = 60,
 			fields = felder,
@@ -199,7 +202,13 @@ class SelikuDaten(private val api: ApiClient) {
 			.filter { (it.userData?.lastPlayedDate ?: grenze) > grenze }
 			.mapNotNull { it.seriesId }.distinct().filter { it !in bekannt }.take(8)
 			.mapNotNull { runCatching { folgeNachZuletztGeschauter(it) }.getOrNull() }
-		val (mitDatum, ohneDatum) = angefangen.partition { it.userData?.lastPlayedDate != null }
+		// Wurde nach der angefangenen Folge eine andere fertig geschaut, gilt die Folge danach, nicht die alte Position
+		val aktuell = angefangen.map { i ->
+			val zuletzt = i.seriesId?.let { zuletztGeschaut[it] }
+			val stand = i.userData?.lastPlayedDate
+			if (zuletzt != null && stand != null && zuletzt > stand) runCatching { folgeNachZuletztGeschauter(i.seriesId!!) }.getOrNull() ?: i else i
+		}
+		val (mitDatum, ohneDatum) = aktuell.partition { (it.userData?.lastPlayedDate ?: it.seriesId?.let { s -> zuletztGeschaut[s] }) != null }
 		// Zuletzt Geschautes zuerst – egal ob angefangen, nächste Folge von Jellyfin oder von uns ergänzt (S 08.11.)
 		fun wann(i: BaseItemDto) = listOfNotNull(i.userData?.lastPlayedDate, i.seriesId?.let { zuletztGeschaut[it] }).maxOrNull()
 		val datiert = (mitDatum + ohneNaechste + naechste.filter { it.seriesId !in serien })
