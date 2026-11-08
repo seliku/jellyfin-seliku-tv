@@ -61,8 +61,16 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 	}
 	@Suppress("UNCHECKED_CAST")
 	var banner by remember { mutableStateOf(vm.wahl["start-banner"] as? List<BaseItemDto> ?: emptyList()) }
+	// Die App läuft auf dem Fernseher tagelang: solange die Startseite offen ist, alle paar Stunden neu ziehen
+	@Suppress("UNCHECKED_CAST")
+	var bannerSeerr by remember { mutableStateOf(vm.wahl["start-banner-seerr"] as? List<SeerrTitel> ?: emptyList()) }
+	val seerrDaten = koinInject<SeerrDaten>()
 	LaunchedEffect(Unit) {
-		runCatching { daten.bannerEmpfehlungen() }.onSuccess { if (it.isNotEmpty()) { banner = it; vm.wahl["start-banner"] = it } }
+		while (true) {
+			runCatching { bannerLaden(context, daten) }.onSuccess { if (it.isNotEmpty()) { banner = it; vm.wahl["start-banner"] = it } }
+			seerrBanner(context, daten, seerrDaten).let { bannerSeerr = it; vm.wahl["start-banner-seerr"] = it }
+			kotlinx.coroutines.delay(BANNER_NEU_MS)
+		}
 	}
 	// Kaltstart: der Banner kommt oft erst nach den Reihen. Die Liste hält dann die erste Reihe fest und der Banner
 	// landet oberhalb des Bildes – steht man noch auf der ersten Reihe, wieder ganz nach oben rollen
@@ -132,6 +140,7 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 			) {
 				item(key = "banner") {
 					Banner(banner, oeffnen = { b -> seiteFuer(b)?.let(vm::zu) }, zeigt = { }, fokus = bannerAnfrage,
+						seerr = bannerSeerr, seerrOeffnen = { t -> vm.zu(Seite.SeerrDetail(t.typ, t.tmdb)) },
 						modifier = Modifier.onFocusChanged { bannerFokus = it.hasFocus; if (it.hasFocus) gewaehlt = null })
 				}
 				items(r, key = { it.titel }) { reihe ->

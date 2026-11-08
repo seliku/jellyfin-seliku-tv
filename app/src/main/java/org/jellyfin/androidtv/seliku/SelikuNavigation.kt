@@ -50,6 +50,7 @@ sealed interface Seite {
 	data object Bibliotheken : Seite { override val schluessel = "bibliotheken" }
 	data object Einstellungen : Seite { override val schluessel = "einstellungen" }
 	data object Entdecken : Seite { override val schluessel = "entdecken" }
+	data object Verlauf : Seite { override val schluessel = "verlauf" }
 	data class SeerrDetail(val typ: String, val tmdb: Int) : Seite { override val schluessel = "seerr-$typ-$tmdb" }
 	/** Alle Titel eines Genres, Studios, Senders oder einer Person (art: film-genre, serie-genre, studio, sender, person). */
 	data class SeerrListe(val art: String, val id: Int, val name: String) : Seite { override val schluessel = "seerr-liste-$art-$id" }

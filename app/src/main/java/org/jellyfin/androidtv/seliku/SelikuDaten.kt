@@ -365,32 +365,106 @@ class SelikuDaten(private val api: ApiClient) {
 	 * (Animation, Horror, Kinder, Doku …) fliegen ganz raus, wenn sie im Verlauf praktisch nicht vorkommen.
 	 * Kein Auffüllen mit Zufälligem mehr (brachte Horror und Trickfilme, die nie jemand schaut). [bib] schränkt ein.
 	 */
-	suspend fun bannerEmpfehlungen(bib: BaseItemDto? = null, anzahl: Int = 6): List<BaseItemDto> = io {
+	suspend fun bannerEmpfehlungen(bib: BaseItemDto? = null, anzahl: Int = 6, ausser: Set<String> = emptySet()): List<BaseItemDto> = io {
 		val typen = bib?.let { typenFuer(it) } ?: setOf(BaseItemKind.MOVIE, BaseItemKind.SERIES)
 		val anteile = runCatching { genreAnteile() }.getOrDefault(emptyMap())
-		val kandidaten = api.itemsApi.getItems(
+		suspend fun abfrage(sortierung: ItemSortBy, grenze: Int) = api.itemsApi.getItems(
 			parentId = bib?.id, includeItemTypes = typen, recursive = true,
 			filters = setOf(ItemFilter.IS_UNPLAYED), imageTypes = setOf(org.jellyfin.sdk.model.api.ImageType.BACKDROP),
-			sortBy = listOf(ItemSortBy.COMMUNITY_RATING), sortOrder = listOf(SortOrder.DESCENDING),
-			fields = felder + ItemFields.GENRES, enableUserData = true, limit = 300,
+			sortBy = listOf(sortierung), sortOrder = listOf(SortOrder.DESCENDING),
+			fields = felder + ItemFields.GENRES, enableUserData = true, limit = grenze,
 		).content.items
-		if (anteile.isEmpty()) return@io kandidaten.take(40).shuffled().take(anzahl)
+		// Breiter als nur die Bestbewerteten: dazu Neues und Zufälliges (S 08.11.: «zeigt seit 4 Tagen dasselbe»)
+		val basis = abfrage(ItemSortBy.COMMUNITY_RATING, 300) + abfrage(ItemSortBy.DATE_CREATED, 80) + abfrage(ItemSortBy.RANDOM, 80)
+		// Geschmack: Favoriten und 4–5 Sterne gefallen, «gefällt mir nicht» und 1–2 Sterne nicht
+		val ich = runCatching { benutzer().id }.getOrNull()
+		val bewertet = runCatching {
+			api.itemsApi.getItems(includeItemTypes = setOf(BaseItemKind.MOVIE, BaseItemKind.SERIES), recursive = true,
+				sortBy = listOf(ItemSortBy.DATE_PLAYED, ItemSortBy.RANDOM), sortOrder = listOf(SortOrder.DESCENDING), enableUserData = true, limit = 400).content.items
+		}.getOrDefault(emptyList())
+		val favoriten = runCatching {
+			api.itemsApi.getItems(includeItemTypes = setOf(BaseItemKind.MOVIE, BaseItemKind.SERIES), recursive = true,
+				filters = setOf(ItemFilter.IS_FAVORITE), enableUserData = true, limit = 100).content.items
+		}.getOrDefault(emptyList())
+		val gemocht = (favoriten + bewertet.filter { (it.userData?.rating ?: 0.0) >= 8.0 }).distinctBy { it.id }
+		val nichtIds = magNicht() + bewertet.filter { (it.userData?.rating ?: 0.0) in 1.0..4.0 }.map { it.id.toString() }
+		suspend fun aehnlich(ids: List<UUID>, je: Int) = ids.flatMap { id ->
+			runCatching { api.libraryApi.getSimilarItems(itemId = id, userId = ich, limit = je, fields = felder + ItemFields.GENRES).content.items }.getOrDefault(emptyList())
+		}
+		val aehnlichGemocht = aehnlich(gemocht.shuffled().take(6).map { it.id }, 15)
+		val aehnlichGemochtIds = aehnlichGemocht.map { it.id }.toSet()
+		val aehnlichNichtIds = aehnlich(nichtIds.mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }.shuffled().take(4), 10).map { it.id }.toSet() - aehnlichGemochtIds
+		// Ähnliches nur auf der Startseite dazunehmen: in einer Bibliothek könnte es aus einer anderen stammen
+		val dazu = if (bib == null) aehnlichGemocht.filter { it.type in typen && it.userData?.played != true && !it.backdropImageTags.isNullOrEmpty() } else emptyList()
+		val kandidaten = (basis + dazu).distinctBy { it.id }
+			.filter { it.id.toString() !in nichtIds && it.id !in aehnlichNichtIds }
+		val vor30Tagen = java.time.LocalDateTime.now().minusDays(30)
 		val spezial = listOf("animation", "anime", "horror", "kinder", "familie", "family", "dokumentar", "documentary", "dokumentation", "reality", "musik", "music")
 		fun anteil(g: String) = anteile[g] ?: 0.0
-		val bewertet = kandidaten.mapNotNull { k ->
+		val gewertet = kandidaten.mapNotNull { k ->
 			val g = k.genres.orEmpty()
-			if (g.isEmpty()) return@mapNotNull null
-			// Spezial-Genre, das man so gut wie nie schaut → weg
-			if (g.any { x -> spezial.any { x.lowercase().contains(it) } && anteil(x) < 0.03 }) return@mapNotNull null
+			val bonus = (if (k.id in aehnlichGemochtIds) 0.25 else 0.0) + (if ((k.dateCreated ?: java.time.LocalDateTime.MIN) > vor30Tagen) 0.05 else 0.0)
+			if (anteile.isEmpty()) return@mapNotNull k to bonus + (k.communityRating ?: 6f) / 100.0
+			if (g.isEmpty()) return@mapNotNull if (bonus > 0.2) k to bonus else null
+			// Spezial-Genre, das man so gut wie nie schaut → weg (ausser es ähnelt etwas, das gefällt)
+			if (bonus < 0.2 && g.any { x -> spezial.any { x.lowercase().contains(it) } && anteil(x) < 0.03 }) return@mapNotNull null
 			val treffer = g.sumOf { anteil(it) }
 			val fremd = g.count { anteil(it) < 0.02 }
-			val wert = treffer - 0.08 * fremd + (k.communityRating ?: 6f) / 100.0
-			if (treffer <= 0.0) null else k to wert
+			val wert = treffer - 0.08 * fremd + (k.communityRating ?: 6f) / 100.0 + bonus
+			if (treffer <= 0.0 && bonus < 0.2) null else k to wert
 		}.sortedByDescending { it.second }.map { it.first }
-		// Aus den besten zwanzig zufällig wählen, damit der Banner nicht jeden Tag gleich ist
-		bewertet.take(20).shuffled().take(anzahl)
+		// Kürzlich im Banner Gezeigtes ein paar Tage auslassen – solange genug anderes da ist
+		val frisch = gewertet.filter { it.id.toString() !in ausser }.let { if (it.size >= anzahl) it else gewertet }
+		// Aus den besten vierzig zufällig wählen, damit der Banner nicht jeden Tag gleich ist
+		frisch.take(40).shuffled().take(anzahl)
 	}
 
+	/** Filme und Serien, die gefallen: Favoriten und 4–5 Sterne. */
+	suspend fun gemochteTitel(): List<BaseItemDto> = io {
+		val favoriten = api.itemsApi.getItems(includeItemTypes = setOf(BaseItemKind.MOVIE, BaseItemKind.SERIES), recursive = true,
+			filters = setOf(ItemFilter.IS_FAVORITE), fields = felder, enableUserData = true, limit = 100).content.items
+		val bewertet = api.itemsApi.getItems(includeItemTypes = setOf(BaseItemKind.MOVIE, BaseItemKind.SERIES), recursive = true,
+			sortBy = listOf(ItemSortBy.DATE_PLAYED), sortOrder = listOf(SortOrder.DESCENDING), fields = felder, enableUserData = true, limit = 400)
+			.content.items.filter { (it.userData?.rating ?: 0.0) >= 8.0 }
+		(favoriten + bewertet).distinctBy { it.id }
+	}
+
+	// --- Mein Verlauf ---
+
+	/** Alles Gesehene und Angefangene (Filme, Folgen, Videos), zuletzt Geschautes zuerst. */
+	suspend fun verlauf(anzahl: Int = 250): List<BaseItemDto> = io {
+		val gesehen = api.itemsApi.getItems(
+			recursive = true, includeItemTypes = setOf(BaseItemKind.MOVIE, BaseItemKind.EPISODE, BaseItemKind.VIDEO),
+			filters = setOf(ItemFilter.IS_PLAYED), sortBy = listOf(ItemSortBy.DATE_PLAYED), sortOrder = listOf(SortOrder.DESCENDING),
+			fields = felder, enableUserData = true, limit = anzahl,
+		).content.items
+		val angefangen = api.itemsApi.getResumeItems(limit = 60, mediaTypes = setOf(MediaType.VIDEO), fields = felder, enableUserData = true).content.items
+		(gesehen + angefangen).filter { it.userData?.lastPlayedDate != null }.distinctBy { it.id }
+			.sortedByDescending { it.userData!!.lastPlayedDate!! }
+	}
+
+	/** Titel (Filme/Serien) samt Benutzerdaten, z. B. für Favorit und Sterne im Verlauf. */
+	suspend fun titelZu(ids: List<UUID>): List<BaseItemDto> = io {
+		ids.chunked(80).flatMap { teil -> api.itemsApi.getItems(ids = teil, enableUserData = true).content.items }
+	}
+
+	private val geschmackId = "seliku-geschmack"
+
+	/** «Gefällt mir nicht» (nicht mehr empfehlen): pro Benutzer auf dem Server, Kennungen wie UUID.toString(). */
+	suspend fun magNicht(): Set<String> = io {
+		runCatching {
+			api.displayPreferencesApi.getDisplayPreferences(displayPreferencesId = geschmackId, client = ausblendClient).content
+				.customPrefs["mag_nicht"].orEmpty().split(",").filter { it.isNotBlank() }.toSet()
+		}.getOrDefault(emptySet())
+	}
+
+	suspend fun magNichtSetzen(id: UUID, ja: Boolean) = io {
+		val alt = api.displayPreferencesApi.getDisplayPreferences(displayPreferencesId = geschmackId, client = ausblendClient).content
+		val liste = alt.customPrefs["mag_nicht"].orEmpty().split(",").filter { it.isNotBlank() }.toSet()
+		val neu = if (ja) liste + id.toString() else liste - id.toString()
+		api.displayPreferencesApi.updateDisplayPreferences(displayPreferencesId = geschmackId, client = ausblendClient,
+			data = alt.copy(customPrefs = alt.customPrefs + ("mag_nicht" to neu.joinToString(","))))
+	}
 
 	// --- Musik ---
 

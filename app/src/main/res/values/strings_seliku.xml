@@ -304,4 +304,24 @@
 	<string name="seliku_tip_favorite_add">Add to favorites</string>
 	<string name="seliku_tip_favorite_remove">Remove from favorites</string>
 	<string name="seliku_tip_trailer">Play trailer</string>
+	<string name="seliku_history">My activity</string>
+	<string name="seliku_history_week">This week</string>
+	<string name="seliku_history_month">This month</string>
+	<string name="seliku_history_top_series">Most watched</string>
+	<string name="seliku_history_genres">Favourite genres</string>
+	<string name="seliku_history_today">Today</string>
+	<string name="seliku_history_yesterday">Yesterday</string>
+	<string name="seliku_history_empty">Nothing watched yet.</string>
+	<string name="seliku_history_approx">approx. %1$s</string>
+	<string name="seliku_tip_like">I like this</string>
+	<string name="seliku_tip_like_remove">Remove like</string>
+	<string name="seliku_tip_dislike">Not for me – don’t recommend</string>
+	<string name="seliku_tip_dislike_remove">Recommend again</string>
+	<string name="seliku_set_history">My activity page</string>
+	<string name="seliku_set_history_desc">What you watched, watch time and thumbs up/down that shape the banner</string>
+	<string name="seliku_banner_not_on_server">Not on the server</string>
+	<string name="seliku_banner_movie">Movie</string>
+	<string name="seliku_banner_series">Series</string>
+	<string name="seliku_set_banner_seerr">Suggestions from Seerr in the banner</string>
+	<string name="seliku_set_banner_seerr_desc">1–2 titles you might like that aren’t on the server yet, with “Request”</string>
 </resources>

@@ -28,6 +28,8 @@ object TrailerUtils {
 	@JvmStatic
 	fun getExternalTrailerIntent(context: Context, item: BaseItemDto): Intent? = item.remoteTrailers.orEmpty()
 		.mapNotNull { it.url?.let(::getExternalTrailerIntent) }
+		// Seliku: YouTube-Trailer in SmartTube, falls installiert
+		.map { i -> org.jellyfin.androidtv.seliku.YouTube.smartTube(context)?.takeIf { i.data?.host?.endsWith(YOUTUBE_HOST) == true }?.let { i.setPackage(it) } ?: i }
 		.firstOrNull {
 			val component = it.resolveActivity(context.packageManager)
 

@@ -279,6 +279,16 @@ class SeerrDaten(private val context: Context, private val api: ApiClient) {
 	}
 
 	suspend fun imTrend() = liste("/discover/trending?page=1&language=de")
+
+	/** Seliku-Banner: eine Liste (Empfehlungen, Trends) samt TMDb-Genre-Nummern je Titel. */
+	suspend fun mitGenres(pfad: String, typ: String?): List<Pair<SeerrTitel, List<Int>>> {
+		val i = meineId()
+		val a = json(pfad).optJSONArray("results") ?: JSONArray()
+		return (0 until a.length()).mapNotNull { n ->
+			val o = a.getJSONObject(n)
+			SeerrTitel.ausJson(o, typ, i)?.let { t -> t to (o.optJSONArray("genreIds")?.let { g -> (0 until g.length()).map { g.optInt(it) } } ?: emptyList()) }
+		}
+	}
 	suspend fun beliebteFilme(seite: Int = 1) = liste("/discover/movies?page=$seite&language=de", "movie")
 	suspend fun beliebteSerien(seite: Int = 1) = liste("/discover/tv?page=$seite&language=de", "tv")
 	suspend fun baldImKino() = liste("/discover/movies/upcoming?page=1&language=de", "movie")
@@ -703,13 +713,10 @@ fun SeerrDetailSeite(vm: SelikuViewModel, seite: Seite.SeerrDetail, oeffnen: (Ba
 									}
 								})
 							}
-							// Trailer von YouTube: in der YouTube-App (die läuft auf jedem Google TV), sonst im Browser
+							// Trailer von YouTube: in SmartTube, sonst in der YouTube-App, sonst im Browser
 							m?.youtube?.let { key ->
 								Knopf(stringResource(R.string.seliku_trailer), symbol = "▸", onFokus = knopfFokus, onClick = {
-									val app = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("vnd.youtube:$key"))
-									val web = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://www.youtube.com/watch?v=$key"))
-									runCatching { context.startActivity(app) }.recoverCatching { context.startActivity(web) }
-										.onFailure { meldung = context.getString(R.string.seliku_seerr_no_youtube) }
+									if (!YouTube.abspielen(context, key)) meldung = context.getString(R.string.seliku_seerr_no_youtube)
 								})
 							}
 							if (x.anfrageVonMir && x.zustand in setOf(SeerrZustand.ANGEFRAGT, SeerrZustand.WIRD_GESUCHT, SeerrZustand.NOCH_NICHT))

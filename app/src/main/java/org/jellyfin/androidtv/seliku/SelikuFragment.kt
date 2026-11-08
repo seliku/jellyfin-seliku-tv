@@ -170,7 +170,7 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 					is Seite.Bibliothek -> {
 						val k = ziel.schluessel
 						if (vm.wahl["$k|start-reihen"] == null) vm.wahl["$k|start-reihen"] = bibliothekReihenLaden(context, daten, bib)
-						if (vm.wahl["$k|banner"] == null) vm.wahl["$k|banner"] = daten.bannerEmpfehlungen(bib)
+						if (vm.wahl["$k|banner"] == null) vm.wahl["$k|banner"] = bannerLaden(context, daten, bib)
 						if (vm.wahl["$k|items|${Sortierung.NEU}|false|null"] == null)
 							vm.wahl["$k|items|${Sortierung.NEU}|false|null"] = daten.inhalt(bib, typenFuer(bib), Sortierung.NEU, false, 0, 60).items
 					}
@@ -217,6 +217,7 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 		add(Eintrag(R.drawable.ic_house, stringResource(R.string.seliku_home), Seite.Start))
 		// Seerr verbunden: «Entdecken» gleich nach der Startseite
 		if (seerrDa) add(Eintrag(R.drawable.seliku_entdecken, stringResource(R.string.seliku_discover), Seite.Entdecken))
+		if (SelikuEinstellungen.meinVerlauf(context)) add(Eintrag(R.drawable.seliku_verlauf, stringResource(R.string.seliku_history), Seite.Verlauf))
 		// Feste Reihenfolge wie gewohnt: Filme, Serien, Live-TV, Musik, dann alles andere
 		val rang = { b: BaseItemDto -> when (b.collectionType?.serialName) { "movies" -> 0; "tvshows" -> 1; "livetv" -> 2; "music" -> 3; else -> 4 } }
 		bibliotheken.filter { it.collectionType?.serialName != "playlists" }.sortedBy(rang).forEach { bib -> add(Eintrag(symbolFuer(bib), bib.name.orEmpty(), seiteFuerBibliothek(bib))) }
@@ -346,6 +347,7 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 						is Seite.Ordner -> OrdnerSeite(vm, seite, oeffnen)
 						Seite.Einstellungen -> EinstellungenSeite(vm) { context.startActivity(ActivityDestinations.userPreferences(context)) }
 						Seite.Entdecken -> EntdeckenSeite(vm)
+						Seite.Verlauf -> VerlaufSeite(vm, oeffnen)
 						is Seite.SeerrDetail -> SeerrDetailSeite(vm, seite, oeffnen)
 						is Seite.SeerrListe -> SeerrListenSeite(vm, seite)
 						Seite.SeerrVerbinden -> SeerrVerbindenSeite(vm)

@@ -159,6 +159,8 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 	var favoritenReihe by remember(stand) { mutableStateOf(SelikuEinstellungen.favoritenReihe(context)) }
 	var wahre by remember(stand) { mutableStateOf(SelikuEinstellungen.wahreGeschichten(context)) }
 	var wertung by remember(stand) { mutableStateOf(SelikuEinstellungen.eigeneWertung(context)) }
+	var verlauf by remember(stand) { mutableStateOf(SelikuEinstellungen.meinVerlauf(context)) }
+	var bannerSeerr by remember(stand) { mutableStateOf(SelikuEinstellungen.bannerSeerr(context)) }
 	var tomaten by remember(stand) { mutableStateOf(SelikuEinstellungen.tomaten(context)) }
 	var musikFav by remember(stand) { mutableStateOf(SelikuEinstellungen.musikFavoriten(context)) }
 	var trailerBanner by remember(stand) { mutableStateOf(SelikuEinstellungen.trailerImBanner(context)) }
@@ -189,6 +191,12 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 		},
 		EinstellungsEintrag.Schalter("wahre", umfang = "wahre_geschichten", stringResource(R.string.seliku_set_true_stories), stringResource(R.string.seliku_set_true_stories_desc), wahre) {
 			wahre = !wahre; SelikuEinstellungen.wahreGeschichten(context, wahre); gesetzt("wahre_geschichten"); vm.datenStand++
+		},
+		EinstellungsEintrag.Schalter("bannerseerr", umfang = "banner_seerr", stringResource(R.string.seliku_set_banner_seerr), stringResource(R.string.seliku_set_banner_seerr_desc), bannerSeerr) {
+			bannerSeerr = !bannerSeerr; SelikuEinstellungen.bannerSeerr(context, bannerSeerr); gesetzt("banner_seerr"); vm.datenStand++
+		},
+		EinstellungsEintrag.Schalter("verlauf", umfang = "mein_verlauf", stringResource(R.string.seliku_set_history), stringResource(R.string.seliku_set_history_desc), verlauf) {
+			verlauf = !verlauf; SelikuEinstellungen.meinVerlauf(context, verlauf); gesetzt("mein_verlauf"); vm.datenStand++
 		},
 		EinstellungsEintrag.Schalter("wertung", umfang = "eigene_wertung", stringResource(R.string.seliku_set_own_rating), stringResource(R.string.seliku_set_own_rating_desc), wertung) {
 			wertung = !wertung; SelikuEinstellungen.eigeneWertung(context, wertung); gesetzt("eigene_wertung")

@@ -56,8 +56,14 @@ fun Banner(
 	zeigt: (BaseItemDto) -> Unit,
 	modifier: Modifier = Modifier,
 	fokus: androidx.compose.ui.focus.FocusRequester? = null,
+	seerr: List<SeerrTitel> = emptyList(),
+	seerrOeffnen: (SeerrTitel) -> Unit = {},
 ) {
-	if (items.isEmpty()) return
+	// Seliku: Titel aus Seerr (nicht auf dem Server) an Stelle 2 und 5 einstreuen
+	val alle: List<Any> = remember(items, seerr) {
+		items.toMutableList<Any>().apply { seerr.forEachIndexed { i, t -> add(minOf(size, 1 + i * 3), t) } }
+	}
+	if (alle.isEmpty()) return
 	val bilder = koinInject<Bilder>()
 	val abspielen = koinInject<Abspielen>()
 	val daten = koinInject<SelikuDaten>()
@@ -65,16 +71,18 @@ fun Banner(
 	val scope = androidx.compose.runtime.rememberCoroutineScope()
 	var nr by remember { mutableIntStateOf(0) }
 	var hatFokus by remember { mutableStateOf(false) }
-	val item = items[nr % items.size]
-	LaunchedEffect(item.id) { zeigt(item) }
+	val eintrag = alle[nr % alle.size]
+	val fremd = eintrag as? SeerrTitel
+	val item = (eintrag as? BaseItemDto) ?: items.firstOrNull() ?: BaseItemDto(id = java.util.UUID(0, 0), type = BaseItemKind.MOVIE)
+	LaunchedEffect(eintrag) { if (fremd == null) zeigt(item) }
 	// Nach 3 Sekunden stumm den Trailer zeigen (falls einer auf dem Server liegt); solange er läuft, wird nicht weitergeblättert
 	val api = koinInject<org.jellyfin.sdk.api.client.ApiClient>()
 	var trailer by remember { mutableStateOf<String?>(null) }
 	var trailerBereit by remember { mutableStateOf(false) }
 	// Der Trailer läuft nur, solange der Fokus im Banner steht (ein paar Sekunden nach dem Hineingehen)
-	LaunchedEffect(item.id, hatFokus) {
+	LaunchedEffect(eintrag, hatFokus) {
 		trailer = null; trailerBereit = false
-		if (!hatFokus || !SelikuEinstellungen.trailerImBanner(context)) return@LaunchedEffect
+		if (fremd != null || !hatFokus || !SelikuEinstellungen.trailerImBanner(context)) return@LaunchedEffect
 		delay(2_000)
 		trailer = Trailer.adresse(api, item, SelikuEinstellungen.ausschnittOhneTrailer(context))
 	}
@@ -88,12 +96,12 @@ fun Banner(
 	}
 	val schriftSicht by androidx.compose.animation.core.animateFloatAsState(if (schrift) 1f else 0f, androidx.compose.animation.core.tween(700), label = "schrift")
 	// Fester Takt: alle 9 s die nächste Empfehlung, aber nur, solange man nicht im Banner ist
-	LaunchedEffect(items) {
+	LaunchedEffect(alle) {
 		var sekunden = 0
-		while (items.size > 1) {
+		while (alle.size > 1) {
 			delay(1_000)
 			if (hatFokus || trailer != null) { sekunden = 0; continue }
-			if (++sekunden >= 9) { sekunden = 0; nr = (nr + 1) % items.size }
+			if (++sekunden >= 9) { sekunden = 0; nr = (nr + 1) % alle.size }
 		}
 	}
 	// Eigene Karte mit eigenem Bild: der Seitenhintergrund folgt den Reihen, der Banner bleibt für sich
@@ -101,34 +109,44 @@ fun Banner(
 		.clip(androidx.compose.foundation.shape.RoundedCornerShape(18.dp)).background(Farben.Flaeche)
 		.onFocusChanged { hatFokus = it.hasFocus }
 		.onPreviewKeyEvent { if (it.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) tasten++; false }) {
-		Bild(bilder.hintergrund(item, 1280), Modifier.matchParentSize())
+		Bild(fremd?.hintergrund ?: bilder.hintergrund(item, 1280), Modifier.matchParentSize())
 		trailer?.let { url ->
 			key(url) {
 				TrailerVideo(url, Modifier.matchParentSize().graphicsLayer { alpha = trailerSicht }, mitTon = true, onBereit = { trailerBereit = true },
-					onEnde = { trailer = null; trailerBereit = false; if (items.size > 1) nr = (nr + 1) % items.size },
+					onEnde = { trailer = null; trailerBereit = false; if (alle.size > 1) nr = (nr + 1) % alle.size },
 					onWeg = { trailer = null; trailerBereit = false })
 			}
 		}
 		Box(Modifier.matchParentSize().graphicsLayer { alpha = 0.25f + 0.75f * schriftSicht }.background(androidx.compose.ui.graphics.Brush.horizontalGradient(
 			listOf(androidx.compose.ui.graphics.Color(0xF0120D0B), androidx.compose.ui.graphics.Color(0x99120D0B), androidx.compose.ui.graphics.Color.Transparent))))
 	Column(Modifier.fillMaxWidth().padding(start = 28.dp, top = 22.dp, end = 340.dp).graphicsLayer { alpha = schriftSicht }) {
-		val logo = bilder.logo(item)
+		val logo = if (fremd == null) bilder.logo(item) else null
 		if (logo != null) Bild(logo, Modifier.height(76.dp).width(320.dp), ContentScale.Fit, grund = androidx.compose.ui.graphics.Color.Transparent, ausrichtung = androidx.compose.ui.Alignment.CenterStart)
-		else Text(item.name.orEmpty(), style = Schrift.Riesig, maxLines = 1, overflow = TextOverflow.Ellipsis)
+		else Text(fremd?.titel ?: item.name.orEmpty(), style = Schrift.Riesig, maxLines = 1, overflow = TextOverflow.Ellipsis)
 		Spacer(Modifier.height(8.dp))
 		// Gesehen: Häkchen vor der Infozeile (wie auf den Postern)
 		Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-			if (item.userData?.played == true) Abzeichen(item, Modifier.padding(end = 4.dp))
-			Text(item.metazeile(), style = Schrift.Leise, maxLines = 1)
+			if (fremd != null) {
+				// Seliku: klar erkennbar, dass es den Titel (noch) nicht gibt
+				Text(stringResource(R.string.seliku_banner_not_on_server), style = Schrift.Klein.copy(color = androidx.compose.ui.graphics.Color.Black),
+					modifier = Modifier.padding(end = 10.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(5.dp)).background(Farben.Akzent).padding(horizontal = 8.dp, vertical = 2.dp))
+				Text(listOf(fremd.jahr, stringResource(if (fremd.typ == "movie") R.string.seliku_banner_movie else R.string.seliku_banner_series))
+					.filter { it.isNotBlank() }.joinToString("   ·   "), style = Schrift.Leise, maxLines = 1)
+			} else {
+				if (item.userData?.played == true) Abzeichen(item, Modifier.padding(end = 4.dp))
+				Text(item.metazeile(), style = Schrift.Leise, maxLines = 1)
+			}
 		}
 		Spacer(Modifier.height(6.dp))
-		Text(item.overview.orEmpty(), style = Schrift.Normal, maxLines = 2, overflow = TextOverflow.Ellipsis)
+		Text(fremd?.text ?: item.overview.orEmpty(), style = Schrift.Normal, maxLines = 2, overflow = TextOverflow.Ellipsis)
 		Spacer(Modifier.height(12.dp))
 		// Die Knopfreihe darf über den Textrand hinaus: sonst bekommen hintere Punkte keinen Platz, bleiben aber
 		// anwählbar – unsichtbar, und der Fokus verschwindet darin (passierte beim Linksdrücken vom ersten Poster)
 		Row(Modifier.wrapContentWidth(androidx.compose.ui.Alignment.Start, unbounded = true),
 			horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-			Knopf(stringResource(R.string.seliku_play), symbol = "▶", hervorgehoben = true,
+			if (fremd != null) Knopf(stringResource(R.string.seliku_seerr_request), symbol = "+", hervorgehoben = true,
+				modifier = if (fokus != null) Modifier.focusRequester(fokus) else Modifier, onClick = { seerrOeffnen(fremd) })
+			else Knopf(stringResource(R.string.seliku_play), symbol = "▶", hervorgehoben = true,
 				modifier = if (fokus != null) Modifier.focusRequester(fokus) else Modifier, onClick = {
 				// Serie: nächste ungesehene Folge
 				if (item.type == BaseItemKind.SERIES) scope.launch {
@@ -136,11 +154,11 @@ fun Banner(
 					if (folge != null) abspielen.video(context, folge) else abspielen.zufall(context, item)
 				} else abspielen.video(context, item)
 			})
-			Knopf(stringResource(R.string.seliku_more_info), symbol = "ⓘ", onClick = { oeffnen(item) })
+			Knopf(stringResource(R.string.seliku_more_info), symbol = "ⓘ", onClick = { if (fremd != null) seerrOeffnen(fremd) else oeffnen(item) })
 			Spacer(Modifier.width(12.dp))
 			// Punkte: welche Empfehlung gerade läuft – anwählbar, Links/Rechts blättert durch die Empfehlungen
-			items.indices.forEach { i ->
-				val aktiv = i == nr % items.size
+			alle.indices.forEach { i ->
+				val aktiv = i == nr % alle.size
 				Waehlbar(onClick = { nr = i }, vergroessern = false, shape = CircleShape, onFokus = { nr = i }) { fokussiert ->
 					Box(Modifier.size(22.dp), contentAlignment = androidx.compose.ui.Alignment.Center) {
 						Box(Modifier.size(if (fokussiert) 12.dp else if (aktiv) 9.dp else 6.dp)

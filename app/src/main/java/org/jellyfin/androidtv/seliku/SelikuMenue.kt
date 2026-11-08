@@ -93,6 +93,14 @@ object SelikuEinstellungen {
 	fun musikFavoriten(c: Context) = prefs(c).getBoolean("musik_favoriten", true)
 	fun musikFavoriten(c: Context, an: Boolean) = prefs(c).edit().putBoolean("musik_favoriten", an).apply()
 
+	/** An (Vorgabe): Seite «Mein Verlauf» in der Seitenleiste (Gesehenes, Sehzeit, Daumen hoch/runter). */
+	fun meinVerlauf(c: Context) = prefs(c).getBoolean("mein_verlauf", true)
+	fun meinVerlauf(c: Context, an: Boolean) = prefs(c).edit().putBoolean("mein_verlauf", an).apply()
+
+	/** An (Vorgabe): im Banner auch 1–2 Titel, die es auf dem Server nicht gibt (über Seerr), mit «Anfragen». */
+	fun bannerSeerr(c: Context) = prefs(c).getBoolean("banner_seerr", true)
+	fun bannerSeerr(c: Context, an: Boolean) = prefs(c).edit().putBoolean("banner_seerr", an).apply()
+
 	/** Eigene Wertung (Sterne) setzen und anzeigen. */
 	fun eigeneWertung(c: Context) = prefs(c).getBoolean("eigene_wertung", true)
 	fun eigeneWertung(c: Context, an: Boolean) = prefs(c).edit().putBoolean("eigene_wertung", an).apply()

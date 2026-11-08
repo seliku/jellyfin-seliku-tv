@@ -72,6 +72,8 @@ object SelikuSync {
 		schalter("doppel_zurueck", true, SelikuEinstellungen::doppelZurueck, SelikuEinstellungen::doppelZurueck),
 		schalter("leiste_mit_links", true, SelikuEinstellungen::leisteMitLinks, SelikuEinstellungen::leisteMitLinks),
 		schalter("untertitel_nachladen", true, SelikuEinstellungen::untertitelNachladen, SelikuEinstellungen::untertitelNachladen),
+		schalter("mein_verlauf", true, SelikuEinstellungen::meinVerlauf, SelikuEinstellungen::meinVerlauf),
+		schalter("banner_seerr", true, SelikuEinstellungen::bannerSeerr, SelikuEinstellungen::bannerSeerr),
 		// Vorgabe 📺 nur dieses Gerät
 		schalter("schlanker_player", false, SelikuEinstellungen::schlankerPlayer, SelikuEinstellungen::schlankerPlayer),
 		schalter("nur_bei_wiedergabe_wach", false, SelikuEinstellungen::nurBeiWiedergabeWach, SelikuEinstellungen::nurBeiWiedergabeWach),

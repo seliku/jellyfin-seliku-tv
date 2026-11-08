@@ -36,6 +36,12 @@
                 android:host="youtube.com"
                 android:scheme="https" />
         </intent>
+        <!-- Seliku: YouTube-Trailer in SmartTube -->
+        <package android:name="org.smarttube.stable" />
+        <package android:name="com.teamsmart.videomanager.tv" />
+        <package android:name="com.liskovsoft.smarttubetv.beta" />
+        <package android:name="org.smarttube.beta" />
+        <package android:name="com.google.android.youtube.tv" />
     </queries>
 
     <application

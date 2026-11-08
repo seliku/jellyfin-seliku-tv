@@ -304,4 +304,24 @@
 	<string name="seliku_tip_favorite_add">Zu den Favoriten</string>
 	<string name="seliku_tip_favorite_remove">Aus den Favoriten entfernen</string>
 	<string name="seliku_tip_trailer">Trailer abspielen</string>
+	<string name="seliku_history">Mein Verlauf</string>
+	<string name="seliku_history_week">Diese Woche</string>
+	<string name="seliku_history_month">Diesen Monat</string>
+	<string name="seliku_history_top_series">Meistgeschaut</string>
+	<string name="seliku_history_genres">Lieblingsgenres</string>
+	<string name="seliku_history_today">Heute</string>
+	<string name="seliku_history_yesterday">Gestern</string>
+	<string name="seliku_history_empty">Du hast noch nichts geschaut.</string>
+	<string name="seliku_history_approx">ca. %1$s</string>
+	<string name="seliku_tip_like">Gefällt mir</string>
+	<string name="seliku_tip_like_remove">Gefällt mir entfernen</string>
+	<string name="seliku_tip_dislike">Gefällt mir nicht – nicht mehr empfehlen</string>
+	<string name="seliku_tip_dislike_remove">Wieder empfehlen</string>
+	<string name="seliku_set_history">Seite «Mein Verlauf»</string>
+	<string name="seliku_set_history_desc">Was du gesehen hast, Sehzeit und Daumen hoch/runter für den Banner</string>
+	<string name="seliku_banner_not_on_server">Nicht auf dem Server</string>
+	<string name="seliku_banner_movie">Film</string>
+	<string name="seliku_banner_series">Serie</string>
+	<string name="seliku_set_banner_seerr">Vorschläge aus Seerr im Banner</string>
+	<string name="seliku_set_banner_seerr_desc">1–2 Titel, die gefallen könnten, aber noch nicht auf dem Server sind – mit «Anfragen»</string>
 </resources>

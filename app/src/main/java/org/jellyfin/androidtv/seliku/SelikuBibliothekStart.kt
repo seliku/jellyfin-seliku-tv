@@ -122,8 +122,16 @@ private fun BibliothekEmpfohlen(vm: SelikuViewModel, seite: Seite.Bibliothek, oe
 	val bilder = koinInject<Bilder>()
 	@Suppress("UNCHECKED_CAST")
 	var banner by remember { mutableStateOf(vm.wahl["${seite.schluessel}|banner"] as? List<BaseItemDto> ?: emptyList()) }
+	@Suppress("UNCHECKED_CAST")
+	var bannerSeerr by remember { mutableStateOf(vm.wahl["${seite.schluessel}|banner-seerr"] as? List<SeerrTitel> ?: emptyList()) }
+	val bannerSeerrDaten = koinInject<SeerrDaten>()
+	val bannerSeerrTyp = when (seite.ansicht.collectionType) { CollectionType.MOVIES -> "movie"; CollectionType.TVSHOWS -> "tv"; else -> null }
 	LaunchedEffect(seite.ansicht.id) {
-		runCatching { daten.bannerEmpfehlungen(seite.ansicht) }.onSuccess { if (it.isNotEmpty()) { banner = it; vm.wahl["${seite.schluessel}|banner"] = it } }
+		while (true) {
+			runCatching { bannerLaden(context, daten, seite.ansicht) }.onSuccess { if (it.isNotEmpty()) { banner = it; vm.wahl["${seite.schluessel}|banner"] = it } }
+			if (bannerSeerrTyp != null) seerrBanner(context, daten, bannerSeerrDaten, bannerSeerrTyp).let { bannerSeerr = it; vm.wahl["${seite.schluessel}|banner-seerr"] = it }
+			delay(BANNER_NEU_MS)
+		}
 	}
 	val r = reihen
 	if (r == null) { Hinweis(stringResource(R.string.seliku_loading)); return }
@@ -144,7 +152,8 @@ private fun BibliothekEmpfohlen(vm: SelikuViewModel, seite: Seite.Bibliothek, oe
 	Box(Modifier.fillMaxSize()) {
 	BannerRollen(vm.liste(unterSeite), banner.isNotEmpty()) {
 		LazyColumn(state = vm.liste(unterSeite), contentPadding = PaddingValues(top = 0.dp, bottom = 48.dp), modifier = Modifier.fillMaxSize()) {
-			item(key = "banner") { Banner(banner, oeffnen = oeffnen, zeigt = { }, fokus = bannerAnfrage) }
+			item(key = "banner") { Banner(banner, oeffnen = oeffnen, zeigt = { }, fokus = bannerAnfrage,
+				seerr = bannerSeerr, seerrOeffnen = { t -> vm.zu(Seite.SeerrDetail(t.typ, t.tmdb)) }) }
 			items(r, key = { it.titel }) { reihe ->
 				Reihe(reihe.titel, reihe.items, vm, unterSeite, beiHoch = if (reihe == r.firstOrNull() && banner.isNotEmpty()) ({
 					rollScope.launch {
