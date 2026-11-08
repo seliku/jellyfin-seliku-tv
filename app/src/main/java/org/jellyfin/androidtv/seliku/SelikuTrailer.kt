@@ -54,10 +54,40 @@ object Trailer {
 		}
 		val t = runCatching { withContext(Dispatchers.IO) { api.userLibraryApi.getLocalTrailers(itemId = id).content.firstOrNull() } }
 			.onFailure { Timber.d(it, "Trailer suchen") }.getOrNull()
-		val url = t?.let { "${api.baseUrl?.trimEnd('/')}/Videos/${it.id}/stream?static=true" }
+		val url = t?.let { tr ->
+			// Seliku: Kann das Gerät den Codec nicht in Hardware (z. B. AV1 auf dem Chromecast), ruckelt der Trailer.
+			// Dann wandelt der Server ihn in h264 um (S 08.11.).
+			val codec = (tr.mediaStreams ?: tr.mediaSources?.firstOrNull()?.mediaStreams)
+				?.firstOrNull { it.type == org.jellyfin.sdk.model.api.MediaStreamType.VIDEO }?.codec
+			if (codec == null || hardwareKann(codec)) "${api.baseUrl?.trimEnd('/')}/Videos/${tr.id}/stream?static=true"
+			else {
+				val q = tr.id.toString().replace("-", "")
+				"${api.baseUrl?.trimEnd('/')}/Videos/$q/main.m3u8?MediaSourceId=$q&DeviceId=${api.deviceInfo.id}" +
+					"&PlaySessionId=seliku-trailer-${UUID.randomUUID().toString().take(8)}&VideoCodec=h264&AudioCodec=aac&MaxWidth=1920" +
+					"&VideoBitrate=6000000&AudioBitrate=128000&MaxAudioChannels=2&SegmentContainer=ts&BreakOnNonKeyFrames=true"
+			}
+		}
 		if (url != null) { zwischenspeicher[id] = url; return url }
 		keiner[id] = System.currentTimeMillis()
 		return if (ausschnitt) ausschnittAdresse(api, item, id) else null
+	}
+
+	private val hardware = ConcurrentHashMap<String, Boolean>()
+
+	/** Hat das Gerät für diesen Jellyfin-Codec einen Hardware-Decoder? Unbekannte Codecs gelten als machbar. */
+	private fun hardwareKann(codec: String): Boolean {
+		val mime = when (codec.lowercase()) {
+			"av1" -> "video/av01"; "hevc", "h265" -> "video/hevc"; "vp9" -> "video/x-vnd.on2.vp9"
+			"vp8" -> "video/x-vnd.on2.vp8"; "h264", "avc" -> "video/avc"; else -> return true
+		}
+		return hardware.getOrPut(mime) {
+			runCatching {
+				android.media.MediaCodecList(android.media.MediaCodecList.REGULAR_CODECS).codecInfos.any { info ->
+					!info.isEncoder && info.supportedTypes.any { it.equals(mime, true) } &&
+						(android.os.Build.VERSION.SDK_INT < 29 || info.isHardwareAccelerated)
+				}
+			}.getOrDefault(true)
+		}
 	}
 
 	private val ausschnitte = ConcurrentHashMap<UUID, String>()
