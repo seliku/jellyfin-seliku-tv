@@ -295,4 +295,8 @@
 		<item quantity="other">%1$d channels</item>
 	</plurals>
 	<string name="seliku_next_program">Next %1$s · %2$s</string>
+	<string name="seliku_previous_episode">Previous episode</string>
+	<string name="seliku_next_episode">Next episode</string>
+	<string name="seliku_previous_item">Previous</string>
+	<string name="seliku_next_item">Next</string>
 </resources>

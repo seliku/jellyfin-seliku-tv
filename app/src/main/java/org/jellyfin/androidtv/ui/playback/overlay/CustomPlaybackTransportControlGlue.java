@@ -237,6 +237,10 @@ public class CustomPlaybackTransportControlGlue extends PlaybackTransportControl
         // Primary Items
         // Seliku: vorige Folge · zurückspulen · Play/Pause · vorspulen · nächste Folge (wie man es kennt)
         VideoPlayerAdapter playerAdapter = getPlayerAdapter();
+        // Seliku: Beschriftung «Vorherige/Nächste Folge» statt Leanbacks «… Element überspringen»
+        boolean folge = playerAdapter.getCurrentlyPlayingItem() != null && playerAdapter.getCurrentlyPlayingItem().getType() == org.jellyfin.sdk.model.api.BaseItemKind.EPISODE;
+        skipPreviousAction.setLabel1(getContext().getString(folge ? R.string.seliku_previous_episode : R.string.seliku_previous_item));
+        skipNextAction.setLabel1(getContext().getString(folge ? R.string.seliku_next_episode : R.string.seliku_next_item));
         if (playerAdapter.hasPreviousItem()) primaryActionsAdapter.add(skipPreviousAction);
         if (playerAdapter.canSeek()) primaryActionsAdapter.add(rewindAction);
         primaryActionsAdapter.add(playPauseAction);

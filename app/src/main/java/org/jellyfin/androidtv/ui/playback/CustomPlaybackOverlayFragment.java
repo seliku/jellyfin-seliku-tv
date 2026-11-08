@@ -257,8 +257,12 @@ public class CustomPlaybackOverlayFragment extends Fragment implements LiveTvGui
                     int[] basis = new int[2];
                     neu.getLocationInWindow(knopf);
                     wurzel.getLocationInWindow(basis);
-                    selikuTipp.setX(knopf[0] - basis[0] + neu.getWidth() / 2f - selikuTipp.getWidth() / 2f);
-                    selikuTipp.setY(knopf[1] - basis[1] - selikuTipp.getHeight() - 6 * dichte);
+                    // Im Bild halten: am Rand nicht über den Bildschirm hinausragen
+                    float rand = 24 * dichte;
+                    float x = knopf[0] - basis[0] + neu.getWidth() / 2f - selikuTipp.getWidth() / 2f;
+                    x = Math.max(rand, Math.min(x, wurzel.getWidth() - selikuTipp.getWidth() - rand));
+                    selikuTipp.setX(x);
+                    selikuTipp.setY(Math.max(rand, knopf[1] - basis[1] - selikuTipp.getHeight() - 6 * dichte));
                     selikuTipp.setVisibility(View.VISIBLE);
                 });
                 selikuHandler.postDelayed(selikuTippWeg, 3000);

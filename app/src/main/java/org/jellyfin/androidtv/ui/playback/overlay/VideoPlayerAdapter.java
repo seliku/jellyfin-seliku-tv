@@ -60,7 +60,10 @@ public class VideoPlayerAdapter extends PlayerAdapter {
 
     @Override
     public void previous() {
-        playbackController.prev();
+        // Seliku: wie bei jedem Player – läuft die Folge schon ein paar Sekunden, springt der erste Druck an den
+        // Anfang; erst ein weiterer Druck (innert 5 Sekunden) geht zur vorherigen Folge
+        if (playbackController.getCurrentPosition() > 5_000) playbackController.seek(0);
+        else playbackController.prev();
     }
 
     @Override
