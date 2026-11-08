@@ -313,6 +313,8 @@ suspend fun seerrBanner(context: Context, daten: SelikuDaten, seerr: SeerrDaten,
 		val passend = (empfohlen.shuffled() + trend.shuffled()).map { it.first }
 			// Nur, was nicht schon da ist (Status 4/5 = auf dem Server), mit Bild, nicht abgelehnt
 			.filter { it.status < 4 && it.hintergrund != null && (typ == null || it.typ == typ) && "seerr-${it.schluessel}" !in nicht }
+			// Ohne deutsche Beschreibung (TMDb fällt dann auf Englisch zurück) lieber nicht in den Banner
+			.filter { deutscheBeschreibung(it.text) }
 			.distinctBy { it.schluessel }
 		val frisch = passend.filter { "seerr-${it.schluessel}" !in gezeigt }.ifEmpty { passend }
 		// Mal einer, mal zwei
@@ -320,4 +322,13 @@ suspend fun seerrBanner(context: Context, daten: SelikuDaten, seerr: SeerrDaten,
 		BannerGedaechtnis.merkenSchluessel(context, wahl.map { "seerr-${it.schluessel}" })
 		wahl
 	}.onFailure { Timber.d(it, "Seerr-Banner") }.getOrDefault(emptyList())
+}
+
+/** Grobe Prüfung, ob eine Beschreibung deutsch ist: mehr typisch deutsche als typisch englische Füllwörter. */
+private fun deutscheBeschreibung(text: String?): Boolean {
+	val w = text.orEmpty().lowercase().split(Regex("[^a-zäöüß]+"))
+	if (w.size < 5) return false
+	val de = setOf("der", "die", "das", "und", "ist", "ein", "eine", "nicht", "mit", "sich", "auf", "zu", "den", "von")
+	val en = setOf("the", "and", "is", "of", "to", "a", "with", "his", "her", "their", "in", "who")
+	return w.count { it in de } > w.count { it in en }
 }
