@@ -227,7 +227,7 @@ fun SeerrRubrikReihe(titel: String, liste: List<SeerrRubrik>, vm: SelikuViewMode
 
 /** Besetzung: runde Bilder mit Name und Rolle; öffnet die Filmografie der Person. */
 @Composable
-fun SeerrBesetzungReihe(titel: String, liste: List<SeerrPerson>, vm: SelikuViewModel, seite: Seite) {
+fun SeerrBesetzungReihe(titel: String, liste: List<SeerrPerson>, vm: SelikuViewModel, seite: Seite, waehlen: (SeerrPerson) -> Unit = { vm.zu(Seite.SeerrListe("person", it.id, it.name)) }) {
 	if (liste.isEmpty()) return
 	Column(Modifier.fillMaxWidth().padding(bottom = 18.dp)) {
 		Text(titel, style = Schrift.Reihe, modifier = Modifier.padding(start = 48.dp, bottom = 8.dp))
@@ -236,7 +236,7 @@ fun SeerrBesetzungReihe(titel: String, liste: List<SeerrPerson>, vm: SelikuViewM
 			LazyRow(state = zustand, contentPadding = PaddingValues(horizontal = 48.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
 				items(liste, key = { "person-${it.id}" }) { p ->
 					Column(Modifier.width(112.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-						Waehlbar(onClick = { vm.zu(Seite.SeerrListe("person", p.id, p.name)) }, shape = CircleShape, merken = vm to (seite.schluessel to "person-${p.id}")) {
+						Waehlbar(onClick = { waehlen(p) }, shape = CircleShape, merken = vm to (seite.schluessel to "person-${p.id}")) {
 							Bild(p.bild, Modifier.size(104.dp), ersatz = initialen(p.name))
 						}
 						Spacer(Modifier.height(6.dp))

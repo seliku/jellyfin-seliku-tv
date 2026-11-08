@@ -299,4 +299,9 @@
 	<string name="seliku_next_episode">Nächste Folge</string>
 	<string name="seliku_previous_item">Vorheriger Titel</string>
 	<string name="seliku_next_item">Nächster Titel</string>
+	<string name="seliku_tip_mark_watched">Als gesehen markieren</string>
+	<string name="seliku_tip_mark_unwatched">Als ungesehen markieren</string>
+	<string name="seliku_tip_favorite_add">Zu den Favoriten</string>
+	<string name="seliku_tip_favorite_remove">Aus den Favoriten entfernen</string>
+	<string name="seliku_tip_trailer">Trailer abspielen</string>
 </resources>

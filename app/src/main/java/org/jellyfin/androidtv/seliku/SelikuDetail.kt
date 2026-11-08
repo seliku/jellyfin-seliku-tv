@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import org.jellyfin.androidtv.ui.base.Text
 import org.jellyfin.sdk.model.api.BaseItemDto
+import org.jellyfin.sdk.api.client.extensions.userLibraryApi
 import org.koin.compose.koinInject
 import timber.log.Timber
 import java.util.UUID
@@ -162,7 +163,7 @@ fun SerienSeite(vm: SelikuViewModel, seite: Seite.Serie, oeffnen: (BaseItemDto) 
 					// «Zufällig» nur auf Wunsch (Einstellung); sonst steht es im Menü «⋯ Mehr»
 					if (SelikuEinstellungen.zufallKnopf(context)) Knopf(stringResource(R.string.seliku_shuffle), onClick = { abspielen.zufall(context, sr) }, symbol = "⤨")
 					val gesehen = sr.userData?.played == true
-					Knopf(stringResource(if (gesehen) R.string.seliku_mark_unwatched else R.string.seliku_mark_watched), symbol = if (gesehen) "○" else "✓", onClick = {
+					SymbolKnopf(R.drawable.ic_check, stringResource(if (gesehen) R.string.seliku_tip_mark_unwatched else R.string.seliku_tip_mark_watched), aktiv = gesehen, onClick = {
 						scope.launch { runCatching { daten.gesehen(sr.id, !gesehen) }; neuLaden++ }
 					})
 					FavoritKnopf(sr) { vm.datenStand++ }
@@ -203,6 +204,7 @@ fun SerienSeite(vm: SelikuViewModel, seite: Seite.Serie, oeffnen: (BaseItemDto) 
 						Modifier.padding(start = 42.dp, end = 294.dp).heightIn(min = 54.dp), stil = Schrift.Leise)
 				}
 			}
+			item { Spacer(Modifier.height(12.dp)); BesetzungReihe(sr, vm, seite) }
 			item { Spacer(Modifier.height(12.dp)); GemischteReihe(stringResource(R.string.seliku_similar_series), aehnlich, seerrFehlendeAehnliche(sr, vm, seite), vm, seite, oeffnen) }
 		} }
 	}
@@ -245,7 +247,7 @@ fun TitelSeite(vm: SelikuViewModel, seite: Seite.Titel, oeffnen: (BaseItemDto) -
 					Knopf(fortsetzen ?: stringResource(R.string.seliku_play), symbol = "▶", hervorgehoben = true, modifier = Modifier.focusRequester(start), onClick = { abspielen.video(context, t) })
 					if (fortsetzen != null) Knopf(stringResource(R.string.seliku_from_start), symbol = "↺", onClick = { abspielen.video(context, t, vonVorn = true) })
 					val gesehen = t.userData?.played == true
-					Knopf(stringResource(if (gesehen) R.string.seliku_mark_unwatched else R.string.seliku_mark_watched), symbol = if (gesehen) "○" else "✓", onClick = {
+					SymbolKnopf(R.drawable.ic_check, stringResource(if (gesehen) R.string.seliku_tip_mark_unwatched else R.string.seliku_tip_mark_watched), aktiv = gesehen, onClick = {
 						scope.launch { runCatching { daten.gesehen(t.id, !gesehen) }; neuLaden++ }
 					})
 					FavoritKnopf(t) { vm.datenStand++ }
@@ -255,6 +257,7 @@ fun TitelSeite(vm: SelikuViewModel, seite: Seite.Titel, oeffnen: (BaseItemDto) -
 				}
 				Spacer(Modifier.height(32.dp))
 			}
+			item { BesetzungReihe(t, vm, seite) }
 			item { GemischteReihe(stringResource(R.string.seliku_similar_titles), aehnlich, seerrFehlendeAehnliche(t, vm, seite), vm, seite, oeffnen) }
 		} }
 	}
@@ -285,7 +288,7 @@ fun FavoritKnopf(item: BaseItemDto, geaendert: () -> Unit) {
 	val context = LocalContext.current
 	val scope = rememberCoroutineScope()
 	var favorit by remember(item.id, item.userData?.isFavorite) { mutableStateOf(item.userData?.isFavorite == true) }
-	Knopf(stringResource(R.string.seliku_favorite), symbol = if (favorit) "♥" else "♡", aktiv = favorit, onClick = {
+	SymbolKnopf(R.drawable.ic_heart, stringResource(if (favorit) R.string.seliku_tip_favorite_remove else R.string.seliku_tip_favorite_add), aktiv = favorit, onClick = {
 		val neu = !favorit
 		favorit = neu
 		scope.launch {
@@ -301,7 +304,7 @@ fun FavoritKnopf(item: BaseItemDto, geaendert: () -> Unit) {
 fun WertungKnopf(item: BaseItemDto, vm: SelikuViewModel) {
 	if (!SelikuEinstellungen.eigeneWertung(LocalContext.current)) return
 	val sterne = item.eigeneSterne()
-	Knopf(if (sterne != null) sterneText(sterne) else stringResource(R.string.seliku_rate), symbol = if (sterne != null) null else "☆", aktiv = sterne != null, onClick = { vm.wertung = item })
+	SymbolKnopf(R.drawable.ic_star, if (sterne != null) sterneText(sterne) else stringResource(R.string.seliku_rate), aktiv = sterne != null, onClick = { vm.wertung = item })
 }
 
 /** Trailer-Knopf (nur wenn ein Trailer auf dem Server liegt): spielt ihn mit Ton im Vollbild. */
@@ -313,5 +316,66 @@ fun TrailerKnopf(item: BaseItemDto) {
 	var trailer by remember(item.id) { mutableStateOf<BaseItemDto?>(null) }
 	LaunchedEffect(item.id) { trailer = Trailer.eintrag(api, item) }
 	val t = trailer ?: return
-	Knopf(stringResource(R.string.seliku_trailer), symbol = "▸", onClick = { abspielen.video(context, t) })
+	SymbolKnopf(R.drawable.ic_movie, stringResource(R.string.seliku_tip_trailer), onClick = { abspielen.video(context, t) })
+}
+
+/**
+ * Seliku: runder Knopf nur mit Symbol (Gesehen, Favorit, Bewerten, Trailer) – kompakt wie bei Plex.
+ * Hat er den Fokus, sagt ein kleiner Hinweis darunter, was er tut; der Hinweis bleibt ganz im Bild.
+ */
+@Composable
+fun SymbolKnopf(symbol: Int, tipp: String, aktiv: Boolean = false, onClick: () -> Unit) {
+	var fokus by remember { mutableStateOf(false) }
+	Box {
+		Waehlbar(onClick = onClick, vergroessern = false, shape = androidx.compose.foundation.shape.CircleShape, onFokus = {}, modifier = Modifier.onFocusChanged { fokus = it.hasFocus }) { fokussiert ->
+			Box(Modifier.size(44.dp).background(if (fokussiert) Farben.Text else Farben.Flaeche), contentAlignment = Alignment.Center) {
+				androidx.compose.foundation.Image(
+					painter = androidx.compose.ui.res.painterResource(symbol),
+					contentDescription = tipp,
+					colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(when { fokussiert -> androidx.compose.ui.graphics.Color.Black; aktiv -> Farben.Akzent; else -> Farben.Text }),
+					modifier = Modifier.size(22.dp),
+				)
+			}
+		}
+		if (fokus) androidx.compose.ui.window.Popup(popupPositionProvider = remember { TippUnten() }, properties = androidx.compose.ui.window.PopupProperties(focusable = false)) {
+			Text(tipp, style = Schrift.Klein.copy(color = androidx.compose.ui.graphics.Color.Black), maxLines = 1,
+				modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(Farben.Text).padding(horizontal = 10.dp, vertical = 4.dp))
+		}
+	}
+}
+
+/** Hinweis mittig unter dem Knopf, aber nie über den Bildschirmrand hinaus (24 px Abstand). */
+private class TippUnten : androidx.compose.ui.window.PopupPositionProvider {
+	override fun calculatePosition(anchorBounds: androidx.compose.ui.unit.IntRect, windowSize: androidx.compose.ui.unit.IntSize, layoutDirection: androidx.compose.ui.unit.LayoutDirection, popupContentSize: androidx.compose.ui.unit.IntSize): androidx.compose.ui.unit.IntOffset {
+		val rand = 24
+		val x = (anchorBounds.left + (anchorBounds.width - popupContentSize.width) / 2).coerceIn(rand, maxOf(rand, windowSize.width - popupContentSize.width - rand))
+		return androidx.compose.ui.unit.IntOffset(x, anchorBounds.bottom + 8)
+	}
+}
+
+/**
+ * Seliku: Besetzung wie bei Plex – runde Bilder mit Name und Rolle. Ein Klick zeigt die Filmografie der Person
+ * (über Seerr/TMDb, wenn Jellyfin die TMDb-Nummer der Person kennt).
+ */
+@Composable
+fun BesetzungReihe(item: BaseItemDto, vm: SelikuViewModel, seite: Seite) {
+	val api = koinInject<org.jellyfin.sdk.api.client.ApiClient>()
+	val context = LocalContext.current
+	val scope = rememberCoroutineScope()
+	val leute = item.people.orEmpty().filter { it.type == org.jellyfin.sdk.model.api.PersonKind.ACTOR }.take(30)
+	if (leute.isEmpty()) return
+	val liste = leute.map { p ->
+		SeerrPerson(p.id.hashCode(), p.name.orEmpty(), p.role.orEmpty(),
+			p.primaryImageTag?.let { tag -> "${api.baseUrl?.trimEnd('/')}/Items/${p.id}/Images/Primary?tag=$tag&maxWidth=220" })
+	}
+	SeerrBesetzungReihe(stringResource(R.string.seliku_seerr_cast), liste, vm, seite) { sp ->
+		val p = leute.firstOrNull { it.id.hashCode() == sp.id } ?: return@SeerrBesetzungReihe
+		scope.launch {
+			val tmdb = runCatching {
+				kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { api.userLibraryApi.getItem(itemId = p.id).content }
+			}.getOrNull()?.providerIds?.entries?.firstOrNull { it.key.equals("Tmdb", true) }?.value?.toIntOrNull()
+			if (tmdb != null) vm.zu(Seite.SeerrListe("person", tmdb, p.name.orEmpty()))
+			else android.widget.Toast.makeText(context, p.name.orEmpty(), android.widget.Toast.LENGTH_SHORT).show()
+		}
+	}
 }
