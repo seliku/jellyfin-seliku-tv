@@ -168,6 +168,7 @@ fun SerienSeite(vm: SelikuViewModel, seite: Seite.Serie, oeffnen: (BaseItemDto) 
 					})
 					FavoritKnopf(sr) { vm.datenStand++ }
 					WertungKnopf(sr, vm)
+					GeschmackKnopf(sr) { vm.wahl.remove("start-banner") }
 					TrailerKnopf(sr)
 					MehrKnopf { vm.menue = sr }
 				}
@@ -252,6 +253,7 @@ fun TitelSeite(vm: SelikuViewModel, seite: Seite.Titel, oeffnen: (BaseItemDto) -
 					})
 					FavoritKnopf(t) { vm.datenStand++ }
 					WertungKnopf(t, vm)
+					GeschmackKnopf(t) { vm.wahl.remove("start-banner") }
 					TrailerKnopf(t)
 					MehrKnopf { vm.menue = t }
 				}

@@ -2,6 +2,7 @@ package org.jellyfin.androidtv.seliku
 
 import androidx.compose.ui.focus.onFocusChanged
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -56,7 +57,10 @@ import org.jellyfin.androidtv.R
 
 /** Musikbibliothek: Reiter «Interpreten» und «Alben». */
 @Composable
-fun MusikSeite(vm: SelikuViewModel, seite: Seite.Musik, oeffnen: (BaseItemDto) -> Unit) {
+fun MusikSeite(vm: SelikuViewModel, seite: Seite.Musik, oeffnen: (BaseItemDto) -> Unit, nebenan: List<BaseItemDto> = emptyList()) {
+	// Podcasts/Hörbücher als weitere Reiter: führen auf ihre eigene Seite (Zurück kommt wieder hierher).
+	// Auf der Podcast-Seite selbst nicht noch einmal anzeigen.
+	val weitere = if (nebenan.any { it.id == seite.ansicht.id }) emptyList() else nebenan
 	val daten = koinInject<SelikuDaten>()
 	// Reiter: 0 Übersicht, 1 Playlists (alle, mit Buchstabenleiste), 2 Interpreten, 3 Alben
 	var reiter by remember { mutableStateOf(vm.wahl["${seite.schluessel}|reiter2"] as? Int ?: 0) }
@@ -73,10 +77,12 @@ fun MusikSeite(vm: SelikuViewModel, seite: Seite.Musik, oeffnen: (BaseItemDto) -
 	}
 
 	Column(Modifier.fillMaxSize()) {
-		Row(Modifier.padding(start = 48.dp, top = 28.dp, bottom = 8.dp).onFocusChanged { vm.reiterFokus = it.hasFocus }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+		// Mit Podcasts/Hörbüchern passen die Reiter nicht mehr in die Breite: die Zeile rollt mit dem Fokus mit
+		Row(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()).padding(start = 48.dp, end = 48.dp, top = 28.dp, bottom = 8.dp).onFocusChanged { vm.reiterFokus = it.hasFocus }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
 			Text(seite.ansicht.name.orEmpty(), style = Schrift.Titel)
 			Spacer(Modifier.width(12.dp))
 			listOf(stringResource(R.string.seliku_music_overview), stringResource(R.string.seliku_music_playlists), stringResource(R.string.seliku_music_artists), stringResource(R.string.seliku_music_albums), stringResource(R.string.seliku_music_radio)).forEachIndexed { n, t -> Knopf(t, onClick = { reiter = n }, aktiv = reiter == n, modifier = if (reiter == n) Modifier.focusRequester(vm.reiter(seite)) else Modifier) }
+			weitere.forEach { bib -> Knopf(bib.name.orEmpty(), onClick = { vm.zu(seiteFuerBibliothek(bib)) }) }
 		}
 		when (reiter) {
 			0 -> { MusikUebersicht(vm, seite, oeffnen); return@Column }

@@ -304,7 +304,7 @@
 	<string name="seliku_tip_favorite_add">Zu den Favoriten</string>
 	<string name="seliku_tip_favorite_remove">Aus den Favoriten entfernen</string>
 	<string name="seliku_tip_trailer">Trailer abspielen</string>
-	<string name="seliku_history">Mein Verlauf</string>
+	<string name="seliku_history">Mein Seliku</string>
 	<string name="seliku_history_week">Diese Woche</string>
 	<string name="seliku_history_month">Diesen Monat</string>
 	<string name="seliku_history_top_series">Meistgeschaut</string>
@@ -317,11 +317,17 @@
 	<string name="seliku_tip_like_remove">Gefällt mir entfernen</string>
 	<string name="seliku_tip_dislike">Gefällt mir nicht – nicht mehr empfehlen</string>
 	<string name="seliku_tip_dislike_remove">Wieder empfehlen</string>
-	<string name="seliku_set_history">Seite «Mein Verlauf»</string>
-	<string name="seliku_set_history_desc">Was du gesehen hast, Sehzeit und Daumen hoch/runter für den Banner</string>
+	<string name="seliku_set_history">Seite «Mein Seliku» (über das Profilbild)</string>
+	<string name="seliku_set_history_desc">Wie «Mein Netflix»: Weiterschauen, Meine Liste, was dir gefällt, Sehzeit; Daumen auf der Detailseite für den Banner</string>
 	<string name="seliku_banner_not_on_server">Nicht auf dem Server</string>
 	<string name="seliku_banner_movie">Film</string>
 	<string name="seliku_banner_series">Serie</string>
 	<string name="seliku_set_banner_seerr">Vorschläge aus Seerr im Banner</string>
 	<string name="seliku_set_banner_seerr_desc">1–2 Titel, die gefallen könnten, aber noch nicht auf dem Server sind – mit «Anfragen»</string>
+	<string name="seliku_my_list">Meine Liste</string>
+	<string name="seliku_liked">Serien und Filme, die dir gefallen</string>
+	<string name="seliku_not_recommended">Nicht mehr empfehlen</string>
+	<string name="seliku_switch_profile">Profil wechseln</string>
+	<string name="seliku_tip_liked">Gefällt mir – nochmal drücken: gefällt mir nicht</string>
+	<string name="seliku_tip_disliked">Gefällt mir nicht – nochmal drücken: zurücknehmen</string>
 </resources>

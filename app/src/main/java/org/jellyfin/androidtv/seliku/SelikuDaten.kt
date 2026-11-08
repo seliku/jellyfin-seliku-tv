@@ -426,7 +426,8 @@ class SelikuDaten(private val api: ApiClient) {
 		val bewertet = api.itemsApi.getItems(includeItemTypes = setOf(BaseItemKind.MOVIE, BaseItemKind.SERIES), recursive = true,
 			sortBy = listOf(ItemSortBy.DATE_PLAYED), sortOrder = listOf(SortOrder.DESCENDING), fields = felder, enableUserData = true, limit = 400)
 			.content.items.filter { (it.userData?.rating ?: 0.0) >= 8.0 }
-		(favoriten + bewertet).distinctBy { it.id }
+		val daumen = mag().mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }
+		(favoriten + bewertet + (if (daumen.isEmpty()) emptyList() else titelZu(daumen))).distinctBy { it.id }
 	}
 
 	// --- Mein Verlauf ---
@@ -445,7 +446,7 @@ class SelikuDaten(private val api: ApiClient) {
 
 	/** Titel (Filme/Serien) samt Benutzerdaten, z. B. für Favorit und Sterne im Verlauf. */
 	suspend fun titelZu(ids: List<UUID>): List<BaseItemDto> = io {
-		ids.chunked(80).flatMap { teil -> api.itemsApi.getItems(ids = teil, enableUserData = true).content.items }
+		ids.chunked(80).flatMap { teil -> api.itemsApi.getItems(ids = teil, fields = felder, enableUserData = true).content.items }
 	}
 
 	private val geschmackId = "seliku-geschmack"
@@ -464,6 +465,33 @@ class SelikuDaten(private val api: ApiClient) {
 		val neu = if (ja) liste + id.toString() else liste - id.toString()
 		api.displayPreferencesApi.updateDisplayPreferences(displayPreferencesId = geschmackId, client = ausblendClient,
 			data = alt.copy(customPrefs = alt.customPrefs + ("mag_nicht" to neu.joinToString(","))))
+	}
+
+	/** «Gefällt mir» (Daumen hoch): pro Benutzer auf dem Server, wie [magNicht]. Unabhängig von «Meine Liste» (Herz). */
+	suspend fun mag(): Set<String> = io {
+		runCatching {
+			api.displayPreferencesApi.getDisplayPreferences(displayPreferencesId = geschmackId, client = ausblendClient).content
+				.customPrefs["mag"].orEmpty().split(",").filter { it.isNotBlank() }.toSet()
+		}.getOrDefault(emptySet())
+	}
+
+	/** Daumen setzen: [wert] 1 = gefällt, -1 = gefällt nicht (nicht mehr empfehlen), 0 = keins von beiden. */
+	suspend fun geschmackSetzen(id: UUID, wert: Int) = io {
+		val alt = api.displayPreferencesApi.getDisplayPreferences(displayPreferencesId = geschmackId, client = ausblendClient).content
+		fun ohne(k: String) = alt.customPrefs[k].orEmpty().split(",").filter { it.isNotBlank() }.toSet() - id.toString()
+		val mag = ohne("mag").let { if (wert > 0) it + id.toString() else it }
+		val nicht = ohne("mag_nicht").let { if (wert < 0) it + id.toString() else it }
+		api.displayPreferencesApi.updateDisplayPreferences(displayPreferencesId = geschmackId, client = ausblendClient,
+			data = alt.copy(customPrefs = alt.customPrefs + ("mag" to mag.joinToString(",")) + ("mag_nicht" to nicht.joinToString(","))))
+	}
+
+	/** Für «Gefällt mir» auf «Mein Seliku»: Daumen hoch und 4–5 Sterne (ohne «Meine Liste»). */
+	suspend fun gefallen(): List<BaseItemDto> = io {
+		val daumen = mag().mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }
+		val bewertet = api.itemsApi.getItems(includeItemTypes = setOf(BaseItemKind.MOVIE, BaseItemKind.SERIES), recursive = true,
+			sortBy = listOf(ItemSortBy.DATE_PLAYED), sortOrder = listOf(SortOrder.DESCENDING), fields = felder, enableUserData = true, limit = 400)
+			.content.items.filter { (it.userData?.rating ?: 0.0) >= 8.0 }
+		((if (daumen.isEmpty()) emptyList() else titelZu(daumen)) + bewertet).distinctBy { it.id }
 	}
 
 	// --- Musik ---

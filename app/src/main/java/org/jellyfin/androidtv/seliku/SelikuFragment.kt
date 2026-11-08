@@ -103,6 +103,13 @@ fun seiteFuerBibliothek(bib: BaseItemDto): Seite = when (bib.collectionType?.ser
 	else -> Seite.Ordner(bib.id, bib.name.orEmpty())
 }
 
+/** Podcasts (Musik-Bibliothek mit «Podcast» im Namen) und Hörbücher (books): erscheinen als Reiter unter «Musik». */
+fun istUnterMusik(bib: BaseItemDto): Boolean = when (bib.collectionType?.serialName) {
+	"music" -> bib.name.orEmpty().contains("podcast", true)
+	"books" -> true
+	else -> false
+}
+
 private fun symbolFuer(bib: BaseItemDto): Int = when (bib.collectionType?.serialName) {
 	"movies" -> R.drawable.ic_movie
 	"tvshows" -> R.drawable.ic_tv
@@ -213,14 +220,16 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 	val seerrDa = SeerrVerbindung.vermittelt.value || SeerrVerbindung.verbunden(context)
 	var updateEintrag: Eintrag? = null
 	var einstellungenEintrag: Eintrag? = null
+	// Podcasts und Hörbücher stehen als Reiter unter «Musik» (S 08.11.: die Leiste muss kurz bleiben) –
+	// nur, wenn es eine Musik-Bibliothek gibt; sonst bleiben sie in der Leiste
+	val unterMusik = if (bibliotheken.any { it.collectionType?.serialName == "music" && !istUnterMusik(it) }) bibliotheken.filter(::istUnterMusik) else emptyList()
 	val eintraege = buildList {
 		add(Eintrag(R.drawable.ic_house, stringResource(R.string.seliku_home), Seite.Start))
 		// Seerr verbunden: «Entdecken» gleich nach der Startseite
 		if (seerrDa) add(Eintrag(R.drawable.seliku_entdecken, stringResource(R.string.seliku_discover), Seite.Entdecken))
-		if (SelikuEinstellungen.meinVerlauf(context)) add(Eintrag(R.drawable.seliku_verlauf, stringResource(R.string.seliku_history), Seite.Verlauf))
 		// Feste Reihenfolge wie gewohnt: Filme, Serien, Live-TV, Musik, dann alles andere
 		val rang = { b: BaseItemDto -> when (b.collectionType?.serialName) { "movies" -> 0; "tvshows" -> 1; "livetv" -> 2; "music" -> 3; else -> 4 } }
-		bibliotheken.filter { it.collectionType?.serialName != "playlists" }.sortedBy(rang).forEach { bib -> add(Eintrag(symbolFuer(bib), bib.name.orEmpty(), seiteFuerBibliothek(bib))) }
+		bibliotheken.filter { it.collectionType?.serialName != "playlists" && it !in unterMusik }.sortedBy(rang).forEach { bib -> add(Eintrag(symbolFuer(bib), bib.name.orEmpty(), seiteFuerBibliothek(bib))) }
 		val updateTitel = update?.let { stringResource(R.string.seliku_update_version, it.name) }
 		updateEintrag = update?.let { v ->
 			(Eintrag(R.drawable.seliku_update, updateText ?: updateTitel.orEmpty(), null, hervor = true) {
@@ -339,7 +348,7 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 						Seite.Suche -> SuchSeite(vm, oeffnen)
 						Seite.LiveTv -> LiveTvSeite(vm)
 						is Seite.Bibliothek -> BibliothekRahmen(vm, seite, oeffnen)
-						is Seite.Musik -> MusikSeite(vm, seite, oeffnen)
+						is Seite.Musik -> MusikSeite(vm, seite, oeffnen, nebenan = unterMusik)
 						is Seite.Serie -> SerienSeite(vm, seite, oeffnen)
 						is Seite.Titel -> TitelSeite(vm, seite, oeffnen)
 						is Seite.Interpret -> InterpretSeite(vm, seite, oeffnen)
@@ -420,6 +429,7 @@ private fun Seitenleiste(
 	// Von der ersten Bibliothek nach oben landet man immer zuerst bei der Suche (ganz links)
 	val sucheAnfrage = remember { FocusRequester() }
 	val sucheTitel = stringResource(R.string.seliku_search)
+	val meinTitel = stringResource(R.string.seliku_history)
 
 	Column(
 		modifier
@@ -458,12 +468,18 @@ private fun Seitenleiste(
 			if (offen) {
 				oben.forEach { e -> SymbolKnopf(e.symbol, e.titel, hervor = e.hervor) { waehlen(e) } }
 				Spacer(Modifier.weight(1f))
+				// Profilbild: öffnet «Mein Seliku» (wie «Mein Netflix»); dort steht auch «Profil wechseln».
+				// Ist die Seite abgeschaltet, wechselt es wie früher direkt das Profil.
+				val meinAktiv = aktiv.schluessel == Seite.Verlauf.schluessel
 				Waehlbar(onClick = {
-					mediaManager.clearAudioQueue()
-					sessionRepository.destroyCurrentSession()
-					context.startActivity(ActivityDestinations.startup(context))
+					if (SelikuEinstellungen.meinVerlauf(context)) waehlen(Eintrag(R.drawable.seliku_verlauf, meinTitel, Seite.Verlauf))
+					else {
+						mediaManager.clearAudioQueue()
+						sessionRepository.destroyCurrentSession()
+						context.startActivity(ActivityDestinations.startup(context))
+					}
 				}, vergroessern = false, shape = CircleShape) { fokussiert ->
-					Box(Modifier.size(44.dp).background(if (fokussiert) Farben.Text else Color.Transparent).padding(3.dp)) {
+					Box(Modifier.size(44.dp).background(when { fokussiert -> Farben.Text; meinAktiv -> Farben.Akzent; else -> Color.Transparent }).padding(3.dp)) {
 						Avatar(benutzer?.primaryImage?.getUrl(api), benutzer?.name, Modifier.fillMaxSize())
 					}
 				}

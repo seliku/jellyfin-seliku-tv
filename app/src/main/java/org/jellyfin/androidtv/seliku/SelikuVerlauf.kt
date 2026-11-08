@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -25,6 +27,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -35,6 +39,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jellyfin.androidtv.R
+import org.jellyfin.androidtv.util.apiclient.getUrl
+import org.jellyfin.androidtv.util.apiclient.primaryImage
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
@@ -141,76 +147,103 @@ suspend fun bannerLaden(context: Context, daten: SelikuDaten, bib: BaseItemDto? 
 const val BANNER_NEU_MS = 3 * 60 * 60 * 1000L
 
 /**
- * «Mein Verlauf» wie bei Netflix: oben Sehzeit, meistgeschaute Serien und Lieblingsgenres, darunter alles Gesehene
- * nach Tagen. Daumen hoch = Favorit, Daumen runter = nicht mehr empfehlen (beides fliesst in den Banner ein).
+ * «Mein Seliku» wie «Mein Netflix»: oben das Profil mit Sehzeit und Lieblingsgenres, darunter Reihen wie auf der
+ * Startseite – Weiterschauen, Meine Liste, Gefällt mir, Zuletzt gesehen und (falls vorhanden) Nicht mehr empfehlen.
+ * Erreichbar über das Profilbild oben in der Seitenleiste; dort auch «Profil wechseln».
  */
 @Composable
 fun VerlaufSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 	val daten = koinInject<SelikuDaten>()
 	val api = koinInject<ApiClient>()
-	val bilder = koinInject<Bilder>()
 	val context = LocalContext.current
-	val scope = rememberCoroutineScope()
+	val sessionRepository = koinInject<org.jellyfin.androidtv.auth.repository.SessionRepository>()
+	val mediaManager = koinInject<org.jellyfin.androidtv.ui.playback.MediaManager>()
+	val k = Seite.Verlauf.schluessel
 	@Suppress("UNCHECKED_CAST")
-	var verlauf by remember { mutableStateOf(vm.wahl["verlauf|liste"] as? List<BaseItemDto>) }
-	var ueberblick by remember { mutableStateOf(vm.wahl["verlauf|ueberblick"] as? VerlaufUeberblick) }
-	// Geschmack je Titel (bei Folgen: der Serie): Favorit, eigene Sterne, «gefällt mir nicht»
-	var favoriten by remember { mutableStateOf<Set<UUID>>(emptySet()) }
-	var sterne by remember { mutableStateOf<Map<UUID, Int>>(emptyMap()) }
-	var magNicht by remember { mutableStateOf<Set<String>>(emptySet()) }
+	fun gemerkt(n: String) = vm.wahl["$k|$n"] as? List<BaseItemDto> ?: emptyList()
+	var weiter by remember { mutableStateOf(gemerkt("weiter")) }
+	var liste by remember { mutableStateOf(gemerkt("liste")) }
+	var gefallen by remember { mutableStateOf(gemerkt("gefallen")) }
+	var zuletzt by remember { mutableStateOf(gemerkt("zuletzt")) }
+	var nicht by remember { mutableStateOf(gemerkt("nicht")) }
+	var ueberblick by remember { mutableStateOf(vm.wahl["$k|ueberblick"] as? VerlaufUeberblick) }
+	var benutzer by remember { mutableStateOf<org.jellyfin.sdk.model.api.UserDto?>(null) }
+	var geladen by remember { mutableStateOf(vm.wahl["$k|zuletzt"] != null) }
+	// Beim ersten Öffnen ist noch nichts zum Anwählen da: den Fokus holen, sobald die erste Reihe steht
+	val seitenFokus = remember { androidx.compose.ui.focus.FocusRequester() }
+	// Ob schon eine Kachel den Fokus hatte (die Liste selbst meldet «hat Fokus», auch wenn keine Kachel ihn hat)
+	var kachelFokus by remember { mutableStateOf(false) }
+	// Die erste Kachel der ersten nicht leeren Reihe trägt den Anfangsfokus. Sobald sie da ist, den Fokus holen
+	// (das Laden aller Reihen dauert auf dem Chromecast mehrere Sekunden – nicht darauf warten)
+	val ersteReihe = listOf("weiter" to weiter, "liste" to liste, "gefallen" to gefallen, "zuletzt" to zuletzt, "nicht" to nicht).firstOrNull { it.second.isNotEmpty() }?.first
+	LaunchedEffect(ersteReihe) {
+		// Kommt man zurück (gemerkte Kachel), stellt [Waehlbar] die Kachel selbst wieder her
+		if (ersteReihe == null || vm.fokus[k] != null) return@LaunchedEffect
+		val ab = System.currentTimeMillis()
+		repeat(20) {
+			if (kachelFokus || System.currentTimeMillis() - ab > 3_000) return@LaunchedEffect
+			kotlinx.coroutines.delay(150)
+			runCatching { seitenFokus.requestFocus() }
+		}
+	}
+	@Composable
+	fun reihe(name: String, titel: String, items: List<BaseItemDto>) = Reihe(titel, items, vm, Seite.Verlauf, onClick = oeffnen,
+		kachel = { item, klick, merken, fokus ->
+			Box(if (name == ersteReihe && item.id == items.first().id) Modifier.focusRequester(seitenFokus) else Modifier) {
+				Kachel(item, klick, merken = merken, onFokus = { kachelFokus = true; fokus() }, onMenue = { vm.menue = item })
+			}
+		})
 
 	LaunchedEffect(vm.datenStand) {
-		runCatching {
-			val l = daten.verlauf()
-			verlauf = l; vm.wahl["verlauf|liste"] = l
-			val titel = daten.titelZu(l.map { it.geschmackId() }.distinct())
-			favoriten = titel.filter { it.userData?.isFavorite == true }.map { it.id }.toSet()
-			sterne = titel.mapNotNull { t -> t.userData?.rating?.let { t.id to kotlin.math.round(it / 2).toInt() } }.toMap()
-			magNicht = daten.magNicht()
-			val u = verlaufUeberblick(api, daten, l)
-			ueberblick = u; vm.wahl["verlauf|ueberblick"] = u
-		}.onFailure { Timber.w(it, "Verlauf laden") }
+		benutzer = runCatching { daten.benutzer() }.getOrNull()
+		suspend fun laden(n: String, holen: suspend () -> List<BaseItemDto>): List<BaseItemDto>? =
+			runCatching { holen() }.onFailure { Timber.w(it, "Mein Seliku: $n") }.getOrNull()?.also { vm.wahl["$k|$n"] = it }
+		laden("weiter") { daten.weiterschauen() }?.let { weiter = it }
+		laden("liste") { daten.favoriten() }?.let { liste = it }
+		laden("gefallen") { daten.gefallen() }?.let { gefallen = it }
+		val verlauf = runCatching { daten.verlauf() }.getOrDefault(emptyList())
+		// Zuletzt gesehen: je Serie bzw. Film einmal, Gesehenes (Angefangenes steht schon unter «Weiterschauen»)
+		zuletzt = verlauf.filter { it.userData?.played == true }.distinctBy { it.geschmackId() }.take(30).also { vm.wahl["$k|zuletzt"] = it }
+		laden("nicht") { daten.titelZu(daten.magNicht().mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }) }?.let { nicht = it }
+		geladen = true
+		runCatching { verlaufUeberblick(api, daten, verlauf) }.getOrNull()?.let { ueberblick = it; vm.wahl["$k|ueberblick"] = it }
 	}
 
-	Column(Modifier.fillMaxSize().background(Farben.Hintergrund)) {
-		Text(stringResource(R.string.seliku_history), style = Schrift.Titel, modifier = Modifier.padding(start = 48.dp, top = 28.dp, bottom = 12.dp))
-		val l = verlauf
-		if (l == null) { Hinweis(stringResource(R.string.seliku_loading)); return@Column }
-		if (l.isEmpty()) { Hinweis(stringResource(R.string.seliku_history_empty)); return@Column }
-		val heute = LocalDate.now()
-		val tage = l.groupBy { it.zuletztOrtszeit()?.toLocalDate() ?: heute }.toSortedMap(compareByDescending { it })
-		// Überblick fest oben: die Karten sind nicht anwählbar, in der Liste rollten sie sonst gleich aus dem Bild
-		ueberblick?.let { u -> Box(Modifier.padding(horizontal = 48.dp)) { Ueberblick(u) } }
-		LazyColumn(state = vm.liste(Seite.Verlauf), contentPadding = PaddingValues(start = 48.dp, end = 48.dp, bottom = 48.dp)) {
-			tage.forEach { (tag, eintraege) ->
-				item(key = "tag-$tag") {
-					Text(tagName(tag, heute), style = Schrift.Reihe, modifier = Modifier.padding(top = 18.dp, bottom = 8.dp))
-				}
-				items(eintraege, key = { it.id }) { i ->
-					val g = i.geschmackId()
-					val gefaellt = g in favoriten || (sterne[g] ?: 0) >= 4
-					val gefaelltNicht = g.toString() in magNicht || (sterne[g] ?: 0) in 1..2
-					VerlaufZeile(i, bilder, vm, gefaellt, gefaelltNicht,
-						onClick = { if (i.type == BaseItemKind.EPISODE) i.seriesId?.let { vm.zu(Seite.Serie(it)) } else oeffnen(i) },
-						onGefaellt = {
-							val ja = !gefaellt
-							favoriten = if (ja) favoriten + g else favoriten - g
-							if (ja) magNicht = magNicht - g.toString()
-							scope.launch {
-								runCatching { daten.favorit(g, ja); if (ja) daten.magNichtSetzen(g, false) }.onFailure { Timber.w(it, "Gefällt mir") }
-								vm.wahl.remove("start-banner")
+	LazyColumn(state = vm.liste(Seite.Verlauf), contentPadding = PaddingValues(bottom = 48.dp), modifier = Modifier.fillMaxSize().background(Farben.Hintergrund)) {
+		item(key = "kopf") {
+			Row(Modifier.fillMaxWidth().padding(start = 48.dp, end = 48.dp, top = 32.dp, bottom = 26.dp), verticalAlignment = Alignment.CenterVertically) {
+				Avatar(benutzer?.primaryImage?.getUrl(api), benutzer?.name, Modifier.size(88.dp))
+				Spacer(Modifier.width(22.dp))
+				Column(Modifier.weight(1f)) {
+					Text(benutzer?.name.orEmpty(), style = Schrift.Titel)
+					ueberblick?.let { u ->
+						Text("${stringResource(R.string.seliku_history_week)} ${dauer(u.woche)}   ·   ${stringResource(R.string.seliku_history_month)} ${dauer(u.monat)}",
+							style = Schrift.Leise, modifier = Modifier.padding(top = 4.dp))
+						if (u.genres.isNotEmpty()) Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+							u.genres.forEach { g ->
+								Text(g, style = Schrift.Klein, modifier = Modifier.clip(RoundedCornerShape(50)).background(Farben.Flaeche).padding(horizontal = 12.dp, vertical = 4.dp))
 							}
-						},
-						onGefaelltNicht = {
-							val ja = !gefaelltNicht
-							magNicht = if (ja) magNicht + g.toString() else magNicht - g.toString()
-							if (ja) favoriten = favoriten - g
-							scope.launch {
-								runCatching { daten.magNichtSetzen(g, ja); if (ja && g in favoriten) daten.favorit(g, false) }.onFailure { Timber.w(it, "Gefällt mir nicht") }
-								vm.wahl.remove("start-banner")
-							}
-						})
+						}
+					}
 				}
+			}
+		}
+		item(key = "weiter") { reihe("weiter", stringResource(R.string.seliku_continue_watching), weiter) }
+		item(key = "liste") { reihe("liste", stringResource(R.string.seliku_my_list), liste) }
+		item(key = "gefallen") { reihe("gefallen", stringResource(R.string.seliku_liked), gefallen) }
+		item(key = "zuletzt") { reihe("zuletzt", stringResource(R.string.seliku_recently_watched), zuletzt) }
+		item(key = "nicht") { reihe("nicht", stringResource(R.string.seliku_not_recommended), nicht) }
+		if (geladen && weiter.isEmpty() && liste.isEmpty() && gefallen.isEmpty() && zuletzt.isEmpty()) item(key = "leer") {
+			Text(stringResource(R.string.seliku_history_empty), style = Schrift.Leise, modifier = Modifier.padding(start = 48.dp))
+		}
+		// Ganz unten, damit der Fokus beim Öffnen nicht darauf landet (ein OK zu viel meldete sonst ab)
+		item(key = "profil") {
+			Box(Modifier.padding(start = 48.dp, top = 12.dp)) {
+				Knopf(stringResource(R.string.seliku_switch_profile), symbol = "⇄", onClick = {
+					mediaManager.clearAudioQueue()
+					sessionRepository.destroyCurrentSession()
+					context.startActivity(org.jellyfin.androidtv.ui.navigation.ActivityDestinations.startup(context))
+				})
 			}
 		}
 	}
@@ -220,68 +253,34 @@ fun VerlaufSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 fun BaseItemDto.geschmackId(): UUID = if (type == BaseItemKind.EPISODE) seriesId ?: id else id
 
 @Composable
-private fun tagName(tag: LocalDate, heute: LocalDate): String = when (tag) {
-	heute -> stringResource(R.string.seliku_history_today)
-	heute.minusDays(1) -> stringResource(R.string.seliku_history_yesterday)
-	else -> tag.format(java.time.format.DateTimeFormatter.ofPattern(if (tag.year == heute.year) "EEEE, d. MMMM" else "EEEE, d. MMMM yyyy"))
-		.replaceFirstChar { it.uppercase() }
-}
-
-@Composable
 private fun dauer(s: Sehzeit): String {
 	val text = if (s.minuten >= 60) stringResource(R.string.seliku_runtime_hours, s.minuten / 60, s.minuten % 60)
 	else stringResource(R.string.seliku_runtime_minutes, s.minuten)
 	return if (s.geschaetzt) stringResource(R.string.seliku_history_approx, text) else text
 }
 
+/**
+ * Daumen auf der Detailseite (wie «Bewerten» bei Netflix). Jeder Druck wechselt: nichts → gefällt mir →
+ * gefällt mir nicht (nicht mehr empfehlen) → nichts. Bei Folgen gilt die Serie. Fliesst in den Banner ein.
+ */
 @Composable
-private fun Ueberblick(u: VerlaufUeberblick) {
-	Row(Modifier.fillMaxWidth().padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-		Karte(stringResource(R.string.seliku_history_week), dauer(u.woche), Modifier.weight(1f))
-		Karte(stringResource(R.string.seliku_history_month), dauer(u.monat), Modifier.weight(1f))
-		Karte(stringResource(R.string.seliku_history_top_series), u.serien.joinToString("\n").ifBlank { "–" }, Modifier.weight(1.4f), klein = true)
-		Karte(stringResource(R.string.seliku_history_genres), u.genres.joinToString(" · ").ifBlank { "–" }, Modifier.weight(1.4f), klein = true)
+fun GeschmackKnopf(item: BaseItemDto, geaendert: () -> Unit = {}) {
+	val context = LocalContext.current
+	if (!SelikuEinstellungen.meinVerlauf(context)) return
+	val daten = koinInject<SelikuDaten>()
+	val scope = rememberCoroutineScope()
+	val id = item.geschmackId()
+	var wert by remember(id) { mutableStateOf(0) }
+	LaunchedEffect(id) {
+		wert = runCatching { if (id.toString() in daten.mag()) 1 else if (id.toString() in daten.magNicht()) -1 else 0 }.getOrDefault(0)
 	}
-}
-
-@Composable
-private fun Karte(titel: String, wert: String, modifier: Modifier, klein: Boolean = false) {
-	Column(modifier.height(104.dp).clip(RoundedCornerShape(12.dp)).background(Farben.Flaeche).padding(horizontal = 16.dp, vertical = 12.dp)) {
-		Text(titel, style = Schrift.Klein)
-		Text(wert, style = if (klein) Schrift.Normal.copy(fontWeight = FontWeight.SemiBold) else Schrift.Titel.copy(color = Farben.Akzent),
-			maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
-	}
-}
-
-@Composable
-private fun VerlaufZeile(
-	i: BaseItemDto, bilder: Bilder, vm: SelikuViewModel, gefaellt: Boolean, gefaelltNicht: Boolean,
-	onClick: () -> Unit, onGefaellt: () -> Unit, onGefaelltNicht: () -> Unit,
-) {
-	Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-		Waehlbar(onClick = onClick, vergroessern = false, merken = vm to (Seite.Verlauf.schluessel to i.id.toString()), modifier = Modifier.weight(1f)) { fokussiert ->
-			Row(Modifier.fillMaxWidth().background(if (fokussiert) Farben.FlaecheHell else Farben.Flaeche).padding(8.dp),
-				verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-				Box(Modifier.width(128.dp).height(72.dp).clip(RoundedCornerShape(6.dp))) {
-					Bild(bilder.quer(i, 320), Modifier.fillMaxSize(), ersatz = i.seriesName ?: i.name)
-					val anteil = i.userData?.playedPercentage?.toFloat()?.div(100f) ?: 0f
-					if (i.userData?.played != true && anteil > 0f) Fortschritt(anteil, Modifier.align(Alignment.BottomStart))
-				}
-				Column(Modifier.weight(1f)) {
-					if (i.type == BaseItemKind.EPISODE) {
-						Text(i.seriesName.orEmpty(), style = Schrift.Normal.copy(fontWeight = FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
-						Text("S${i.parentIndexNumber ?: 0} · F${i.indexNumber ?: 0}  ${i.name.orEmpty()}", style = Schrift.Leise, maxLines = 1, overflow = TextOverflow.Ellipsis)
-					} else {
-						Text(i.name.orEmpty(), style = Schrift.Normal.copy(fontWeight = FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
-						i.productionYear?.let { Text(it.toString(), style = Schrift.Leise) }
-					}
-				}
-				i.zuletztOrtszeit()?.let { Text("%02d:%02d".format(it.hour, it.minute), style = Schrift.Klein) }
-			}
-		}
-		SymbolKnopf(R.drawable.seliku_daumen_hoch, stringResource(if (gefaellt) R.string.seliku_tip_like_remove else R.string.seliku_tip_like), aktiv = gefaellt, onClick = onGefaellt)
-		SymbolKnopf(R.drawable.seliku_daumen_runter, stringResource(if (gefaelltNicht) R.string.seliku_tip_dislike_remove else R.string.seliku_tip_dislike), aktiv = gefaelltNicht, onClick = onGefaelltNicht)
-	}
+	SymbolKnopf(if (wert < 0) R.drawable.seliku_daumen_runter else R.drawable.seliku_daumen_hoch,
+		stringResource(when (wert) { 1 -> R.string.seliku_tip_liked; -1 -> R.string.seliku_tip_disliked; else -> R.string.seliku_tip_like }),
+		aktiv = wert != 0, onClick = {
+			val neu = when (wert) { 0 -> 1; 1 -> -1; else -> 0 }
+			wert = neu
+			scope.launch { runCatching { daten.geschmackSetzen(id, neu) }.onFailure { Timber.w(it, "Geschmack") }; geaendert() }
+		})
 }
 
 /** Genre-Nummern von Seerr/TMDb je Name (deutsch), einmal geholt. */
