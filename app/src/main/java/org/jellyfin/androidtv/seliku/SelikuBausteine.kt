@@ -582,7 +582,8 @@ fun Kulisse(url: String?, modifier: Modifier = Modifier) {
 /** Lade- und Leer-Anzeige. */
 @Composable
 fun Hinweis(text: String) {
-	Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(text, style = Schrift.Leise) }
+	// Seliku: fokussierbar, sonst hat eine leere Seite (z. B. leere «Aufnahmen») nichts im Fokus und Zurück öffnet die Leiste nicht
+	Box(Modifier.fillMaxSize().focusable(), contentAlignment = Alignment.Center) { Text(text, style = Schrift.Leise) }
 }
 
 @Composable
