@@ -256,7 +256,14 @@ fun PosterKachel(
 	aufklappen: Boolean = false,
 ) {
 	LocalBuehne.current?.let { aktiv ->
-		Buehne(breite, aktiv, item.hauptzeile() to item.unterzeile()) { AufgeklappteKachel(item, spielen = aktiv) }
+		Buehne(breite, aktiv, item.hauptzeile() to item.unterzeile()) {
+			// Auch auf dem grossen ersten Platz: Balken, wie viel man schon gesehen hat
+			Box(Modifier.fillMaxSize()) {
+				AufgeklappteKachel(item, spielen = aktiv)
+				val anteil = item.anteilGesehen()
+				if (anteil > 0f && item.userData?.played != true) Fortschritt(anteil, Modifier.align(Alignment.BottomStart))
+			}
+		}
 		return
 	}
 	val bilder = koinInject<Bilder>()

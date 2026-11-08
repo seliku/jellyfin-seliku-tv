@@ -183,20 +183,28 @@ class SelikuDaten(private val api: ApiClient) {
 		// Serien der letzten 30 Tage, für die Jellyfin keine nächste Folge kennt (siehe folgeNachZuletztGeschauter)
 		val bekannt = serien + naechste.mapNotNull { it.seriesId }
 		val grenze = java.time.LocalDateTime.now().minusDays(30)
-		val ohneNaechste = api.itemsApi.getItems(
+		val gesehen = api.itemsApi.getItems(
 			recursive = true,
 			includeItemTypes = setOf(BaseItemKind.EPISODE),
 			filters = setOf(ItemFilter.IS_PLAYED),
 			sortBy = listOf(ItemSortBy.DATE_PLAYED),
 			sortOrder = listOf(SortOrder.DESCENDING),
 			enableUserData = true,
-			limit = 40,
+			limit = 100,
 		).content.items
+		// Wann eine Serie zuletzt geschaut wurde (neueste gesehene Folge)
+		val zuletztGeschaut = gesehen.filter { it.seriesId != null && it.userData?.lastPlayedDate != null }
+			.groupBy { it.seriesId!! }.mapValues { (_, f) -> f.maxOf { it.userData!!.lastPlayedDate!! } }
+		val ohneNaechste = gesehen
 			.filter { (it.userData?.lastPlayedDate ?: grenze) > grenze }
 			.mapNotNull { it.seriesId }.distinct().filter { it !in bekannt }.take(8)
 			.mapNotNull { runCatching { folgeNachZuletztGeschauter(it) }.getOrNull() }
 		val (mitDatum, ohneDatum) = angefangen.partition { it.userData?.lastPlayedDate != null }
-		ohneAusgeblendete((mitDatum + ohneNaechste + naechste.filter { it.seriesId !in serien } + ohneDatum).distinctBy { it.seriesId ?: it.id }).take(40)
+		// Zuletzt Geschautes zuerst – egal ob angefangen, nächste Folge von Jellyfin oder von uns ergänzt (S 08.11.)
+		fun wann(i: BaseItemDto) = listOfNotNull(i.userData?.lastPlayedDate, i.seriesId?.let { zuletztGeschaut[it] }).maxOrNull()
+		val datiert = (mitDatum + ohneNaechste + naechste.filter { it.seriesId !in serien })
+			.sortedByDescending { wann(it) ?: java.time.LocalDateTime.MIN }
+		ohneAusgeblendete((datiert + ohneDatum).distinctBy { it.seriesId ?: it.id }).take(40)
 	}
 
 	/** «Wahre Geschichten»: Filme und Serien mit den TMDb-Schlagwörtern für wahre Begebenheiten und Biografien. */
