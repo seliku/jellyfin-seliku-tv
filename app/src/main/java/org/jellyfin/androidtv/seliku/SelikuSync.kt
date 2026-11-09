@@ -62,6 +62,7 @@ object SelikuSync {
 		schalter("favoriten_reihe", true, SelikuEinstellungen::favoritenReihe, SelikuEinstellungen::favoritenReihe),
 		schalter("wahre_geschichten", true, SelikuEinstellungen::wahreGeschichten, SelikuEinstellungen::wahreGeschichten),
 		schalter("eigene_wertung", true, SelikuEinstellungen::eigeneWertung, SelikuEinstellungen::eigeneWertung),
+		schalter("loeschen", true, SelikuEinstellungen::loeschen, SelikuEinstellungen::loeschen),
 		schalter("musik_favoriten", true, SelikuEinstellungen::musikFavoriten, SelikuEinstellungen::musikFavoriten),
 		schalter("tomaten", true, SelikuEinstellungen::tomaten, SelikuEinstellungen::tomaten),
 		schalter("trailer_banner", true, SelikuEinstellungen::trailerImBanner, SelikuEinstellungen::trailerImBanner),

@@ -92,6 +92,7 @@ fun BibliothekSeite(vm: SelikuViewModel, seite: Seite.Bibliothek, oeffnen: (Base
 		if (items.isNotEmpty() && vm.fokus[seite.schluessel] == null) { kotlinx.coroutines.delay(100); runCatching { erstes.requestFocus() } }
 	}
 	LaunchedEffect(sortierung, ungesehen, genre, favoriten) { if (items.isEmpty()) nachladen() }
+	LaunchedEffect(vm.geloescht.size) { if (vm.geloescht.isNotEmpty()) items.removeAll { it.id in vm.geloescht } }
 	LaunchedEffect(raster, sortierung, ungesehen, genre, favoriten) {
 		snapshotFlow { raster.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }
 			.distinctUntilChanged()

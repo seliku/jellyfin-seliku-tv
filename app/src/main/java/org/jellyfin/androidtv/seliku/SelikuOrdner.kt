@@ -51,7 +51,7 @@ fun OrdnerSeite(vm: SelikuViewModel, seite: Seite.Ordner, oeffnen: (BaseItemDto)
 	var inhalt by remember { mutableStateOf<List<BaseItemDto>?>(null) }
 	var titel by remember { mutableStateOf(seite.name) }
 
-	LaunchedEffect(seite.id) {
+	LaunchedEffect(seite.id, vm.datenStand) {
 		inhalt = runCatching { daten.ordnerInhalt(seite.id) }.onFailure { Timber.w(it, "Ordner laden") }.getOrDefault(emptyList())
 	}
 	// Hörbücher: angefangene Bücher (in der Bibliothek selbst als Reihe «Weiterhören»), Fortschritt auf den Kacheln
@@ -84,7 +84,7 @@ fun OrdnerSeite(vm: SelikuViewModel, seite: Seite.Ordner, oeffnen: (BaseItemDto)
 			if (ordner.isNotEmpty()) item {
 				Reihe(stringResource(R.string.seliku_folders), ordner, vm, seite, onClick = { oeffnen(it) }, kachel = { item, klick, merken, fokus ->
 					if (Hoeren.fortschritt(item.id) != null && weiter.any { it.id == item.id }) HoerKachel(item, klick, merken, fokus)
-					else QuadratKachel(item, klick, merken = merken, onFokus = fokus)
+					else QuadratKachel(item, klick, merken = merken, onFokus = fokus, onMenue = { vm.menue = item })
 				})
 			}
 			if (audio.isNotEmpty()) item {
@@ -98,7 +98,7 @@ fun OrdnerSeite(vm: SelikuViewModel, seite: Seite.Ordner, oeffnen: (BaseItemDto)
 						onClick = { abspielen.musik(context, audio, audio.indexOf(d).coerceAtLeast(0)) })
 				} else {
 					Box(Modifier.padding(start = 48.dp, top = 8.dp)) {
-						QuerKachel(d, onClick = { abspielen.video(context, d) }, merken = vm to (seite.schluessel to d.id.toString()))
+						QuerKachel(d, onClick = { abspielen.video(context, d) }, merken = vm to (seite.schluessel to d.id.toString()), onMenue = { vm.menue = d })
 					}
 				}
 			}
@@ -178,6 +178,7 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 	var favoritenReihe by remember(stand) { mutableStateOf(SelikuEinstellungen.favoritenReihe(context)) }
 	var wahre by remember(stand) { mutableStateOf(SelikuEinstellungen.wahreGeschichten(context)) }
 	var wertung by remember(stand) { mutableStateOf(SelikuEinstellungen.eigeneWertung(context)) }
+	var loeschen by remember(stand) { mutableStateOf(SelikuEinstellungen.loeschen(context)) }
 	var verlauf by remember(stand) { mutableStateOf(SelikuEinstellungen.meinVerlauf(context)) }
 	var bannerSeerr by remember(stand) { mutableStateOf(SelikuEinstellungen.bannerSeerr(context)) }
 	var tomaten by remember(stand) { mutableStateOf(SelikuEinstellungen.tomaten(context)) }
@@ -228,6 +229,9 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 		},
 		EinstellungsEintrag.Schalter("wertung", umfang = "eigene_wertung", stringResource(R.string.seliku_set_own_rating), stringResource(R.string.seliku_set_own_rating_desc), wertung) {
 			wertung = !wertung; SelikuEinstellungen.eigeneWertung(context, wertung); gesetzt("eigene_wertung")
+		},
+		EinstellungsEintrag.Schalter("loeschen", umfang = "loeschen", stringResource(R.string.seliku_set_delete), stringResource(R.string.seliku_set_delete_desc), loeschen) {
+			loeschen = !loeschen; SelikuEinstellungen.loeschen(context, loeschen); gesetzt("loeschen")
 		},
 		EinstellungsEintrag.Schalter("musikfav", umfang = "musik_favoriten", stringResource(R.string.seliku_set_music_favorites), stringResource(R.string.seliku_set_music_favorites_desc), musikFav) {
 			musikFav = !musikFav; SelikuEinstellungen.musikFavoriten(context, musikFav); gesetzt("musik_favoriten")

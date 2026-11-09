@@ -79,6 +79,8 @@ class SelikuViewModel : ViewModel() {
 	var reiterFokus = false
 	/** Zählt hoch, wenn sich Daten geändert haben (Titelmenü): Seiten laden ihre Reihen dann neu. */
 	var datenStand by androidx.compose.runtime.mutableIntStateOf(0)
+	/** Im Titelmenü gelöschte Titel: Listen, die nicht neu laden (Bibliotheksraster), nehmen sie heraus. */
+	val geloescht = mutableStateListOf<java.util.UUID>()
 	val ersterSchluessel = mutableMapOf<String, String>()
 	private val ersteAnfragen = mutableMapOf<String, androidx.compose.ui.focus.FocusRequester>()
 	fun ersteAnfrageFuer(seite: String, kachel: String): androidx.compose.ui.focus.FocusRequester {

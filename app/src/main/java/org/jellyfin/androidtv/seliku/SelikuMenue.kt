@@ -31,6 +31,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import kotlinx.coroutines.launch
 import org.jellyfin.androidtv.ui.base.Text
+import org.jellyfin.sdk.api.client.extensions.libraryApi
+import org.jellyfin.sdk.api.client.extensions.userLibraryApi
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.koin.compose.koinInject
@@ -125,6 +127,10 @@ object SelikuEinstellungen {
 	fun eigeneWertung(c: Context) = prefs(c).getBoolean("eigene_wertung", true)
 	fun eigeneWertung(c: Context, an: Boolean) = prefs(c).edit().putBoolean("eigene_wertung", an).apply()
 
+	/** An (Vorgabe): «Löschen» im Titelmenü, wenn das Konto auf dem Server löschen darf (mit Rückfrage). */
+	fun loeschen(c: Context) = prefs(c).getBoolean("loeschen", true)
+	fun loeschen(c: Context, an: Boolean) = prefs(c).edit().putBoolean("loeschen", an).apply()
+
 	/** Rotten-Tomatoes-Wertung anzeigen (fehlt sie in Jellyfin, z. B. bei Serien, wird sie bei Seerr nachgeschlagen). */
 	fun tomaten(c: Context) = prefs(c).getBoolean("tomaten", true)
 	fun tomaten(c: Context, an: Boolean) = prefs(c).edit().putBoolean("tomaten", an).apply()
@@ -149,6 +155,14 @@ fun TitelMenue(vm: SelikuViewModel, item: BaseItemDto, geaendert: () -> Unit) {
 	val scope = rememberCoroutineScope()
 	val erstes = remember { FocusRequester() }
 	val schliessen = { vm.menue = null }
+	// Löschen nur, wenn der Server es diesem Konto erlaubt (CanDelete kommt nur bei der Einzelabfrage)
+	val api = koinInject<org.jellyfin.sdk.api.client.ApiClient>()
+	var darfLoeschen by remember { mutableStateOf(false) }
+	var loeschenFragen by remember { mutableStateOf(false) }
+	LaunchedEffect(item.id) {
+		if (!SelikuEinstellungen.loeschen(context) || item.type in setOf(BaseItemKind.COLLECTION_FOLDER, BaseItemKind.USER_VIEW, BaseItemKind.TV_CHANNEL, BaseItemKind.FOLDER)) return@LaunchedEffect
+		darfLoeschen = runCatching { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { api.userLibraryApi.getItem(itemId = item.id).content.canDelete } }.getOrNull() == true
+	}
 	val gesehen = item.userData?.played == true
 	val favorit = item.userData?.isFavorite == true
 	val angefangen = (item.userData?.playbackPositionTicks ?: 0L) > 0L
@@ -208,6 +222,23 @@ fun TitelMenue(vm: SelikuViewModel, item: BaseItemDto, geaendert: () -> Unit) {
 		if (SelikuEinstellungen.eigeneWertung(context) && item.type in setOf(BaseItemKind.MOVIE, BaseItemKind.SERIES, BaseItemKind.EPISODE, BaseItemKind.VIDEO))
 			add(Punkt(item.eigeneSterne()?.let(::sterneText) ?: stringResource(R.string.seliku_rate), "☆") { schliessen(); vm.wertung = item })
 		seiteFuer(item)?.let { s -> add(Punkt(stringResource(R.string.seliku_details), "ⓘ") { schliessen(); vm.zu(s) }) }
+		if (darfLoeschen) add(Punkt(stringResource(R.string.seliku_delete), "⌫") { loeschenFragen = true })
+	}
+	val abbrechen = remember { FocusRequester() }
+	fun loeschenJetzt() {
+		scope.launch {
+			runCatching { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { api.libraryApi.deleteItem(itemId = item.id) } }
+				.onSuccess {
+					android.widget.Toast.makeText(context, context.getString(R.string.seliku_deleted, item.hauptzeile()), android.widget.Toast.LENGTH_SHORT).show()
+					schliessen()
+					// Stand man auf der Seite des gelöschten Titels, geht es eine Seite zurück
+					val a = vm.aktuell
+					if ((a is Seite.Titel && a.id == item.id) || (a is Seite.Serie && a.id == item.id)) vm.zurueck()
+					vm.geloescht.add(item.id)
+					geaendert()
+				}
+				.onFailure { android.widget.Toast.makeText(context, context.getString(R.string.seliku_failed, it.message?.take(80).toString()), android.widget.Toast.LENGTH_LONG).show(); schliessen() }
+		}
 	}
 
 	// Das Menü geht auf, während OK noch gedrückt ist. Das Loslassen dieser Taste darf nicht den ersten Punkt
@@ -233,13 +264,20 @@ fun TitelMenue(vm: SelikuViewModel, item: BaseItemDto, geaendert: () -> Unit) {
 			Text(item.hauptzeile(), style = Schrift.Reihe, maxLines = 1, overflow = TextOverflow.Ellipsis)
 			if (item.type == BaseItemKind.EPISODE) Text(item.unterzeile(), style = Schrift.Klein, maxLines = 1)
 			Spacer(Modifier.height(6.dp))
-			punkte.forEachIndexed { i, p ->
+			if (loeschenFragen) {
+				// Rückfrage: «Abbrechen» hat den Fokus, damit ein versehentliches OK nichts löscht
+				Text(stringResource(if (item.type == BaseItemKind.SERIES || item.type == BaseItemKind.SEASON) R.string.seliku_delete_hint_series else R.string.seliku_delete_hint), style = Schrift.Klein)
+				Spacer(Modifier.height(6.dp))
+				Knopf(stringResource(R.string.seliku_cancel), onClick = { loeschenFragen = false }, symbol = "‹", breit = true,
+					modifier = Modifier.fillMaxWidth().focusRequester(abbrechen))
+				Knopf(stringResource(R.string.seliku_delete_confirm), onClick = { loeschenJetzt() }, symbol = "⌫", breit = true, modifier = Modifier.fillMaxWidth())
+			} else punkte.forEachIndexed { i, p ->
 				Knopf(p.text, onClick = p.aktion, symbol = p.symbol, breit = true,
 					modifier = Modifier.fillMaxWidth().then(if (i == 0) Modifier.focusRequester(erstes) else Modifier))
 			}
 		}
 	}
-	LaunchedEffect(item.id) { runCatching { erstes.requestFocus() } }
+	LaunchedEffect(item.id, loeschenFragen) { runCatching { if (loeschenFragen) abbrechen.requestFocus() else erstes.requestFocus() } }
 }
 
 /** «Wie war's?»: eigene Wertung von 1 bis 5 Sternen setzen oder löschen (bei Jellyfin pro Benutzer gespeichert). */

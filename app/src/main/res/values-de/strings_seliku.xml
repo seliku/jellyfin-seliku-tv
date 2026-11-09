@@ -387,4 +387,11 @@
 	<string name="seliku_set_crossfade_off">Aus</string>
 	<string name="seliku_set_live_back_guide">Zurück öffnet Programm</string>
 	<string name="seliku_set_live_back_guide_desc">Im Live-TV zeigt «Zurück» den Programmführer, der Sender läuft klein weiter. Nochmals «Zurück» beendet.</string>
+	<string name="seliku_delete">Löschen</string>
+	<string name="seliku_delete_hint">Die Datei wird vom Server gelöscht. Das lässt sich nicht rückgängig machen.</string>
+	<string name="seliku_delete_hint_series">Alle Folgen werden vom Server gelöscht. Das lässt sich nicht rückgängig machen.</string>
+	<string name="seliku_delete_confirm">Endgültig löschen</string>
+	<string name="seliku_deleted">Gelöscht: %1$s</string>
+	<string name="seliku_set_delete">Löschen im Menü</string>
+	<string name="seliku_set_delete_desc">Langes Drücken bietet «Löschen» an (mit Rückfrage), wenn dein Konto auf dem Server löschen darf.</string>
 </resources>

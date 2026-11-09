@@ -387,4 +387,11 @@
 	<string name="seliku_set_crossfade_off">Off</string>
 	<string name="seliku_set_live_back_guide">Back opens the guide</string>
 	<string name="seliku_set_live_back_guide_desc">In live TV, Back shows the guide while the channel keeps playing small. Back again leaves.</string>
+	<string name="seliku_delete">Delete</string>
+	<string name="seliku_delete_hint">The file will be deleted from the server. This cannot be undone.</string>
+	<string name="seliku_delete_hint_series">All episodes will be deleted from the server. This cannot be undone.</string>
+	<string name="seliku_delete_confirm">Delete permanently</string>
+	<string name="seliku_deleted">Deleted: %1$s</string>
+	<string name="seliku_set_delete">Delete in the menu</string>
+	<string name="seliku_set_delete_desc">Long press offers Delete (with confirmation) when your account may delete on the server.</string>
 </resources>
