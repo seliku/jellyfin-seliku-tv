@@ -38,5 +38,8 @@ interface PlayerBackend {
 	fun setScrubbing(scrubbing: Boolean)
 
 	fun setSpeed(speed: Float)
+
+	/** Seliku: Lautstärke nur dieses Players (0..1), z. B. zum Überblenden. Nicht die Gerätelautstärke. */
+	fun setPlayerVolume(volume: Float) = Unit
 }
 

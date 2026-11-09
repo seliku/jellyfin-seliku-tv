@@ -50,6 +50,9 @@ interface PlayerState {
 
 	fun setSpeed(speed: Float)
 
+	/** Seliku: Lautstärke nur des Players (0..1), z. B. zum Überblenden. */
+	fun setPlayerVolume(volume: Float) = Unit
+
 	fun setPlaybackOrder(order: PlaybackOrder)
 
 	fun setRepeatMode(mode: RepeatMode)
@@ -148,6 +151,10 @@ class MutablePlayerState(
 	override fun setSpeed(speed: Float) {
 		_speed.value = speed
 		backendService.backend?.setSpeed(speed)
+	}
+
+	override fun setPlayerVolume(volume: Float) {
+		backendService.backend?.setPlayerVolume(volume)
 	}
 
 	override fun setPlaybackOrder(order: PlaybackOrder) {

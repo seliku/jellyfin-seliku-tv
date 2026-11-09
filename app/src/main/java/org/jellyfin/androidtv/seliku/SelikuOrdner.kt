@@ -184,6 +184,8 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 	var musikFav by remember(stand) { mutableStateOf(SelikuEinstellungen.musikFavoriten(context)) }
 	var audioPlayer by remember(stand) { mutableStateOf(SelikuEinstellungen.neuerAudioPlayer(context)) }
 	var endlos by remember(stand) { mutableStateOf(SelikuEinstellungen.endlosMusik(context)) }
+	var blenden by remember(stand) { mutableStateOf(SelikuEinstellungen.ueberblenden(context)) }
+	val blendStufen = listOf(0, 3, 6, 9, 12)
 	var hoerenStart by remember(stand) { mutableStateOf(SelikuEinstellungen.hoerenStart(context)) }
 	var trailerBanner by remember(stand) { mutableStateOf(SelikuEinstellungen.trailerImBanner(context)) }
 	var zufall by remember(stand) { mutableStateOf(SelikuEinstellungen.zufallKnopf(context)) }
@@ -262,6 +264,11 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 		},
 		EinstellungsEintrag.Schalter("audioplayer", umfang = "audio_player", stringResource(R.string.seliku_set_audio_player), stringResource(R.string.seliku_set_audio_player_desc), audioPlayer) {
 			audioPlayer = !audioPlayer; SelikuEinstellungen.neuerAudioPlayer(context, audioPlayer); gesetzt("audio_player")
+		},
+		EinstellungsEintrag.Auswahl("ueberblenden", umfang = "ueberblenden", stringResource(R.string.seliku_set_crossfade), stringResource(R.string.seliku_set_crossfade_desc),
+			if (blenden == 0) stringResource(R.string.seliku_set_crossfade_off) else stringResource(R.string.seliku_set_crossfade_value, blenden)) {
+			blenden = blendStufen[(blendStufen.indexOf(blenden) + 1) % blendStufen.size]
+			SelikuEinstellungen.ueberblenden(context, blenden); gesetzt("ueberblenden")
 		},
 		EinstellungsEintrag.Schalter("endlos", umfang = "endlos_musik", stringResource(R.string.seliku_set_endless), stringResource(R.string.seliku_set_endless_desc), endlos) {
 			endlos = !endlos; SelikuEinstellungen.endlosMusik(context, endlos); gesetzt("endlos_musik")

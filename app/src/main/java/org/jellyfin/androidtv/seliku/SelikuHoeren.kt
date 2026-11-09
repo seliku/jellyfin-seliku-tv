@@ -568,6 +568,7 @@ object Hoeren {
 		val art = art(item)
 		if (art == HoerArt.MUSIK) {
 			endlosPruefen(item, pos, dauer)
+			Ueberblenden.pruefen(app, item, pos, dauer)
 		} else {
 			val jetzt = System.currentTimeMillis()
 			if (spielt && pos > 0 && jetzt - letztesMerken > 5_000L) { merken(item, pos); letztesMerken = jetzt }

@@ -75,6 +75,7 @@ object SelikuSync {
 		schalter("mein_verlauf", true, SelikuEinstellungen::meinVerlauf, SelikuEinstellungen::meinVerlauf),
 		schalter("banner_seerr", true, SelikuEinstellungen::bannerSeerr, SelikuEinstellungen::bannerSeerr),
 		schalter("audio_player", true, SelikuEinstellungen::neuerAudioPlayer, SelikuEinstellungen::neuerAudioPlayer),
+		Eintrag("ueberblenden", true, { SelikuEinstellungen.ueberblenden(it).toString() }, { c, w -> w.toIntOrNull()?.let { SelikuEinstellungen.ueberblenden(c, it) } }),
 		schalter("endlos_musik", true, SelikuEinstellungen::endlosMusik, SelikuEinstellungen::endlosMusik),
 		schalter("hoeren_start", true, SelikuEinstellungen::hoerenStart, SelikuEinstellungen::hoerenStart),
 		// Vorgabe 📺 nur dieses Gerät

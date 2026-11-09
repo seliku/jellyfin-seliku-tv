@@ -381,4 +381,8 @@
 	<string name="seliku_audio_add_queue">Add to queue</string>
 	<string name="seliku_audio_queued_next">«%1$s» plays next</string>
 	<string name="seliku_audio_queued_end">«%1$s» added to queue</string>
+	<string name="seliku_set_crossfade">Crossfade music</string>
+	<string name="seliku_set_crossfade_desc">The next song fades in while the current one fades out (not between consecutive album tracks)</string>
+	<string name="seliku_set_crossfade_value">%1$d s</string>
+	<string name="seliku_set_crossfade_off">Off</string>
 </resources>

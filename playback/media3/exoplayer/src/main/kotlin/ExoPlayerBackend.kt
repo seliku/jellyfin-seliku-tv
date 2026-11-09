@@ -249,6 +249,10 @@ class ExoPlayerBackend(
 		exoPlayer.isScrubbingModeEnabled = scrubbing
 	}
 
+	override fun setPlayerVolume(volume: Float) {
+		exoPlayer.volume = volume.coerceIn(0f, 1f)
+	}
+
 	override fun setSpeed(speed: Float) {
 		if (!exoPlayer.isCommandAvailable(Player.COMMAND_SET_SPEED_AND_PITCH)) {
 			Timber.w("Trying to change speed but ExoPlayer doesn't support it for the current item")

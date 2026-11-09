@@ -381,4 +381,8 @@
 	<string name="seliku_audio_add_queue">Hinten anstellen</string>
 	<string name="seliku_audio_queued_next">«%1$s» kommt als Nächstes</string>
 	<string name="seliku_audio_queued_end">«%1$s» ist angestellt</string>
+	<string name="seliku_set_crossfade">Musik überblenden</string>
+	<string name="seliku_set_crossfade_desc">Das nächste Lied wird eingeblendet, während das alte ausklingt (nicht innerhalb eines Albums am Stück)</string>
+	<string name="seliku_set_crossfade_value">%1$d s</string>
+	<string name="seliku_set_crossfade_off">Aus</string>
 </resources>

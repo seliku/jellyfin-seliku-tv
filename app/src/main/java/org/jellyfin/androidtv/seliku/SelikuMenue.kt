@@ -109,6 +109,10 @@ object SelikuEinstellungen {
 	fun endlosMusik(c: Context) = prefs(c).getBoolean("endlos_musik", true)
 	fun endlosMusik(c: Context, an: Boolean) = prefs(c).edit().putBoolean("endlos_musik", an).apply()
 
+	/** Musik: so viele Sekunden blenden zwei Lieder ineinander (0 = aus). Vorgabe 6. */
+	fun ueberblenden(c: Context) = prefs(c).getInt("ueberblenden", 6)
+	fun ueberblenden(c: Context, sekunden: Int) = prefs(c).edit().putInt("ueberblenden", sekunden).apply()
+
 	/** An (Vorgabe): Reihe «Weiterhören» (Hörbücher, Podcasts) auf der Startseite. */
 	fun hoerenStart(c: Context) = prefs(c).getBoolean("hoeren_start", true)
 	fun hoerenStart(c: Context, an: Boolean) = prefs(c).edit().putBoolean("hoeren_start", an).apply()
