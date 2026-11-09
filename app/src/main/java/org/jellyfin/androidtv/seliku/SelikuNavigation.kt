@@ -232,8 +232,22 @@ class Abspielen(
 	/** Musik: Liste ab Titel [ab] abspielen. Die Wiedergabe läuft im Hintergrund weiter, die Seite bleibt offen. */
 	fun musik(context: Context, titel: List<BaseItemDto>, ab: Int = 0, zufall: Boolean = false) {
 		if (titel.isEmpty()) return
-		RadioSpieler.stoppen()
-		mediaManager.playNow(context, titel, ab, zufall)
+		// Die ganze Liste kommt in die Warteschlange, auch was vor dem gewählten Titel steht («Zurück» geht dorthin)
+		Hoeren.spielen(titel, ab, zufall = zufall)
+	}
+
+	/**
+	 * Hörbuch (Ordner oder eine seiner Dateien) bzw. Podcast-Folge dort weiterhören, wo man war, und den Player zeigen.
+	 */
+	fun hoeren(context: Context, item: BaseItemDto) {
+		kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+			val ok = when {
+				item.isFolder == true -> Hoeren.buchSpielen(item.id)
+				item.type == BaseItemKind.AUDIO_BOOK -> item.parentId?.let { b -> Hoeren.buch(b)?.let { Hoeren.buchSpielen(b, it.index(item.id).takeIf { i -> i >= 0 }) } } ?: false
+				else -> { Hoeren.folgeSpielen(item); true }
+			}
+			if (ok) jetztLaeuft()
+		}
 	}
 
 	fun jetztLaeuft() = navigation.navigate(Destinations.nowPlaying)

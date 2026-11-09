@@ -74,6 +74,9 @@ object SelikuSync {
 		schalter("untertitel_nachladen", true, SelikuEinstellungen::untertitelNachladen, SelikuEinstellungen::untertitelNachladen),
 		schalter("mein_verlauf", true, SelikuEinstellungen::meinVerlauf, SelikuEinstellungen::meinVerlauf),
 		schalter("banner_seerr", true, SelikuEinstellungen::bannerSeerr, SelikuEinstellungen::bannerSeerr),
+		schalter("audio_player", true, SelikuEinstellungen::neuerAudioPlayer, SelikuEinstellungen::neuerAudioPlayer),
+		schalter("endlos_musik", true, SelikuEinstellungen::endlosMusik, SelikuEinstellungen::endlosMusik),
+		schalter("hoeren_start", true, SelikuEinstellungen::hoerenStart, SelikuEinstellungen::hoerenStart),
 		// Vorgabe 📺 nur dieses Gerät
 		schalter("schlanker_player", false, SelikuEinstellungen::schlankerPlayer, SelikuEinstellungen::schlankerPlayer),
 		schalter("nur_bei_wiedergabe_wach", false, SelikuEinstellungen::nurBeiWiedergabeWach, SelikuEinstellungen::nurBeiWiedergabeWach),

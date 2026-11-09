@@ -122,7 +122,8 @@ object Destinations {
 	val liveTvSeriesRecordings = fragmentDestination<BrowseViewFragment>(Extras.IsLiveTvSeriesRecordings to true)
 
 	// Playback
-	val nowPlaying = fragmentDestination<AudioNowPlayingFragment>()
+	// Seliku: eigener Player für Musik, Hörbücher und Podcasts (zeigt bei Bedarf den alten)
+	val nowPlaying = fragmentDestination<org.jellyfin.androidtv.seliku.SelikuSpielerFragment>()
 
 	fun photoPlayer(
 		item: UUID,

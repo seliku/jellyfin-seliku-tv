@@ -61,6 +61,8 @@ fun MusikSeite(vm: SelikuViewModel, seite: Seite.Musik, oeffnen: (BaseItemDto) -
 	// Podcasts/Hörbücher als weitere Reiter: führen auf ihre eigene Seite (Zurück kommt wieder hierher).
 	// Auf der Podcast-Seite selbst nicht noch einmal anzeigen.
 	val weitere = if (nebenan.any { it.id == seite.ansicht.id }) emptyList() else nebenan
+	val context = LocalContext.current
+	if (seite.ansicht.name.orEmpty().contains("podcast", true) && SelikuEinstellungen.neuerAudioPlayer(context)) { PodcastSeite(vm, seite, oeffnen, nebenan); return }
 	val daten = koinInject<SelikuDaten>()
 	// Reiter: 0 Übersicht, 1 Playlists (alle, mit Buchstabenleiste), 2 Interpreten, 3 Alben
 	var reiter by remember { mutableStateOf(vm.wahl["${seite.schluessel}|reiter2"] as? Int ?: 0) }
@@ -412,6 +414,10 @@ fun AlbumSeite(vm: SelikuViewModel, seite: Seite.Album, oeffnen: (BaseItemDto) -
 	var titel by remember { mutableStateOf<List<BaseItemDto>>(emptyList()) }
 	var fehltAlbum by remember { mutableStateOf(false) }
 	val start = remember { FocusRequester() }
+	// Ein Podcast: Folgen mit Datum und Hörstand
+	var podcast by remember { mutableStateOf(Hoeren.istPodcastAlbum(seite.id)) }
+	LaunchedEffect(seite.id) { Hoeren.podcastsLaden(); podcast = Hoeren.istPodcastAlbum(seite.id) }
+	if (podcast && SelikuEinstellungen.neuerAudioPlayer(context)) { PodcastAlbumSeite(vm, seite); return }
 
 	LaunchedEffect(seite.id) {
 		runCatching {

@@ -101,6 +101,18 @@ object SelikuEinstellungen {
 	fun bannerSeerr(c: Context) = prefs(c).getBoolean("banner_seerr", true)
 	fun bannerSeerr(c: Context, an: Boolean) = prefs(c).edit().putBoolean("banner_seerr", an).apply()
 
+	/** An (Vorgabe): eigener Player für Musik, Hörbücher und Podcasts; aus = Jellyfins alter Player. */
+	fun neuerAudioPlayer(c: Context) = prefs(c).getBoolean("audio_player", true)
+	fun neuerAudioPlayer(c: Context, an: Boolean) = prefs(c).edit().putBoolean("audio_player", an).apply()
+
+	/** An (Vorgabe): Musik spielt nach dem letzten Titel mit passenden Titeln weiter (wie Plexamp). */
+	fun endlosMusik(c: Context) = prefs(c).getBoolean("endlos_musik", true)
+	fun endlosMusik(c: Context, an: Boolean) = prefs(c).edit().putBoolean("endlos_musik", an).apply()
+
+	/** An (Vorgabe): Reihe «Weiterhören» (Hörbücher, Podcasts) auf der Startseite. */
+	fun hoerenStart(c: Context) = prefs(c).getBoolean("hoeren_start", true)
+	fun hoerenStart(c: Context, an: Boolean) = prefs(c).edit().putBoolean("hoeren_start", an).apply()
+
 	/** Eigene Wertung (Sterne) setzen und anzeigen. */
 	fun eigeneWertung(c: Context) = prefs(c).getBoolean("eigene_wertung", true)
 	fun eigeneWertung(c: Context, an: Boolean) = prefs(c).edit().putBoolean("eigene_wertung", an).apply()

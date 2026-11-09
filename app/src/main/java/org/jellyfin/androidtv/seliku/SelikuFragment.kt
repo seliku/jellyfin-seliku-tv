@@ -87,6 +87,8 @@ class SelikuFragment : Fragment() {
 	private val vm by viewModels<SelikuViewModel>()
 
 	override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?) = content {
+		// Merkt Hörbuch- und Podcast-Stellen, setzt das Tempo, füllt Musik endlos auf
+		Hoeren.starten(requireContext())
 		JellyfinTheme {
 			Oberflaeche(vm)
 		}

@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,8 +54,17 @@ fun OrdnerSeite(vm: SelikuViewModel, seite: Seite.Ordner, oeffnen: (BaseItemDto)
 	LaunchedEffect(seite.id) {
 		inhalt = runCatching { daten.ordnerInhalt(seite.id) }.onFailure { Timber.w(it, "Ordner laden") }.getOrDefault(emptyList())
 	}
+	// Hörbücher: angefangene Bücher (in der Bibliothek selbst als Reihe «Weiterhören»), Fortschritt auf den Kacheln
+	val version by Hoeren.version.collectAsState()
+	var weiter by remember { mutableStateOf<List<BaseItemDto>>(emptyList()) }
+	var istHoerbuecher by remember { mutableStateOf(false) }
+	LaunchedEffect(seite.id, version) {
+		istHoerbuecher = runCatching { daten.alleBibliotheken().any { it.id == seite.id && it.collectionType == org.jellyfin.sdk.model.api.CollectionType.BOOKS } }.getOrDefault(false)
+		weiter = runCatching { Hoeren.weiterhoeren().filter { it.isFolder == true } }.getOrDefault(emptyList())
+	}
 
 	val alle = inhalt
+	if (alle != null && Hoeren.istBuch(alle) && SelikuEinstellungen.neuerAudioPlayer(context)) { BuchSeite(vm, seite); return }
 	Column(Modifier.fillMaxSize().background(Farben.Hintergrund)) {
 		Text(titel, style = Schrift.Titel, modifier = Modifier.padding(start = 48.dp, top = 28.dp, bottom = 12.dp))
 		if (alle == null) { Hinweis(stringResource(R.string.seliku_loading)); return@Column }
@@ -63,9 +73,15 @@ fun OrdnerSeite(vm: SelikuViewModel, seite: Seite.Ordner, oeffnen: (BaseItemDto)
 		val dateien = alle.filter { it !in ordner }
 		val audio = dateien.filter { it.type == BaseItemKind.AUDIO_BOOK || it.type == BaseItemKind.AUDIO }
 		LazyColumn(state = vm.liste(seite), contentPadding = PaddingValues(bottom = 48.dp), modifier = Modifier.fillMaxSize()) {
+			if (istHoerbuecher && weiter.isNotEmpty()) item {
+				Reihe(stringResource(R.string.seliku_audio_continue), weiter, vm, seite, onClick = { abspielen.hoeren(context, it) }, kachel = { item, klick, merken, fokus ->
+					HoerKachel(item, klick, merken, fokus, onMenue = { oeffnen(item) })
+				})
+			}
 			if (ordner.isNotEmpty()) item {
 				Reihe(stringResource(R.string.seliku_folders), ordner, vm, seite, onClick = { oeffnen(it) }, kachel = { item, klick, merken, fokus ->
-					QuadratKachel(item, klick, merken = merken, onFokus = fokus)
+					if (Hoeren.fortschritt(item.id) != null && weiter.any { it.id == item.id }) HoerKachel(item, klick, merken, fokus)
+					else QuadratKachel(item, klick, merken = merken, onFokus = fokus)
 				})
 			}
 			if (audio.isNotEmpty()) item {
@@ -163,6 +179,9 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 	var bannerSeerr by remember(stand) { mutableStateOf(SelikuEinstellungen.bannerSeerr(context)) }
 	var tomaten by remember(stand) { mutableStateOf(SelikuEinstellungen.tomaten(context)) }
 	var musikFav by remember(stand) { mutableStateOf(SelikuEinstellungen.musikFavoriten(context)) }
+	var audioPlayer by remember(stand) { mutableStateOf(SelikuEinstellungen.neuerAudioPlayer(context)) }
+	var endlos by remember(stand) { mutableStateOf(SelikuEinstellungen.endlosMusik(context)) }
+	var hoerenStart by remember(stand) { mutableStateOf(SelikuEinstellungen.hoerenStart(context)) }
 	var trailerBanner by remember(stand) { mutableStateOf(SelikuEinstellungen.trailerImBanner(context)) }
 	var zufall by remember(stand) { mutableStateOf(SelikuEinstellungen.zufallKnopf(context)) }
 	var senderGruppen by remember(stand) { mutableStateOf(SelikuEinstellungen.senderGruppen(context)) }
@@ -197,6 +216,9 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 		},
 		EinstellungsEintrag.Schalter("verlauf", umfang = "mein_verlauf", stringResource(R.string.seliku_set_history), stringResource(R.string.seliku_set_history_desc), verlauf) {
 			verlauf = !verlauf; SelikuEinstellungen.meinVerlauf(context, verlauf); gesetzt("mein_verlauf"); vm.datenStand++
+		},
+		EinstellungsEintrag.Schalter("hoerenstart", umfang = "hoeren_start", stringResource(R.string.seliku_set_listen_home), stringResource(R.string.seliku_set_listen_home_desc), hoerenStart) {
+			hoerenStart = !hoerenStart; SelikuEinstellungen.hoerenStart(context, hoerenStart); gesetzt("hoeren_start"); vm.datenStand++
 		},
 		EinstellungsEintrag.Schalter("wertung", umfang = "eigene_wertung", stringResource(R.string.seliku_set_own_rating), stringResource(R.string.seliku_set_own_rating_desc), wertung) {
 			wertung = !wertung; SelikuEinstellungen.eigeneWertung(context, wertung); gesetzt("eigene_wertung")
@@ -234,6 +256,12 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 		// Jellyfins «Nächstes automatisch abspielen» (pref_enable_tv_queuing): aus = nur die gewählte Folge kommt in die Warteschlange
 		EinstellungsEintrag.Schalter("folge", umfang = "naechste_folge", stringResource(R.string.seliku_set_autoplay_next), stringResource(R.string.seliku_set_autoplay_next_desc), naechste) {
 			naechste = !naechste; userPrefs[org.jellyfin.androidtv.preference.UserPreferences.mediaQueuingEnabled] = naechste; gesetzt("naechste_folge")
+		},
+		EinstellungsEintrag.Schalter("audioplayer", umfang = "audio_player", stringResource(R.string.seliku_set_audio_player), stringResource(R.string.seliku_set_audio_player_desc), audioPlayer) {
+			audioPlayer = !audioPlayer; SelikuEinstellungen.neuerAudioPlayer(context, audioPlayer); gesetzt("audio_player")
+		},
+		EinstellungsEintrag.Schalter("endlos", umfang = "endlos_musik", stringResource(R.string.seliku_set_endless), stringResource(R.string.seliku_set_endless_desc), endlos) {
+			endlos = !endlos; SelikuEinstellungen.endlosMusik(context, endlos); gesetzt("endlos_musik")
 		},
 		EinstellungsEintrag.Schalter("wach", umfang = "nur_bei_wiedergabe_wach", stringResource(R.string.seliku_set_keep_awake), stringResource(R.string.seliku_set_keep_awake_desc), wach) {
 			wach = !wach; SelikuEinstellungen.nurBeiWiedergabeWach(context, wach); gesetzt("nur_bei_wiedergabe_wach")

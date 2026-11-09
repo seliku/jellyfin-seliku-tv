@@ -324,17 +324,31 @@ fun TrailerKnopf(item: BaseItemDto) {
  * Hat er den Fokus, sagt ein kleiner Hinweis darunter, was er tut; der Hinweis bleibt ganz im Bild.
  */
 @Composable
-fun SymbolKnopf(symbol: Int, tipp: String, aktiv: Boolean = false, onClick: () -> Unit) {
+fun SymbolKnopf(
+	symbol: Int,
+	tipp: String,
+	aktiv: Boolean = false,
+	text: String? = null,
+	groesse: androidx.compose.ui.unit.Dp = 44.dp,
+	hervor: Boolean = false,
+	modifier: Modifier = Modifier,
+	onClick: () -> Unit,
+) {
 	var fokus by remember { mutableStateOf(false) }
 	Box {
-		Waehlbar(onClick = onClick, vergroessern = false, shape = androidx.compose.foundation.shape.CircleShape, onFokus = {}, modifier = Modifier.onFocusChanged { fokus = it.hasFocus }) { fokussiert ->
-			Box(Modifier.size(44.dp).background(if (fokussiert) Farben.Text else Farben.Flaeche), contentAlignment = Alignment.Center) {
-				androidx.compose.foundation.Image(
-					painter = androidx.compose.ui.res.painterResource(symbol),
-					contentDescription = tipp,
-					colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(when { fokussiert -> androidx.compose.ui.graphics.Color.Black; aktiv -> Farben.Akzent; else -> Farben.Text }),
-					modifier = Modifier.size(22.dp),
-				)
+		Waehlbar(onClick = onClick, vergroessern = false, shape = androidx.compose.foundation.shape.CircleShape, onFokus = {}, modifier = modifier.onFocusChanged { fokus = it.hasFocus }) { fokussiert ->
+			val farbe = when { fokussiert -> androidx.compose.ui.graphics.Color.Black; hervor -> androidx.compose.ui.graphics.Color.Black; aktiv -> Farben.Akzent; else -> Farben.Text }
+			Box(Modifier.size(groesse).background(when { fokussiert -> Farben.Text; hervor -> Farben.Akzent; else -> Farben.Flaeche }), contentAlignment = Alignment.Center) {
+				Column(horizontalAlignment = Alignment.CenterHorizontally) {
+					androidx.compose.foundation.Image(
+						painter = androidx.compose.ui.res.painterResource(symbol),
+						contentDescription = tipp,
+						colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(farbe),
+						modifier = Modifier.size(if (text != null) 16.dp else groesse / 2),
+					)
+					// Kleine Angabe unter dem Symbol, z. B. «30» (Sekunden) oder «1,25×» (Tempo)
+					if (text != null) Text(text, style = Schrift.Klein.copy(color = farbe, fontSize = androidx.compose.ui.unit.TextUnit(9f, androidx.compose.ui.unit.TextUnitType.Sp), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold), maxLines = 1)
+				}
 			}
 		}
 		if (fokus) androidx.compose.ui.window.Popup(popupPositionProvider = remember { TippUnten() }, properties = androidx.compose.ui.window.PopupProperties(focusable = false)) {

@@ -35,7 +35,7 @@ import androidx.compose.ui.res.stringResource
 import org.jellyfin.androidtv.R
 
 /** Art der Startseiten-Reihe (die Überschrift ist übersetzt und taugt nicht als Unterscheidung). */
-private enum class StartArt { WEITER, TV, NEU, FAVORITEN, WAHR, ANDERE }
+private enum class StartArt { WEITER, HOEREN, TV, NEU, FAVORITEN, WAHR, ANDERE }
 
 private data class StartReihe(val titel: String, val items: List<BaseItemDto>, val loeschdatum: Map<java.util.UUID, String> = emptyMap(), val art: StartArt = StartArt.ANDERE)
 
@@ -86,6 +86,8 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 			val bibs = daten.bibliotheken()
 			buildList {
 				add(StartReihe(context.getString(R.string.seliku_continue_watching), daten.weiterschauen(), art = StartArt.WEITER))
+				if (SelikuEinstellungen.hoerenStart(context))
+					add(StartReihe(context.getString(R.string.seliku_audio_continue), runCatching { Hoeren.weiterhoeren() }.getOrDefault(emptyList()), art = StartArt.HOEREN))
 				if (SelikuEinstellungen.favoritenReihe(context))
 					add(StartReihe(context.getString(R.string.seliku_your_favorites), runCatching { daten.favoriten() }.getOrDefault(emptyList()), art = StartArt.FAVORITEN))
 				if (bibs.any { it.istLiveTv() }) add(StartReihe(context.getString(R.string.seliku_on_tv_now), daten.sender().filter { it.currentProgram != null }.let { s ->
@@ -162,6 +164,7 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 						onClick = { item ->
 							when {
 								reihe.art == StartArt.TV -> abspielen.sender(context, item)
+								reihe.art == StartArt.HOEREN -> abspielen.hoeren(context, item)
 								reihe.art == StartArt.WEITER -> abspielen.video(context, item)
 								item.type == BaseItemKind.EPISODE -> abspielen.video(context, item)
 								else -> oeffnen(item)
@@ -169,6 +172,8 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 						},
 						kachel = if (reihe.art == StartArt.WEITER) { item, klick, merken, fokus ->
 							PosterKachel(item, klick, breite = 120.dp, merken = merken, onFokus = fokus, onMenue = { vm.menue = item }, aufklappen = true)
+						} else if (reihe.art == StartArt.HOEREN) { item, klick, merken, fokus ->
+							HoerKachel(item, klick, merken, fokus, onMenue = { seiteFuer(item)?.let(vm::zu) ?: item.albumId?.let { vm.zu(Seite.Album(it)) } })
 						} else if (reihe.art == StartArt.TV) { item, klick, merken, fokus ->
 							SenderKachel(item, klick, merken = merken, onFokus = fokus)
 						} else if (reihe.loeschdatum.isNotEmpty()) { item, klick, merken, fokus ->
