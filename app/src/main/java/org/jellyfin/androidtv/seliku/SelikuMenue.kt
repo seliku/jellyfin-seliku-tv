@@ -145,11 +145,40 @@ fun TitelMenue(vm: SelikuViewModel, item: BaseItemDto, geaendert: () -> Unit) {
 	val favorit = item.userData?.isFavorite == true
 	val angefangen = (item.userData?.playbackPositionTicks ?: 0L) > 0L
 	val spielbar = item.type in setOf(BaseItemKind.MOVIE, BaseItemKind.EPISODE, BaseItemKind.VIDEO, BaseItemKind.MUSIC_VIDEO)
+	// Musik wie bei Plexamp: sofort spielen, als Nächstes oder hinten anstellen (die laufende Liste bleibt)
+	val musik = item.type in setOf(BaseItemKind.AUDIO, BaseItemKind.MUSIC_ALBUM, BaseItemKind.PLAYLIST, BaseItemKind.MUSIC_ARTIST)
+	suspend fun musikTitel(): List<BaseItemDto> = runCatching {
+		when (item.type) {
+			BaseItemKind.AUDIO -> listOf(item)
+			BaseItemKind.MUSIC_ALBUM -> daten.titel(item.id)
+			BaseItemKind.PLAYLIST -> daten.playlistTitel(item.id)
+			else -> daten.titelVon(item.id, beliebteste = false)
+		}
+	}.getOrDefault(emptyList())
 
 	data class Punkt(val text: String, val symbol: String, val aktion: () -> Unit)
 	val punkte = buildList {
 		// Bei Folgen steht «Zur Serie» zuoberst
 		item.seriesId?.let { sid -> add(Punkt(stringResource(R.string.seliku_go_to_series), "›") { schliessen(); vm.zu(Seite.Serie(sid)) }) }
+		if (musik) {
+			add(Punkt(stringResource(R.string.seliku_play), "▶") { scope.launch { abspielen.musik(context, musikTitel()); schliessen() } })
+			if (Hoeren.musikLaeuft()) {
+				add(Punkt(stringResource(R.string.seliku_audio_play_next), "⤵") { scope.launch {
+					Hoeren.einreihen(musikTitel(), gleichDanach = true)
+					android.widget.Toast.makeText(context, context.getString(R.string.seliku_audio_queued_next, item.name.orEmpty()), android.widget.Toast.LENGTH_SHORT).show()
+					schliessen()
+				} })
+				add(Punkt(stringResource(R.string.seliku_audio_add_queue), "+") { scope.launch {
+					Hoeren.einreihen(musikTitel(), gleichDanach = false)
+					android.widget.Toast.makeText(context, context.getString(R.string.seliku_audio_queued_end, item.name.orEmpty()), android.widget.Toast.LENGTH_SHORT).show()
+					schliessen()
+				} })
+			}
+			if (item.type == BaseItemKind.AUDIO) item.albumId?.let { a -> add(Punkt(stringResource(R.string.seliku_audio_go_album), "›") { schliessen(); vm.zu(Seite.Album(a)) }) }
+			if (item.type != BaseItemKind.MUSIC_ARTIST) (item.albumArtists?.firstOrNull()?.id ?: item.artistItems?.firstOrNull()?.id)?.let { i ->
+				add(Punkt(stringResource(R.string.seliku_go_to_artist), "›") { schliessen(); vm.zu(Seite.Interpret(i)) })
+			}
+		}
 		if (spielbar) add(Punkt(if (angefangen) fortsetzenText(item) ?: stringResource(R.string.seliku_play) else stringResource(R.string.seliku_play), "▶") { abspielen.video(context, item); schliessen() })
 		if (spielbar && angefangen) add(Punkt(stringResource(R.string.seliku_from_start), "↺") { abspielen.video(context, item, vonVorn = true); schliessen() })
 		// Serie bzw. Film aus «Weiterschauen» nehmen (auch «Als Nächstes»-Folgen); kommt beim nächsten Abspielen von selbst zurück
@@ -157,7 +186,7 @@ fun TitelMenue(vm: SelikuViewModel, item: BaseItemDto, geaendert: () -> Unit) {
 			scope.launch { runCatching { daten.ausWeiterschauen(item) }; schliessen(); geaendert() }
 		})
 		if (item.type == BaseItemKind.SERIES || item.type == BaseItemKind.SEASON) add(Punkt(stringResource(R.string.seliku_random_episode), "⤨") { abspielen.zufall(context, item); schliessen() })
-		add(Punkt(stringResource(if (gesehen) R.string.seliku_mark_as_unwatched else R.string.seliku_mark_as_watched), if (gesehen) "○" else "✓") {
+		if (!musik) add(Punkt(stringResource(if (gesehen) R.string.seliku_mark_as_unwatched else R.string.seliku_mark_as_watched), if (gesehen) "○" else "✓") {
 			scope.launch { runCatching { daten.gesehen(item.id, !gesehen) }; schliessen(); geaendert() }
 		})
 		add(Punkt(stringResource(if (favorit) R.string.seliku_remove_favorite else R.string.seliku_add_favorite), if (favorit) "☆" else "★") {

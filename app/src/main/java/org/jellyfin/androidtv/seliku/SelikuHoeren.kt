@@ -20,6 +20,10 @@ import org.jellyfin.playback.core.model.PlaybackOrder
 import org.jellyfin.playback.core.model.RepeatMode
 import org.jellyfin.playback.core.queue.Queue
 import org.jellyfin.playback.core.queue.queue
+import org.jellyfin.playback.core.queue.QueueEntry
+import org.jellyfin.playback.core.queue.supplier.QueueSupplier
+import org.jellyfin.playback.jellyfin.queue.createBaseItemQueueEntry
+import org.jellyfin.androidtv.integration.dream.visibleInScreensaver
 import org.jellyfin.playback.jellyfin.queue.baseItem
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.displayPreferencesApi
@@ -64,6 +68,21 @@ data class HoerStand(val datei: UUID?, val ms: Long, val zeit: Long)
 
 /** Fortschritt für Kacheln: Anteil 0..1 und Restzeit. */
 data class HoerFortschritt(val anteil: Float, val restMs: Long, val kapitel: Int = 0, val kapitelVon: Int = 0)
+
+/**
+ * Unsere Warteschlange: eine Liste, die beim Abspielen wachsen darf («Als Nächstes», «Hinten anstellen», Endlos-Mix).
+ * Die Wiedergabe holt sich die Titel der Reihe nach ab; [abgeholt] zählt, wie weit.
+ */
+private class Warteliste(private val api: ApiClient, start: List<BaseItemDto>) : QueueSupplier {
+	val titel: MutableList<BaseItemDto> = java.util.Collections.synchronizedList(start.toMutableList())
+	@Volatile var abgeholt = 0
+	override val size: Int get() = titel.size
+	override suspend fun getItem(index: Int): QueueEntry? {
+		val item = titel.getOrNull(index) ?: return null
+		abgeholt = maxOf(abgeholt, index + 1)
+		return createBaseItemQueueEntry(api, item).also { it.visibleInScreensaver = true }
+	}
+}
 
 /** Schlaf-Timer: bis zu einer Uhrzeit oder bis zum Ende der Datei [endeVon] (Kapitel, Folge, Titel). */
 data class SchlafTimer(val bis: Long?, val endeVon: UUID?, val minuten: Int)
@@ -262,6 +281,13 @@ object Hoeren {
 
 	/** Was zuletzt als Liste gestartet wurde (für «Als Nächstes», Kapitel und Folgen im Player). */
 	var liste: List<BaseItemDto> = emptyList(); private set
+	private var warteliste: Warteliste? = null
+	/** Ab hier (in der Warteliste) steht der Endlos-Mix; was man selbst anstellt, kommt davor. */
+	private var mixAb: Int? = null
+	/** Zählt Titel, die beim «Als Nächstes» schon abgeholt waren und darum ein zweites Mal in der Warteliste stehen. */
+	private var doppelt = 0
+	/** Zählt hoch, wenn sich «Als Nächstes» ändert (der Player zeichnet die Reihe neu). */
+	val listenStand = MutableStateFlow(0)
 	private var ausstehend: Pair<UUID, Long>? = null
 	private var ausstehendBis = 0L
 
@@ -283,7 +309,9 @@ object Hoeren {
 		pm.state.setRepeatMode(RepeatMode.NONE)
 		pm.state.setPlaybackOrder(if (zufall) PlaybackOrder.SHUFFLE else PlaybackOrder.DEFAULT)
 		pm.queue.clear()
-		pm.queue.addSupplier(RewriteMediaManager.BaseItemQueueSupplier(api, titel, true))
+		mixAb = null; doppelt = 0
+		warteliste = Warteliste(api, titel).also { pm.queue.addSupplier(it) }
+		listenStand.value++
 		pm.state.play()
 		if (nr > 0 && !zufall) scope.launch {
 			// Die Warteschlange beginnt selbst bei 0; danach zur gewünschten Nummer
@@ -405,6 +433,40 @@ object Hoeren {
 
 	fun vor() { scope.launch { pm.queue.next() } }
 
+	/** Läuft gerade Musik aus unserer Warteschlange (dann kann man Titel anstellen)? */
+	fun musikLaeuft(): Boolean = laufend()?.let { art(it) == HoerArt.MUSIK } == true && warteliste != null
+
+	/**
+	 * Wie bei Plexamp: Titel [gleichDanach] als Nächstes spielen, sonst hinten anstellen (vor dem Endlos-Mix).
+	 * Läuft nichts, spielen sie gleich.
+	 */
+	suspend fun einreihen(neu: List<BaseItemDto>, gleichDanach: Boolean) {
+		val w = warteliste
+		if (neu.isEmpty()) return
+		if (w == null || !musikLaeuft()) { spielen(neu); return }
+		if (gleichDanach) {
+			// Schon abgeholte Titel nach dem laufenden (die Wiedergabe lädt den nächsten vor) aus der Wiedergabe nehmen
+			// und hinter den neuen wieder anstellen – so bleibt die Reihenfolge richtig
+			val jetzt = pm.queue.entryIndex.value
+			val vorgeholt = pm.queue.entries.value.drop(jetzt + 1)
+			vorgeholt.forEach { pm.queue.removeEntry(it) }
+			val stelle = w.abgeholt
+			w.titel.addAll(stelle, neu + vorgeholt.mapNotNull { it.baseItem })
+			doppelt += vorgeholt.size
+			mixAb = mixAb?.let { it + neu.size + vorgeholt.size }
+			liste = liste.take(jetzt + 1) + neu + liste.drop(jetzt + 1)
+		} else {
+			val stelle = maxOf(w.abgeholt, mixAb ?: w.titel.size).coerceAtMost(w.titel.size)
+			w.titel.addAll(stelle, neu)
+			mixAb = mixAb?.let { it + neu.size }
+			val logisch = (stelle - doppelt).coerceIn(0, liste.size)
+			liste = liste.take(logisch) + neu + liste.drop(logisch)
+		}
+		// Hat der Endlos-Mix schon zugeschlagen, darf er später wieder
+		endlosFuer = null
+		listenStand.value++
+	}
+
 	/** Medientasten im Player: Spulen um die Sprungweite der Art, ⏮/⏭ wechseln Titel, Kapitel bzw. Folge. */
 	fun taste(e: android.view.KeyEvent): Boolean {
 		val (zurueckS, vorS) = sprung(art(laufend()))
@@ -481,7 +543,7 @@ object Hoeren {
 			letztes = item; gehoertMarkiert = null; letztePos = 0; letzteDauer = 0
 			if (item != null) {
 				// Von anderswo gestartet (z. B. Jellyfins eigene Seiten): unsere Liste gilt nicht mehr
-				if (liste.none { it.id == item.id }) liste = listOf(item)
+				if (liste.none { it.id == item.id }) { liste = listOf(item); warteliste = null; mixAb = null; doppelt = 0 }
 				podcastsLaden()
 				val tempo = if (art(item) == HoerArt.MUSIK) 1f else tempo(tempoSchluessel(item))
 				if (pm.state.speed.value != tempo) pm.state.setSpeed(tempo)
@@ -569,7 +631,10 @@ object Hoeren {
 		if (mix.isEmpty()) return
 		val erster = pm.queue.estimatedSize
 		liste = liste + mix
-		pm.queue.addSupplier(RewriteMediaManager.BaseItemQueueSupplier(api, mix, true))
+		val w = warteliste
+		if (w != null) { if (mixAb == null) mixAb = w.titel.size; w.titel.addAll(mix) }
+		else pm.queue.addSupplier(RewriteMediaManager.BaseItemQueueSupplier(api, mix, true))
+		listenStand.value++
 		// Schon zu Ende (z. B. ans Ende gespult, bevor der Mix da war): gleich weiterspielen. Pausiert bleibt pausiert.
 		if (pm.state.playState.value == PlayState.STOPPED) { pm.queue.setIndex(erster); pm.state.play() }
 	}

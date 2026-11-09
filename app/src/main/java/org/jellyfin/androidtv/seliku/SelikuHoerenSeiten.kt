@@ -196,6 +196,7 @@ fun PodcastSeite(vm: SelikuViewModel, seite: Seite.Musik, oeffnen: (BaseItemDto)
 		Row(Modifier.padding(start = 48.dp, end = 48.dp, top = 28.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
 			Text(seite.ansicht.name.orEmpty(), style = Schrift.Titel)
 			Spacer(Modifier.width(12.dp))
+			LaeuftKnopf()
 			nebenan.filter { it.id != seite.ansicht.id }.forEach { bib -> Knopf(bib.name.orEmpty(), onClick = { vm.zu(seiteFuerBibliothek(bib)) }) }
 		}
 		val a = alle

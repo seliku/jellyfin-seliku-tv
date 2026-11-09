@@ -128,6 +128,9 @@ private fun symbolFuer(bib: BaseItemDto): Int = when (bib.collectionType?.serial
 private fun Oberflaeche(vm: SelikuViewModel) {
 	val daten = koinInject<SelikuDaten>()
 	val context = LocalContext.current
+	// Aus dem Player «Zum Album»/«Zum Interpreten»: die Seite öffnen, sobald die Oberfläche wieder da ist
+	val sprung by SelikuSprung.ziel.collectAsState()
+	LaunchedEffect(sprung) { sprung?.let { vm.zu(it); SelikuSprung.ziel.value = null } }
 	var bibliotheken by remember { mutableStateOf<List<BaseItemDto>>(emptyList()) }
 	var leisteOffen by remember { mutableStateOf(false) }
 	// Die Leiste öffnet nur, wenn man sie holt (Zurück, bzw. Links falls eingestellt). Landet der Fokus sonst dort –

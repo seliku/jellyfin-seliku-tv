@@ -250,7 +250,15 @@ class Abspielen(
 		}
 	}
 
-	fun jetztLaeuft() = navigation.navigate(Destinations.nowPlaying)
+	/** Den Player zeigen – nie zweimal übereinander (ein langer Druck schickt die Taste mehrmals). */
+	fun jetztLaeuft() {
+		if (SelikuSpielerFragment.offen) return
+		val jetzt = System.currentTimeMillis()
+		if (jetzt - zuletztGeoeffnet < 1_500L) return
+		zuletztGeoeffnet = jetzt
+		navigation.navigate(Destinations.nowPlaying)
+	}
+	private var zuletztGeoeffnet = 0L
 	fun programmfuehrer() = navigation.navigate(Destinations.liveTvGuide)
 	fun aufnahmen() = navigation.navigate(Destinations.liveTvRecordings)
 }

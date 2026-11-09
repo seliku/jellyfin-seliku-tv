@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -71,9 +73,22 @@ fun Banner(
 	val scope = androidx.compose.runtime.rememberCoroutineScope()
 	var nr by remember { mutableIntStateOf(0) }
 	var hatFokus by remember { mutableStateOf(false) }
-	val eintrag = alle[nr % alle.size]
+	val ersatz = items.firstOrNull() ?: BaseItemDto(id = java.util.UUID(0, 0), type = BaseItemKind.MOVIE)
+	fun hintergrundVon(e: Any): String? = (e as? SeerrTitel)?.hintergrund ?: (e as? BaseItemDto)?.let { bilder.hintergrund(it, 1280) }
+	// Weich überblenden: das nächste Bild erst laden, dann Bild und Text gemeinsam in einer Sekunde überblenden
+	// (sonst springt der Banner, oder er wird kurz dunkel, solange das Bild noch lädt)
+	val gewaehlt = alle[nr % alle.size]
+	val bildLader = koinInject<coil3.ImageLoader>()
+	var eintrag by remember { mutableStateOf(gewaehlt) }
+	LaunchedEffect(gewaehlt) {
+		if (gewaehlt == eintrag) return@LaunchedEffect
+		hintergrundVon(gewaehlt)?.let { url ->
+			runCatching { kotlinx.coroutines.withTimeoutOrNull(3_000) { bildLader.execute(coil3.request.ImageRequest.Builder(context).data(url).build()) } }
+		}
+		eintrag = gewaehlt
+	}
 	val fremd = eintrag as? SeerrTitel
-	val item = (eintrag as? BaseItemDto) ?: items.firstOrNull() ?: BaseItemDto(id = java.util.UUID(0, 0), type = BaseItemKind.MOVIE)
+	val item = (eintrag as? BaseItemDto) ?: ersatz
 	LaunchedEffect(eintrag) { if (fremd == null) zeigt(item) }
 	// Nach 3 Sekunden stumm den Trailer zeigen (falls einer auf dem Server liegt); solange er läuft, wird nicht weitergeblättert
 	val api = koinInject<org.jellyfin.sdk.api.client.ApiClient>()
@@ -109,7 +124,9 @@ fun Banner(
 		.clip(androidx.compose.foundation.shape.RoundedCornerShape(18.dp)).background(Farben.Flaeche)
 		.onFocusChanged { hatFokus = it.hasFocus }
 		.onPreviewKeyEvent { if (it.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) tasten++; false }) {
-		Bild(fremd?.hintergrund ?: bilder.hintergrund(item, 1280), Modifier.matchParentSize())
+		androidx.compose.animation.Crossfade(eintrag, Modifier.matchParentSize(), androidx.compose.animation.core.tween(1_000), label = "bannerbild") { e ->
+			Bild(hintergrundVon(e), Modifier.fillMaxSize())
+		}
 		trailer?.let { url ->
 			key(url) {
 				TrailerVideo(url, Modifier.matchParentSize().graphicsLayer { alpha = trailerSicht }, mitTon = true, onBereit = { trailerBereit = true },
@@ -120,25 +137,35 @@ fun Banner(
 		Box(Modifier.matchParentSize().graphicsLayer { alpha = 0.25f + 0.75f * schriftSicht }.background(androidx.compose.ui.graphics.Brush.horizontalGradient(
 			listOf(androidx.compose.ui.graphics.Color(0xF0120D0B), androidx.compose.ui.graphics.Color(0x99120D0B), androidx.compose.ui.graphics.Color.Transparent))))
 	Column(Modifier.fillMaxWidth().padding(start = 28.dp, top = 22.dp, end = 340.dp).graphicsLayer { alpha = schriftSicht }) {
-		val logo = if (fremd == null) bilder.logo(item) else null
-		if (logo != null) Bild(logo, Modifier.height(76.dp).width(320.dp), ContentScale.Fit, grund = androidx.compose.ui.graphics.Color.Transparent, ausrichtung = androidx.compose.ui.Alignment.CenterStart)
-		else Text(fremd?.titel ?: item.name.orEmpty(), style = Schrift.Riesig, maxLines = 1, overflow = TextOverflow.Ellipsis)
-		Spacer(Modifier.height(8.dp))
-		// Gesehen: Häkchen vor der Infozeile (wie auf den Postern)
-		Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-			if (fremd != null) {
-				// Seliku: klar erkennbar, dass es den Titel (noch) nicht gibt
-				Text(stringResource(R.string.seliku_banner_not_on_server), style = Schrift.Klein.copy(color = androidx.compose.ui.graphics.Color.Black),
-					modifier = Modifier.padding(end = 10.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(5.dp)).background(Farben.Akzent).padding(horizontal = 8.dp, vertical = 2.dp))
-				Text(listOf(fremd.jahr, stringResource(if (fremd.typ == "movie") R.string.seliku_banner_movie else R.string.seliku_banner_series))
-					.filter { it.isNotBlank() }.joinToString("   ·   "), style = Schrift.Leise, maxLines = 1)
-			} else {
-				if (item.userData?.played == true) Abzeichen(item, Modifier.padding(end = 4.dp))
-				Text(item.metazeile(), style = Schrift.Leise, maxLines = 1)
+		// Text: erst der alte weg, dann der neue (übereinander wäre er unlesbar)
+		androidx.compose.animation.AnimatedContent(eintrag, transitionSpec = {
+			androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(500, delayMillis = 350)) togetherWith
+				androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(300))
+		}, label = "bannertext") { e ->
+		val f = e as? SeerrTitel
+		val it2 = (e as? BaseItemDto) ?: ersatz
+		Column {
+			val logo = if (f == null) bilder.logo(it2) else null
+			if (logo != null) Bild(logo, Modifier.height(76.dp).width(320.dp), ContentScale.Fit, grund = androidx.compose.ui.graphics.Color.Transparent, ausrichtung = androidx.compose.ui.Alignment.CenterStart)
+			else Text(f?.titel ?: it2.name.orEmpty(), style = Schrift.Riesig, maxLines = 1, overflow = TextOverflow.Ellipsis)
+			Spacer(Modifier.height(8.dp))
+			// Gesehen: Häkchen vor der Infozeile (wie auf den Postern)
+			Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+				if (f != null) {
+					// Seliku: klar erkennbar, dass es den Titel (noch) nicht gibt
+					Text(stringResource(R.string.seliku_banner_not_on_server), style = Schrift.Klein.copy(color = androidx.compose.ui.graphics.Color.Black),
+						modifier = Modifier.padding(end = 10.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(5.dp)).background(Farben.Akzent).padding(horizontal = 8.dp, vertical = 2.dp))
+					Text(listOf(f.jahr, stringResource(if (f.typ == "movie") R.string.seliku_banner_movie else R.string.seliku_banner_series))
+						.filter { it.isNotBlank() }.joinToString("   ·   "), style = Schrift.Leise, maxLines = 1)
+				} else {
+					if (it2.userData?.played == true) Abzeichen(it2, Modifier.padding(end = 4.dp))
+					Text(it2.metazeile(), style = Schrift.Leise, maxLines = 1)
+				}
 			}
+			Spacer(Modifier.height(6.dp))
+			Text(f?.text ?: it2.overview.orEmpty(), style = Schrift.Normal, maxLines = 2, overflow = TextOverflow.Ellipsis)
 		}
-		Spacer(Modifier.height(6.dp))
-		Text(fremd?.text ?: item.overview.orEmpty(), style = Schrift.Normal, maxLines = 2, overflow = TextOverflow.Ellipsis)
+		}
 		Spacer(Modifier.height(12.dp))
 		// Die Knopfreihe darf über den Textrand hinaus: sonst bekommen hintere Punkte keinen Platz, bleiben aber
 		// anwählbar – unsichtbar, und der Fokus verschwindet darin (passierte beim Linksdrücken vom ersten Poster)

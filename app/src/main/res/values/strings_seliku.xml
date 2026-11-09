@@ -372,4 +372,13 @@
 	<string name="seliku_set_listen_home_desc">Started audiobooks and podcast episodes as a row on the home screen</string>
 	<string name="seliku_audio_episode_count">%1$d episodes</string>
 	<string name="seliku_audio_new_count">%1$d new</string>
+	<string name="seliku_audio_go_album">Go to album</string>
+	<string name="seliku_audio_now_playing">Now playing</string>
+	<string name="seliku_audio_continue_books_podcasts">Continue: audiobooks and podcasts</string>
+	<string name="seliku_audio_new_podcast_episodes">New podcast episodes</string>
+	<string name="seliku_audio_your_radio">Your radio stations</string>
+	<string name="seliku_audio_play_next">Play next</string>
+	<string name="seliku_audio_add_queue">Add to queue</string>
+	<string name="seliku_audio_queued_next">«%1$s» plays next</string>
+	<string name="seliku_audio_queued_end">«%1$s» added to queue</string>
 </resources>

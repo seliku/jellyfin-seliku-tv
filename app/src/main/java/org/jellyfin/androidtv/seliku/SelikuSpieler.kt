@@ -84,6 +84,14 @@ import org.koin.compose.koinInject
  * «Läuft gerade» für Musik, Hörbücher und Podcasts. Ist der neue Player abgeschaltet, zeigt die Seite Jellyfins alten.
  */
 class SelikuSpielerFragment : Fragment() {
+	companion object {
+		/** Ist der Player gerade sichtbar (dann öffnet «Läuft gerade» ihn nicht noch einmal)? */
+		@Volatile var offen = false
+	}
+
+	override fun onStart() { super.onStart(); offen = true }
+	override fun onStop() { offen = false; super.onStop() }
+
 	override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
 		if (!SelikuEinstellungen.neuerAudioPlayer(requireContext())) {
 			val rahmen = FrameLayout(requireContext()).apply { id = View.generateViewId() }
@@ -103,7 +111,12 @@ private fun Spieler() {
 	val context = LocalContext.current
 	val scope = rememberCoroutineScope()
 	val entry by pm.queue.entry.collectAsState()
-	val item = entry?.baseItem?.takeIf { it.mediaType == MediaType.AUDIO }
+	// Beim Wechsel zum nächsten Lied ist kurz nichts in der Warteschlange: den letzten Titel weiter zeigen,
+	// sonst baut sich der Bildschirm (samt Bildschirmschoner) neu auf
+	var zuletzt by remember { mutableStateOf<BaseItemDto?>(null) }
+	val jetzt = entry?.baseItem?.takeIf { it.mediaType == MediaType.AUDIO }
+	if (jetzt != null) zuletzt = jetzt
+	val item = jetzt ?: zuletzt
 	val zustand by pm.state.playState.collectAsState()
 	val tempo by pm.state.speed.collectAsState()
 	val reihenfolge by pm.state.playbackOrder.collectAsState()
@@ -120,8 +133,8 @@ private fun Spieler() {
 		}
 	}
 	// Nichts mehr in der Warteschlange: zurück, woher man kam
-	LaunchedEffect(item == null) {
-		if (item == null) { delay(1_500); if (Hoeren.laufend() == null) navigation.goBack() }
+	LaunchedEffect(jetzt == null) {
+		if (jetzt == null) { delay(3_000); if (Hoeren.laufend() == null) navigation.goBack() }
 	}
 
 	// Ruhebildschirm wie beim alten Player: nach 20 s ohne Taste dunkel bzw. Diashow; die erste Taste weckt nur auf
@@ -251,6 +264,11 @@ private fun Spieler() {
 									favorit = !favorit
 									scope.launch { runCatching { daten.favorit(item.id, favorit) } }
 								})
+								// Zum Album bzw. Interpreten: zurück in die Oberfläche, dort die Seite öffnen
+								item.albumId?.let { a -> SymbolKnopf(R.drawable.ic_album, stringResource(R.string.seliku_audio_go_album), onClick = { SelikuSprung.ziel.value = Seite.Album(a); navigation.goBack() }) }
+								(item.albumArtists?.firstOrNull()?.id ?: item.artistItems?.firstOrNull()?.id)?.let { i ->
+									SymbolKnopf(R.drawable.ic_artist, stringResource(R.string.seliku_go_to_artist), onClick = { SelikuSprung.ziel.value = Seite.Interpret(i); navigation.goBack() })
+								}
 							}
 							else -> {
 								SymbolKnopf(R.drawable.ic_playback_speed, stringResource(R.string.seliku_audio_speed), text = tempoText(tempo), aktiv = tempo != 1f, onClick = Hoeren::tempoWeiter)
@@ -289,6 +307,7 @@ private fun Unten(item: BaseItemDto, art: HoerArt, buch: Buch?) {
 	val pm = koinInject<PlaybackManager>()
 	val scope = rememberCoroutineScope()
 	@Suppress("UNUSED_VARIABLE") val index by pm.queue.entryIndex.collectAsState()
+	@Suppress("UNUSED_VARIABLE") val stand by Hoeren.listenStand.collectAsState()
 	val liste = if (art == HoerArt.HOERBUCH && buch != null && Hoeren.liste.none { it.id == buch.dateien.first().id }) buch.dateien else Hoeren.liste
 	val jetzt = liste.indexOfFirst { it.id == item.id }.coerceAtLeast(0)
 	val zeigen = if (art == HoerArt.MUSIK) liste.drop(jetzt + 1).take(40) else liste
@@ -354,3 +373,36 @@ private fun schlafText(t: SchlafTimer?, art: HoerArt): String = when {
 
 fun datumLang(d: java.time.LocalDate): String = d.format(java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.LONG))
 fun datumKurz(d: java.time.LocalDate): String = d.format(java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM))
+
+/** Seite, die die Oberfläche nach der Rückkehr aus dem Player öffnen soll (Zum Album, Zum Interpreten). */
+object SelikuSprung { val ziel = kotlinx.coroutines.flow.MutableStateFlow<Seite?>(null) }
+
+/**
+ * Kleiner «Läuft gerade»-Knopf neben der Überschrift (Musik, Podcasts, Hörbücher): Cover, Titel, OK öffnet den Player.
+ * Mit Zurück ist man oben bei den Reitern, von dort ein Schritt nach links.
+ */
+@Composable
+fun LaeuftKnopf(modifier: Modifier = Modifier) {
+	val pm = koinInject<PlaybackManager>()
+	val abspielen = koinInject<Abspielen>()
+	val bilder = koinInject<Bilder>()
+	val entry by pm.queue.entry.collectAsState()
+	val item = entry?.baseItem?.takeIf { it.mediaType == MediaType.AUDIO } ?: return
+	val zustand by pm.state.playState.collectAsState()
+	val buch by produceState<Buch?>(null, item.id) { value = if (Hoeren.art(item) == HoerArt.HOERBUCH) Hoeren.buchVon(item) else null }
+	val cover = buch?.let { bilder.eigenesBild(it.ordner, 120) } ?: bilder.poster(item, 120)
+	Waehlbar(onClick = { abspielen.jetztLaeuft() }, modifier = modifier, vergroessern = false, shape = RoundedCornerShape(22.dp)) { fokussiert ->
+		Row(Modifier.background(if (fokussiert) Farben.Text else Farben.FlaecheHell).padding(start = 4.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
+			verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+			Bild(cover, Modifier.size(34.dp).clip(RoundedCornerShape(17.dp)), ersatz = "♫")
+			Column(Modifier.width(170.dp)) {
+				val farbe = if (fokussiert) Color.Black else Farben.Text
+				Text(item.name.orEmpty(), style = Schrift.Klein.copy(color = farbe, fontWeight = FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
+				Text(stringResource(R.string.seliku_audio_now_playing), style = Schrift.Klein.copy(color = if (fokussiert) Color.Black.copy(alpha = 0.7f) else Farben.TextLeise), maxLines = 1)
+			}
+			if (zustand == PlayState.PLAYING) Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.Bottom) {
+				listOf(10, 16, 12).forEach { h -> Box(Modifier.size(width = 4.dp, height = h.dp).background(Farben.Akzent, RoundedCornerShape(1.dp))) }
+			} else Text("❚❚", style = Schrift.Klein.copy(color = Farben.Akzent))
+		}
+	}
+}

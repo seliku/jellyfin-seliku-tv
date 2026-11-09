@@ -66,7 +66,10 @@ fun OrdnerSeite(vm: SelikuViewModel, seite: Seite.Ordner, oeffnen: (BaseItemDto)
 	val alle = inhalt
 	if (alle != null && Hoeren.istBuch(alle) && SelikuEinstellungen.neuerAudioPlayer(context)) { BuchSeite(vm, seite); return }
 	Column(Modifier.fillMaxSize().background(Farben.Hintergrund)) {
-		Text(titel, style = Schrift.Titel, modifier = Modifier.padding(start = 48.dp, top = 28.dp, bottom = 12.dp))
+		Row(Modifier.padding(start = 48.dp, top = 28.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+			Text(titel, style = Schrift.Titel)
+			LaeuftKnopf()
+		}
 		if (alle == null) { Hinweis(stringResource(R.string.seliku_loading)); return@Column }
 		if (alle.isEmpty()) { Hinweis(stringResource(R.string.seliku_folder_empty)); return@Column }
 		val ordner = alle.filter { it.isFolder == true && it.type != BaseItemKind.MUSIC_ALBUM }

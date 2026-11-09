@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -83,11 +84,12 @@ fun MusikSeite(vm: SelikuViewModel, seite: Seite.Musik, oeffnen: (BaseItemDto) -
 		Row(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()).padding(start = 48.dp, end = 48.dp, top = 28.dp, bottom = 8.dp).onFocusChanged { vm.reiterFokus = it.hasFocus }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
 			Text(seite.ansicht.name.orEmpty(), style = Schrift.Titel)
 			Spacer(Modifier.width(12.dp))
+			LaeuftKnopf()
 			listOf(stringResource(R.string.seliku_music_overview), stringResource(R.string.seliku_music_playlists), stringResource(R.string.seliku_music_artists), stringResource(R.string.seliku_music_albums), stringResource(R.string.seliku_music_radio)).forEachIndexed { n, t -> Knopf(t, onClick = { reiter = n }, aktiv = reiter == n, modifier = if (reiter == n) Modifier.focusRequester(vm.reiter(seite)) else Modifier) }
 			weitere.forEach { bib -> Knopf(bib.name.orEmpty(), onClick = { vm.zu(seiteFuerBibliothek(bib)) }) }
 		}
 		when (reiter) {
-			0 -> { MusikUebersicht(vm, seite, oeffnen); return@Column }
+			0 -> { MusikUebersicht(vm, seite, oeffnen, nebenan); return@Column }
 			1 -> { AllePlaylists(vm, seite); return@Column }
 			4 -> { RadioReiter(vm); return@Column }
 		}
@@ -105,7 +107,7 @@ fun MusikSeite(vm: SelikuViewModel, seite: Seite.Musik, oeffnen: (BaseItemDto) -
 				modifier = Modifier.weight(1f),
 			) {
 				items(l, key = { it.id }) { item ->
-					QuadratKachel(item, onClick = { oeffnen(item) }, rund = reiter == 2, merken = vm to (schluessel.schluessel to item.id.toString()))
+					QuadratKachel(item, onClick = { oeffnen(item) }, rund = reiter == 2, merken = vm to (schluessel.schluessel to item.id.toString()), onMenue = { vm.menue = item })
 				}
 			}
 			AlphabetLeiste(l.map { it.sortName ?: it.name.orEmpty() }, raster)
@@ -115,7 +117,7 @@ fun MusikSeite(vm: SelikuViewModel, seite: Seite.Musik, oeffnen: (BaseItemDto) -
 
 /** Übersicht der Musik: zuletzt gehört, neu hinzugefügt, Mixe, eigene Playlists. */
 @Composable
-private fun MusikUebersicht(vm: SelikuViewModel, seite: Seite.Musik, oeffnen: (BaseItemDto) -> Unit) {
+private fun MusikUebersicht(vm: SelikuViewModel, seite: Seite.Musik, oeffnen: (BaseItemDto) -> Unit, nebenan: List<BaseItemDto> = emptyList()) {
 	val daten = koinInject<SelikuDaten>()
 	val abspielen = koinInject<Abspielen>()
 	val context = LocalContext.current
@@ -135,6 +137,28 @@ private fun MusikUebersicht(vm: SelikuViewModel, seite: Seite.Musik, oeffnen: (B
 	val radioDaten = koinInject<RadioDaten>()
 	val mediaManager = koinInject<org.jellyfin.androidtv.ui.playback.MediaManager>()
 	val mitFavoriten = SelikuEinstellungen.musikFavoriten(context)
+	// Auch Hörbücher, Podcasts und Radio gehören in die Übersicht
+	@Suppress("UNCHECKED_CAST")
+	var hoeren by remember { mutableStateOf(vm.wahl["$k|hoeren"] as? List<BaseItemDto> ?: emptyList()) }
+	@Suppress("UNCHECKED_CAST")
+	var folgen by remember { mutableStateOf(vm.wahl["$k|folgen"] as? List<BaseItemDto> ?: emptyList()) }
+	@Suppress("UNCHECKED_CAST")
+	var radio by remember { mutableStateOf(vm.wahl["$k|radioreihe"] as? List<RadioSender> ?: emptyList()) }
+	var radioTitel by remember { mutableStateOf(vm.wahl["$k|radiotitel"] as? String ?: "") }
+	val hoerStand by Hoeren.version.collectAsState()
+	LaunchedEffect(vm.datenStand, hoerStand) {
+		runCatching { Hoeren.weiterhoeren() }.onSuccess { hoeren = it; vm.wahl["$k|hoeren"] = it }
+		nebenan.firstOrNull { it.name.orEmpty().contains("podcast", true) }?.let { bib ->
+			runCatching { Hoeren.neueFolgen(bib.id, 20) }.onSuccess { folgen = it; vm.wahl["$k|folgen"] = it }
+		}
+	}
+	LaunchedEffect(Unit) {
+		// Radio: die eigenen Sender, sonst die beliebtesten der Schweiz
+		val fav = runCatching { radioDaten.favoriten() }.getOrDefault(emptyList())
+		val (t, l) = if (fav.isNotEmpty()) context.getString(R.string.seliku_audio_your_radio) to fav
+			else context.getString(R.string.seliku_radio_popular_ch) to runCatching { radioDaten.beliebtIn("CH", 20) }.getOrDefault(emptyList())
+		radio = l; radioTitel = t; vm.wahl["$k|radioreihe"] = l; vm.wahl["$k|radiotitel"] = t
+	}
 	LaunchedEffect(vm.datenStand) {
 		if (mitFavoriten) {
 			runCatching { daten.musikFavoriten(bib) }.onSuccess { favItems = it; vm.wahl["$k|fav"] = it }
@@ -174,9 +198,28 @@ private fun MusikUebersicht(vm: SelikuViewModel, seite: Seite.Musik, oeffnen: (B
 			}
 			if (zuletzt.isNotEmpty()) item {
 				Reihe(stringResource(R.string.seliku_music_recently_played), zuletzt, vm, unterSeite, onClick = { t -> abspielen.musik(context, zuletzt, zuletzt.indexOf(t).coerceAtLeast(0)) },
-					kachel = { item, klick, merken, fokus -> QuadratKachel(item, klick, merken = merken, onFokus = fokus) })
+					kachel = { item, klick, merken, fokus -> QuadratKachel(item, klick, merken = merken, onFokus = fokus, onMenue = { vm.menue = item }) })
 			}
-			if (neu.isNotEmpty()) item { Reihe(stringResource(R.string.seliku_recently_added), neu, vm, unterSeite, onClick = oeffnen) }
+			if (hoeren.isNotEmpty()) item(key = "hoeren") {
+				Reihe(stringResource(R.string.seliku_audio_continue_books_podcasts), hoeren, vm, unterSeite, onClick = { abspielen.hoeren(context, it) },
+					kachel = { item, klick, merken, fokus -> HoerKachel(item, klick, merken, fokus) })
+			}
+			if (folgen.isNotEmpty()) item(key = "folgen") {
+				Reihe(stringResource(R.string.seliku_audio_new_podcast_episodes), folgen, vm, unterSeite, onClick = { abspielen.hoeren(context, it) },
+					kachel = { item, klick, merken, fokus -> HoerKachel(item, klick, merken, fokus) })
+			}
+			if (radio.isNotEmpty()) item(key = "radio") {
+				Text(radioTitel, style = Schrift.Reihe, modifier = Modifier.padding(start = 48.dp, top = 6.dp, bottom = 8.dp))
+				SeitlichRollen { LazyRow(contentPadding = PaddingValues(horizontal = 48.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+					items(radio, key = { "radio" + it.id }) { s ->
+						RadioKachel(s, merken = vm to (unterSeite.schluessel to "radio|" + s.id)) {
+							mediaManager.stopAudio(true); RadioSpieler.spielen(context, s, radio, radioTitel)
+						}
+					}
+				} }
+				Spacer(Modifier.height(18.dp))
+			}
+			if (neu.isNotEmpty()) item { Reihe(stringResource(R.string.seliku_recently_added), neu, vm, unterSeite, onClick = oeffnen, onMenue = { vm.menue = it }) }
 			item {
 				Text(stringResource(R.string.seliku_music_auto_mixes), style = Schrift.Reihe, modifier = Modifier.padding(start = 48.dp, top = 6.dp, bottom = 8.dp))
 				androidx.compose.foundation.lazy.LazyRow(contentPadding = PaddingValues(horizontal = 48.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
@@ -386,6 +429,7 @@ fun InterpretSeite(vm: SelikuViewModel, seite: Seite.Interpret, oeffnen: (BaseIt
 							Knopf(stringResource(R.string.seliku_shuffle), symbol = "⤨", onClick = {
 								scope.launch { abspielen.musik(context, daten.titelVon(seite.id, beliebteste = false), zufall = true) }
 							})
+							FavoritKnopf(i) { vm.datenStand++ }
 						}
 					}
 				}
@@ -394,7 +438,7 @@ fun InterpretSeite(vm: SelikuViewModel, seite: Seite.Interpret, oeffnen: (BaseIt
 			if (beliebt.isNotEmpty()) {
 				item { Text(stringResource(R.string.seliku_music_popular_tracks), style = Schrift.Reihe, modifier = Modifier.padding(start = 48.dp, bottom = 8.dp)) }
 				itemsIndexed(beliebt, key = { _, it -> "b" + it.id }) { index, t ->
-					TitelZeile(t, nummer = index + 1, mitAlbum = true, onClick = { abspielen.musik(context, beliebt, index) })
+					TitelZeile(t, nummer = index + 1, mitAlbum = true, onClick = { abspielen.musik(context, beliebt, index) }, onMenue = { vm.menue = t })
 				}
 				item { Spacer(Modifier.height(24.dp)) }
 			}
@@ -442,6 +486,7 @@ fun AlbumSeite(vm: SelikuViewModel, seite: Seite.Album, oeffnen: (BaseItemDto) -
 				Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
 					Knopf(stringResource(R.string.seliku_play), symbol = "▶", hervorgehoben = true, modifier = Modifier.focusRequester(start), onClick = { abspielen.musik(context, titel) })
 					Knopf(stringResource(R.string.seliku_shuffle), symbol = "⤨", onClick = { abspielen.musik(context, titel, zufall = true) })
+					FavoritKnopf(a) { vm.datenStand++ }
 				}
 				val interpretId = a.albumArtists?.firstOrNull()?.id
 				if (interpretId != null) {
@@ -452,7 +497,7 @@ fun AlbumSeite(vm: SelikuViewModel, seite: Seite.Album, oeffnen: (BaseItemDto) -
 			LazyColumn(state = vm.liste(seite), contentPadding = PaddingValues(bottom = 48.dp), modifier = Modifier.weight(1f)) {
 				itemsIndexed(titel, key = { _, it -> it.id }) { index, t ->
 					TitelZeile(t, nummer = t.indexNumber ?: (index + 1), mitAlbum = false, onClick = { abspielen.musik(context, titel, index) },
-						merken = vm to (seite.schluessel to t.id.toString()))
+						merken = vm to (seite.schluessel to t.id.toString()), onMenue = { vm.menue = t })
 				}
 			}
 		}
@@ -467,8 +512,9 @@ fun TitelZeile(
 	mitAlbum: Boolean,
 	onClick: () -> Unit,
 	merken: Pair<SelikuViewModel, Pair<String, String>>? = null,
+	onMenue: (() -> Unit)? = null,
 ) {
-	Waehlbar(onClick = onClick, vergroessern = false, merken = merken, modifier = Modifier.padding(horizontal = if (mitAlbum) 40.dp else 0.dp, vertical = 2.dp)) { fokussiert ->
+	Waehlbar(onClick = onClick, vergroessern = false, merken = merken, onMenue = onMenue, modifier = Modifier.padding(horizontal = if (mitAlbum) 40.dp else 0.dp, vertical = 2.dp)) { fokussiert ->
 		Row(
 			Modifier.fillMaxWidth().background(if (fokussiert) Farben.FlaecheHell else Farben.Flaeche.copy(alpha = 0.5f)).padding(horizontal = 16.dp, vertical = 10.dp),
 			verticalAlignment = Alignment.CenterVertically,

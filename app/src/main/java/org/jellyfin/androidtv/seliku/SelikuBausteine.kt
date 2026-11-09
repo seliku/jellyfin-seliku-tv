@@ -394,8 +394,8 @@ fun Kachel(
 	onMenue: (() -> Unit)? = null,
 ) = when (item.type) {
 	BaseItemKind.EPISODE, BaseItemKind.TV_CHANNEL, BaseItemKind.PROGRAM, BaseItemKind.VIDEO -> QuerKachel(item, onClick, merken = merken, onFokus = onFokus, onMenue = onMenue)
-	BaseItemKind.MUSIC_ALBUM, BaseItemKind.AUDIO, BaseItemKind.PLAYLIST -> QuadratKachel(item, onClick, merken = merken, onFokus = onFokus)
-	BaseItemKind.MUSIC_ARTIST -> QuadratKachel(item, onClick, rund = true, merken = merken, onFokus = onFokus)
+	BaseItemKind.MUSIC_ALBUM, BaseItemKind.AUDIO, BaseItemKind.PLAYLIST -> QuadratKachel(item, onClick, merken = merken, onFokus = onFokus, onMenue = onMenue)
+	BaseItemKind.MUSIC_ARTIST -> QuadratKachel(item, onClick, rund = true, merken = merken, onFokus = onFokus, onMenue = onMenue)
 	else -> PosterKachel(item, onClick, merken = merken, onFokus = onFokus, onMenue = onMenue)
 }
 
