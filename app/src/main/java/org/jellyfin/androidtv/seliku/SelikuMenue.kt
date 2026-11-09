@@ -63,6 +63,10 @@ object SelikuEinstellungen {
 	/** An (Vorgabe): Live-TV nach Senderblöcken getrennt (1–99, 100–199 …, z. B. je Sprache) – Reiter auf der Seite, Zappen bleibt im Block. */
 	@JvmStatic fun senderGruppen(c: Context) = prefs(c).getBoolean("sender_gruppen", true)
 	fun senderGruppen(c: Context, an: Boolean) = prefs(c).edit().putBoolean("sender_gruppen", an).apply()
+
+	/** An (Vorgabe): «Zurück» im Live-TV öffnet den Programmführer, der Sender läuft klein weiter; erst ein zweites «Zurück» beendet. */
+	@JvmStatic fun liveZurueckProgramm(c: Context) = prefs(c).getBoolean("live_zurueck_programm", true)
+	fun liveZurueckProgramm(c: Context, an: Boolean) = prefs(c).edit().putBoolean("live_zurueck_programm", an).apply()
 	/** Zuletzt gewählter Senderblock auf der Live-TV-Seite (-1 = alle), nur auf diesem Gerät. */
 	fun senderBlock(c: Context) = prefs(c).getInt("sender_block", -1)
 	fun senderBlock(c: Context, block: Int) = prefs(c).edit().putInt("sender_block", block).apply()

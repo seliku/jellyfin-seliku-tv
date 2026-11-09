@@ -385,4 +385,6 @@
 	<string name="seliku_set_crossfade_desc">The next song fades in while the current one fades out (not between consecutive album tracks)</string>
 	<string name="seliku_set_crossfade_value">%1$d s</string>
 	<string name="seliku_set_crossfade_off">Off</string>
+	<string name="seliku_set_live_back_guide">Back opens the guide</string>
+	<string name="seliku_set_live_back_guide_desc">In live TV, Back shows the guide while the channel keeps playing small. Back again leaves.</string>
 </resources>

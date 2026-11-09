@@ -385,4 +385,6 @@
 	<string name="seliku_set_crossfade_desc">Das nächste Lied wird eingeblendet, während das alte ausklingt (nicht innerhalb eines Albums am Stück)</string>
 	<string name="seliku_set_crossfade_value">%1$d s</string>
 	<string name="seliku_set_crossfade_off">Aus</string>
+	<string name="seliku_set_live_back_guide">Zurück öffnet Programm</string>
+	<string name="seliku_set_live_back_guide_desc">Im Live-TV zeigt «Zurück» den Programmführer, der Sender läuft klein weiter. Nochmals «Zurück» beendet.</string>
 </resources>

@@ -102,6 +102,8 @@ public class CustomPlaybackOverlayFragment extends Fragment implements LiveTvGui
     BaseItemDto mSelectedProgram;
     RelativeLayout mSelectedProgramView;
     private boolean mGuideVisible = false;
+    // Seliku: Programmführer wurde mit «Zurück» geöffnet – dann beendet das nächste «Zurück» den Player
+    private boolean selikuGuideVonZurueck = false;
     private LocalDateTime mCurrentGuideStart;
     private LocalDateTime mCurrentGuideEnd;
     private int mCurrentDisplayChannelStartNdx = 0;
@@ -457,7 +459,12 @@ public class CustomPlaybackOverlayFragment extends Fragment implements LiveTvGui
                 // also close this if live tv
                 if (playbackControllerContainer.getValue().getPlaybackController().isLiveTv()) hide();
             } else if (mGuideVisible) {
-                hideGuide();
+                selikuGuideZurueck();
+            } else if (playbackControllerContainer.getValue().getPlaybackController().isLiveTv()
+                    && org.jellyfin.androidtv.seliku.SelikuEinstellungen.liveZurueckProgramm(requireContext())) {
+                // Seliku: weiterstöbern, ohne dass der Sender stoppt
+                showGuide();
+                selikuGuideVonZurueck = true;
             } else {
                 closePlayer();
             }
@@ -599,7 +606,7 @@ public class CustomPlaybackOverlayFragment extends Fragment implements LiveTvGui
                         if (playbackControllerContainer.getValue().getPlaybackController().isLiveTv()) hide();
                         return true;
                     } else if (mGuideVisible) {
-                        hideGuide();
+                        selikuGuideZurueck();
                         return true;
                     }
                 }
@@ -621,7 +628,7 @@ public class CustomPlaybackOverlayFragment extends Fragment implements LiveTvGui
                 if (mGuideVisible) {
                     if (keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_BUTTON_B || keyCode == KeyEvent.KEYCODE_ESCAPE) {
                         // go back to normal
-                        hideGuide();
+                        selikuGuideZurueck();
                         return true;
                     } else if ((keyCode == KeyEvent.KEYCODE_MEDIA_PLAY || keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) &&
                             (mSelectedProgram != null && mSelectedProgram.getChannelId() != null)) {
@@ -912,7 +919,13 @@ public class CustomPlaybackOverlayFragment extends Fragment implements LiveTvGui
         binding.skipOverlay.setSkipUiEnabled(!mIsVisible && !mGuideVisible && !mPopupPanelVisible);
     }
 
+    private void selikuGuideZurueck() {
+        if (selikuGuideVonZurueck) closePlayer();
+        else hideGuide();
+    }
+
     public void showGuide() {
+        selikuGuideVonZurueck = false;
         hide();
         leanbackOverlayFragment.setShouldShowOverlay(false);
         leanbackOverlayFragment.hideOverlay();
@@ -937,6 +950,7 @@ public class CustomPlaybackOverlayFragment extends Fragment implements LiveTvGui
         tvGuideBinding.getRoot().setVisibility(View.GONE);
         playbackControllerContainer.getValue().getPlaybackController().mVideoManager.setVideoFullSize(true);
         mGuideVisible = false;
+        selikuGuideVonZurueck = false;
         binding.skipOverlay.setSkipUiEnabled(!mIsVisible && !mGuideVisible && !mPopupPanelVisible);
     }
 
