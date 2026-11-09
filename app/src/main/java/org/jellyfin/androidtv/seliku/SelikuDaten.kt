@@ -485,7 +485,16 @@ class SelikuDaten(private val api: ApiClient) {
 			data = alt.copy(customPrefs = alt.customPrefs + ("mag" to mag.joinToString(",")) + ("mag_nicht" to nicht.joinToString(","))))
 	}
 
-	/** Für «Gefällt mir» auf «Mein Seliku»: Daumen hoch und 4–5 Sterne (ohne «Meine Liste»). */
+	/** Für «Nicht mehr empfehlen» auf «Mein Seliku»: 1–2 Sterne (und früher gesetzte Daumen runter). */
+	suspend fun nichtGemocht(): List<BaseItemDto> = io {
+		val alt = magNicht().mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }
+		val bewertet = api.itemsApi.getItems(includeItemTypes = setOf(BaseItemKind.MOVIE, BaseItemKind.SERIES), recursive = true,
+			sortBy = listOf(ItemSortBy.DATE_PLAYED), sortOrder = listOf(SortOrder.DESCENDING), fields = felder, enableUserData = true, limit = 400)
+			.content.items.filter { (it.userData?.rating ?: 0.0) in 1.0..4.0 }
+		(bewertet + (if (alt.isEmpty()) emptyList() else titelZu(alt))).distinctBy { it.id }
+	}
+
+	/** Für «Gefällt mir» auf «Mein Seliku»: 4–5 Sterne (und früher gesetzte Daumen hoch), ohne «Meine Liste». */
 	suspend fun gefallen(): List<BaseItemDto> = io {
 		val daumen = mag().mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }
 		val bewertet = api.itemsApi.getItems(includeItemTypes = setOf(BaseItemKind.MOVIE, BaseItemKind.SERIES), recursive = true,

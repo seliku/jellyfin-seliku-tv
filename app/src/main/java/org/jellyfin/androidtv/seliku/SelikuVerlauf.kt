@@ -204,7 +204,7 @@ fun VerlaufSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 		val verlauf = runCatching { daten.verlauf() }.getOrDefault(emptyList())
 		// Zuletzt gesehen: je Serie bzw. Film einmal, Gesehenes (Angefangenes steht schon unter «Weiterschauen»)
 		zuletzt = verlauf.filter { it.userData?.played == true }.distinctBy { it.geschmackId() }.take(30).also { vm.wahl["$k|zuletzt"] = it }
-		laden("nicht") { daten.titelZu(daten.magNicht().mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }) }?.let { nicht = it }
+		laden("nicht") { daten.nichtGemocht() }?.let { nicht = it }
 		geladen = true
 		runCatching { verlaufUeberblick(api, daten, verlauf) }.getOrNull()?.let { ueberblick = it; vm.wahl["$k|ueberblick"] = it }
 	}
@@ -257,30 +257,6 @@ private fun dauer(s: Sehzeit): String {
 	val text = if (s.minuten >= 60) stringResource(R.string.seliku_runtime_hours, s.minuten / 60, s.minuten % 60)
 	else stringResource(R.string.seliku_runtime_minutes, s.minuten)
 	return if (s.geschaetzt) stringResource(R.string.seliku_history_approx, text) else text
-}
-
-/**
- * Daumen auf der Detailseite (wie «Bewerten» bei Netflix). Jeder Druck wechselt: nichts → gefällt mir →
- * gefällt mir nicht (nicht mehr empfehlen) → nichts. Bei Folgen gilt die Serie. Fliesst in den Banner ein.
- */
-@Composable
-fun GeschmackKnopf(item: BaseItemDto, geaendert: () -> Unit = {}) {
-	val context = LocalContext.current
-	if (!SelikuEinstellungen.meinVerlauf(context)) return
-	val daten = koinInject<SelikuDaten>()
-	val scope = rememberCoroutineScope()
-	val id = item.geschmackId()
-	var wert by remember(id) { mutableStateOf(0) }
-	LaunchedEffect(id) {
-		wert = runCatching { if (id.toString() in daten.mag()) 1 else if (id.toString() in daten.magNicht()) -1 else 0 }.getOrDefault(0)
-	}
-	SymbolKnopf(if (wert < 0) R.drawable.seliku_daumen_runter else R.drawable.seliku_daumen_hoch,
-		stringResource(when (wert) { 1 -> R.string.seliku_tip_liked; -1 -> R.string.seliku_tip_disliked; else -> R.string.seliku_tip_like }),
-		aktiv = wert != 0, onClick = {
-			val neu = when (wert) { 0 -> 1; 1 -> -1; else -> 0 }
-			wert = neu
-			scope.launch { runCatching { daten.geschmackSetzen(id, neu) }.onFailure { Timber.w(it, "Geschmack") }; geaendert() }
-		})
 }
 
 /** Genre-Nummern von Seerr/TMDb je Name (deutsch), einmal geholt. */
