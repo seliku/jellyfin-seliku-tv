@@ -248,8 +248,11 @@
 		<item quantity="one">%1$d Folge</item>
 		<item quantity="other">%1$d Folgen</item>
 	</plurals>
-	<string name="seliku_set_autoplay_next">Nächste Folge automatisch abspielen</string>
-	<string name="seliku_set_autoplay_next_desc">Nach einer Folge startet die nächste von selbst. Aus: Schluss nach der Folge</string>
+	<string name="seliku_set_autoplay_next">Nach einer Folge</string>
+	<string name="seliku_set_autoplay_next_desc">Die nächste Folge startet von selbst, wartet still auf OK (blind drücken genügt) oder es ist Schluss</string>
+	<string name="seliku_set_autoplay_next_start">Nächste startet</string>
+	<string name="seliku_set_autoplay_next_wait">Wartet auf OK</string>
+	<string name="seliku_set_autoplay_next_stop">Schluss</string>
 	<string name="seliku_set_scope_hint">Menütaste (oder OK lang drücken): ☁ für alle Geräte ↔ 📺 nur dieses Gerät</string>
 	<string name="seliku_favorite">Favorit</string>
 	<string name="seliku_favorite_added">Zu Favoriten hinzugefügt – auf der Startseite unter «Deine Favoriten»</string>
@@ -394,4 +397,12 @@
 	<string name="seliku_deleted">Gelöscht: %1$s</string>
 	<string name="seliku_set_delete">Löschen im Menü</string>
 	<string name="seliku_set_delete_desc">Langes Drücken bietet «Löschen» an (mit Rückfrage), wenn dein Konto auf dem Server löschen darf.</string>
+	<string name="seliku_set_clock">Uhr in der Seitenleiste</string>
+	<string name="seliku_set_clock_desc">Wochentag und Uhrzeit unten in der zugeklappten Leiste</string>
+	<string name="seliku_set_recordings_livetv">Aufnahmen nur unter Live-TV</string>
+	<string name="seliku_set_recordings_livetv_desc">Der Aufnahme-Ordner bekommt keinen eigenen Punkt in der Seitenleiste (nur wenn es Live-TV gibt)</string>
+	<string name="seliku_set_resume_device">Weiterschauen nur von diesem Gerät</string>
+	<string name="seliku_set_resume_device_desc">Zeigt nur, was auf diesem Gerät angefangen wurde (zählt ab jetzt). Aus: alles des Kontos</string>
+	<string name="seliku_set_quickstart">Schnellstart</string>
+	<string name="seliku_set_quickstart_desc">Beim Start sofort den letzten Stand der Startseite zeigen; Neues ersetzt ihn still</string>
 </resources>

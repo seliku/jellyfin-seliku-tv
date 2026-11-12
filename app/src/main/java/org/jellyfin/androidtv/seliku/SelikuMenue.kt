@@ -40,6 +40,27 @@ import androidx.compose.ui.res.stringResource
 import org.jellyfin.androidtv.R
 
 /** Eigene Schalter der Seliku-Oberfläche, auf dem Gerät gespeichert. */
+/**
+ * Was auf diesem Gerät angefangen wurde (je Serie bzw. Film, mit Zeitpunkt), für «Weiterschauen nur von diesem Gerät».
+ * Jellyfin merkt sich den Fortschritt nur pro Konto; welches Gerät es war, weiss nur das Gerät selbst. Zählt ab dem ersten Abspielen.
+ */
+object GeraetVerlauf {
+	private const val MAX = 400
+	private fun prefs(c: Context) = c.getSharedPreferences("seliku_geraet_verlauf", Context.MODE_PRIVATE)
+	private fun schluessel(item: org.jellyfin.sdk.model.api.BaseItemDto) = (item.seriesId ?: item.id).toString()
+
+	fun merken(c: Context, item: org.jellyfin.sdk.model.api.BaseItemDto) {
+		val p = prefs(c)
+		val e = p.edit().putLong(schluessel(item), System.currentTimeMillis())
+		// Nicht endlos wachsen: die ältesten fallen weg
+		val alle = p.all.mapNotNull { (k, v) -> (v as? Long)?.let { k to it } }
+		if (alle.size > MAX) alle.sortedBy { it.second }.take(alle.size - MAX).forEach { e.remove(it.first) }
+		e.apply()
+	}
+
+	fun enthaelt(c: Context, item: org.jellyfin.sdk.model.api.BaseItemDto) = prefs(c).contains(schluessel(item))
+}
+
 object SelikuEinstellungen {
 	private const val DATEI = "seliku"
 	private fun prefs(c: Context) = c.getSharedPreferences(DATEI, Context.MODE_PRIVATE)
@@ -77,6 +98,22 @@ object SelikuEinstellungen {
 	/** An (Vorgabe): im Banner läuft nach ein paar Sekunden stumm der Trailer (falls auf dem Server einer liegt). */
 	fun trailerImBanner(c: Context) = prefs(c).getBoolean("trailer_banner", true)
 	fun trailerImBanner(c: Context, an: Boolean) = prefs(c).edit().putBoolean("trailer_banner", an).apply()
+
+	/** An (Vorgabe): beim Start sofort den letzten Stand von Startseite und Seitenleiste zeigen (siehe [Schnellstart]). */
+	fun schnellstart(c: Context) = prefs(c).getBoolean("schnellstart", true)
+	fun schnellstart(c: Context, an: Boolean) = prefs(c).edit().putBoolean("schnellstart", an).apply()
+
+	/** An (Vorgabe): unten in der zugeklappten Seitenleiste Wochentag und Uhrzeit. */
+	fun uhrInLeiste(c: Context) = prefs(c).getBoolean("uhr_leiste", true)
+	fun uhrInLeiste(c: Context, an: Boolean) = prefs(c).edit().putBoolean("uhr_leiste", an).apply()
+
+	/** An (Vorgabe): Aufnahme-Ordner nicht als eigener Punkt in der Seitenleiste, wenn es Live-TV gibt (dort stehen sie unter «Aufnahmen»). */
+	fun aufnahmenUnterLiveTv(c: Context) = prefs(c).getBoolean("aufnahmen_unter_livetv", true)
+	fun aufnahmenUnterLiveTv(c: Context, an: Boolean) = prefs(c).edit().putBoolean("aufnahmen_unter_livetv", an).apply()
+
+	/** Aus (Vorgabe): «Weiterschauen» zeigt alles des Kontos. An: nur, was auf diesem Gerät angefangen wurde (siehe [GeraetVerlauf]). */
+	fun weiterschauenGeraet(c: Context) = prefs(c).getBoolean("weiterschauen_geraet", false)
+	fun weiterschauenGeraet(c: Context, an: Boolean) = prefs(c).edit().putBoolean("weiterschauen_geraet", an).apply()
 
 	/** Aus (Vorgabe): die Seitenleiste kommt nur mit Zurück. An: auch mit Links am linken Rand. */
 	fun leisteMitLinks(c: Context) = prefs(c).getBoolean("leiste_mit_links", false)

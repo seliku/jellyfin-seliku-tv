@@ -39,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -436,9 +437,10 @@ fun Reihe(
 			else Kachel(item, { onClick(item) }, merken = merken, onFokus = gewaehlt, onMenue = onMenue?.let { m -> { m(item) } } ?: { vm.menue = item })
 		}
 		Band(items.size, zustand, offenNr.coerceIn(0, items.lastIndex), mitBuehne, schluessel = { items[it].id },
-			buehne = { nr -> zeige(items[nr], vm to (seite.schluessel to "$titel|buehne"), {}) },
+			// getOrNull: wird die Reihe kürzer (z. B. «Aus Weiterschauen entfernen»), blendet die Bühne noch kurz die alte Stelle über
+			buehne = { nr -> items.getOrNull(nr)?.let { zeige(it, vm to (seite.schluessel to "$titel|buehne"), {}) } },
 		) { nr ->
-			val item = items[nr]
+			val item = items.getOrNull(nr) ?: return@Band
 			zeige(item, vm to (seite.schluessel to "$titel|${item.id}")) { offenNr = nr; vm.wahl[offenSchluessel] = nr; onFokus(item) }
 		}
 	}
@@ -462,24 +464,35 @@ fun Band(
 	kachel: @Composable (Int) -> Unit,
 ) {
 	val buehnenBreite = breite * 1.5f * 16f / 9f
-	val anfang = if (mitBuehne) 48.dp + buehnenBreite - breite else 48.dp
+	// Mit Bühne ist der Platz der gewählten Kachel so breit wie die Bühne: die vorige Kachel steht dann links daneben
+	// und schaut im Spalt zur Seitenleiste hervor – man sieht, dass dort noch etwas ist (S 12.11.)
+	val anfang = 48.dp
 	val schnitt = if (mitBuehne) 48.dp + buehnenBreite + 9.dp else 40.dp
 	var fokus by remember { mutableStateOf(false) }
 	androidx.compose.foundation.layout.BoxWithConstraints {
 		// genug Platz am Ende, damit auch die letzte Kachel an den ersten Platz kann
-		val ende = (maxWidth - anfang - if (mitBuehne) breite else 100.dp).coerceAtLeast(48.dp)
+		val ende = (maxWidth - anfang - if (mitBuehne) buehnenBreite else 100.dp).coerceAtLeast(48.dp)
 		SeitlichRollen(links = true, linksRand = anfang) {
 			LazyRow(
 				state = zustand,
-				// Was links aus der Reihe gerollt ist (bzw. unter der Bühne liegt), nicht hervorschauen lassen
+				// Links aus der Reihe Gerolltes schaut im Spalt zur Seitenleiste hervor; was unter der Bühne liegt, bleibt verdeckt
 				modifier = Modifier.onFocusChanged { fokus = it.hasFocus }
-					.drawWithContent { clipRect(left = schnitt.toPx(), top = -40f, right = size.width + 40f, bottom = size.height + 40f) { this@drawWithContent.drawContent() } },
+					.drawWithContent {
+						if (mitBuehne) {
+							val sichtbar = androidx.compose.ui.graphics.Path().apply {
+								addRect(androidx.compose.ui.geometry.Rect(-40f, -40f, (anfang - 6.dp).toPx(), size.height + 40f))
+								addRect(androidx.compose.ui.geometry.Rect(schnitt.toPx(), -40f, size.width + 40f, size.height + 40f))
+							}
+							clipPath(sichtbar) { this@drawWithContent.drawContent() }
+						} else clipRect(left = -40f, top = -40f, right = size.width + 40f, bottom = size.height + 40f) { this@drawWithContent.drawContent() }
+					},
 				contentPadding = PaddingValues(start = anfang, end = ende, top = 8.dp, bottom = 8.dp),
 				horizontalArrangement = Arrangement.spacedBy(18.dp),
 			) {
 				items(anzahl, key = schluessel) { nr ->
 					// Letzte Kachel: «rechts» schlucken – rechts davon ist nur Leerraum, sonst springt der Fokus nach oben
-					Box(if (nr == anzahl - 1) Modifier.onPreviewKeyEvent { e -> e.key == Key.DirectionRight } else Modifier) {
+					Box((if (nr == anzahl - 1) Modifier.onPreviewKeyEvent { e -> e.key == Key.DirectionRight } else Modifier)
+						.then(if (mitBuehne && nr == offenNr) Modifier.width(buehnenBreite) else Modifier)) {
 						androidx.compose.runtime.CompositionLocalProvider(LocalKachelOffen provides (!mitBuehne && nr == offenNr), LocalOhneRahmen provides mitBuehne) { kachel(nr) }
 					}
 				}

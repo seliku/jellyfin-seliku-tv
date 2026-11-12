@@ -12,11 +12,16 @@ streaming-service style home screen, built for our own living room – and share
 - **Home screen like the big streaming services**: a featured banner with personal recommendations (scored from your
   own watch history), poster rows with a fixed "stage" at the start of each row that plays the **trailer** after a few
   seconds, while the other posters glide in behind it.
-- **Continue Watching** with one entry per series (resumed episode or next up).
+- **Continue Watching** with one entry per series (resumed episode or next up). Optionally only what was started on
+  this device (each TV remembers what was played on it).
+- **Quick start**: the last home screen and side bar are shown right away; fresh rows replace them quietly once the
+  server has answered (rows load in parallel, Continue Watching first).
 - **Ratings**: Rotten Tomatoes score, TMDb score and your **own 1–5 star rating** (stored in your Jellyfin account).
 - **"True stories" row** built from TMDb keywords (based on a true story, biography, true crime …).
 - **Navigation for remotes**: a slim side bar that opens as an "island" with Back, Netflix-like Back behaviour
-  (tabs → side bar → close), no accidental focus jumps.
+  (tabs → side bar → close), no accidental focus jumps. Weekday and time at the bottom of the side bar. The tile you
+  scrolled past peeks out between side bar and row, so you can see there is more to the left. The Live TV recordings
+  folder is not listed twice (it is under Live TV → Recordings, where the scheduled ones come last).
 - **Per-library start pages** (Recommended / Library) with genre rows, "Because you watched …", "Rediscover", and a genre
   filter that combines.
 - **Seerr built in**: browse what is missing ("Entdecken"), request with one click, see the state on the tiles
@@ -27,7 +32,9 @@ streaming-service style home screen, built for our own living room – and share
   (dimmed with clock, backdrop slideshow, or muted trailers with their title).
 - **Player**: optional "slim" controls – OK pauses, left/right seeks (live TV: switch channel) without popping up the
   overlay; controls come with Up. Previous/next episode in the main bar, tooltips on the buttons. Intros and credits
-  are skipped as set in the player settings (with the Intro Skipper plugin on the server).
+  are skipped as set in the player settings (with the Intro Skipper plugin on the server). After an episode the next
+  one starts by itself, **waits for OK** (a quiet "Next up" screen, nice for falling asleep – one blind press on OK
+  plays on), or playback stops.
 - **Live TV by language**: channels in number blocks (1–99, 100–199 …) get tabs on the Live TV page, e.g. one per
   language; holding left/right in the player zaps within the block. Block names come from the Jellyfin account
   (see Server setup), otherwise "Channels 100–199".

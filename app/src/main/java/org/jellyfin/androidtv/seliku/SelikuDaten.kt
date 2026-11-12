@@ -2,6 +2,8 @@ package org.jellyfin.androidtv.seliku
 
 import androidx.compose.ui.graphics.Color
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.artistsApi
@@ -53,6 +55,9 @@ enum class Sortierung(@androidx.annotation.StringRes val titel: Int, val nach: L
 /** Alle Serverabfragen der Seliku-Oberfläche an einer Stelle. */
 class SelikuDaten(private val api: ApiClient) {
 	companion object {
+		// Bibliotheken-Zwischenspeicher, gemeinsam für alle Instanzen (SelikuDaten ist eine Koin-factory)
+		private val bibliothekenSperre = kotlinx.coroutines.sync.Mutex()
+		@Volatile private var bibliothekenZwischen: Zwischen? = null
 		/** Haupt-Interpret -> alle zusammengefassten Interpreten (inkl. sich selbst). */
 		val verwandte = java.util.concurrent.ConcurrentHashMap<UUID, List<UUID>>()
 
@@ -73,11 +78,32 @@ class SelikuDaten(private val api: ApiClient) {
 
 	private suspend fun <T> io(block: suspend () -> T): T = withContext(Dispatchers.IO) { block() }
 
-	/** Sichtbare Bibliotheken (ohne die in den Benutzereinstellungen ausgeblendeten). */
-	suspend fun bibliotheken(): List<BaseItemDto> {
-		val aus = versteckteBibliotheken()
-		return alleBibliotheken().filter { it.id !in aus }
+	/**
+	 * Sichtbare Bibliotheken (ohne die in den Benutzereinstellungen ausgeblendeten). Beim Start fragen mehrere Teile
+	 * gleichzeitig danach: eine Minute lang (und solange die Anfrage läuft) gilt dieselbe Antwort, je Server und Anmeldung.
+	 */
+	suspend fun bibliotheken(): List<BaseItemDto> = bibliothekenSperre.withLock {
+		val wer = "${api.baseUrl}|${api.accessToken}"
+		bibliothekenZwischen?.takeIf { it.wer == wer && System.currentTimeMillis() - it.zeit < 60_000L }?.let { return@withLock it.liste }
+		val liste = io {
+			kotlinx.coroutines.coroutineScope {
+				val aus = async { versteckteBibliotheken() }
+				val alle = async { alleBibliotheken() }
+				alle.await().filter { it.id !in aus.await() }
+			}
+		}
+		bibliothekenZwischen = Zwischen(wer, System.currentTimeMillis(), liste)
+		liste
 	}
+
+	private class Zwischen(val wer: String, val zeit: Long, val liste: List<BaseItemDto>)
+
+	/** Kennung von Server und Anmeldung (ohne das Token selbst), z. B. für den Schnellstart. */
+	fun wer(): String = "${api.baseUrl}|${api.accessToken?.hashCode()}"
+
+
+	/** Bibliotheken, in denen Jellyfin Live-TV-Aufnahmen ablegt (leer ohne Live-TV). */
+	suspend fun aufnahmeOrdner(): Set<UUID> = io { api.liveTvApi.getRecordingFolders().content.items.map { it.id }.toSet() }
 
 	suspend fun alleBibliotheken(): List<BaseItemDto> = io { api.userViewsApi.getUserViews().content.items }
 
@@ -87,6 +113,7 @@ class SelikuDaten(private val api: ApiClient) {
 
 	/** Ausblenden gilt für Leiste/«Meine Medien» und für die «Neu in …»-Reihen. */
 	suspend fun versteckteSetzen(ids: Set<UUID>) = io {
+		bibliothekenZwischen = null
 		val ich = api.userApi.getCurrentUser().content
 		val cfg = ich.configuration ?: return@io
 		api.userApi.updateUserConfiguration(ich.id, cfg.copy(myMediaExcludes = ids.toList(), latestItemsExcludes = ids.toList()))
@@ -166,8 +193,10 @@ class SelikuDaten(private val api: ApiClient) {
 	 * Reihenfolge: zuletzt geschaut zuerst, dann die nächsten Folgen begonnener Serien (Jellyfin sortiert sie nach
 	 * zuletzt geschaut), am Schluss angefangene Titel ohne Datum (aus Plex übernommen, also alt).
 	 */
-	suspend fun weiterschauen(): List<BaseItemDto> = io {
-		val angefangen = api.itemsApi.getResumeItems(
+	suspend fun weiterschauen(): List<BaseItemDto> = io { kotlinx.coroutines.coroutineScope {
+		// Die vier Grundabfragen hängen nicht voneinander ab: gleichzeitig (spart beim Start Sekunden)
+		val weg = async { ausgeblendet() }
+		val angefangenA = async { api.itemsApi.getResumeItems(
 			limit = 60,
 			mediaTypes = setOf(MediaType.VIDEO),
 			fields = felder,
@@ -175,18 +204,15 @@ class SelikuDaten(private val api: ApiClient) {
 		).content.items
 			// Seliku: je Serie die zuletzt geschaute angefangene Folge, nicht eine ältere mit liegengebliebener Position (S 08.11.)
 			.sortedByDescending { it.userData?.lastPlayedDate ?: java.time.LocalDateTime.MIN }
-			.distinctBy { it.seriesId ?: it.id }
-		val naechste = api.tvShowsApi.getNextUp(
+			.distinctBy { it.seriesId ?: it.id } }
+		val naechsteA = async { api.tvShowsApi.getNextUp(
 			limit = 60,
 			fields = felder,
 			enableUserData = true,
 			enableResumable = false,
-		).content.items
-		val serien = angefangen.mapNotNull { it.seriesId }.toSet()
-		// Serien der letzten 30 Tage, für die Jellyfin keine nächste Folge kennt (siehe folgeNachZuletztGeschauter)
-		val bekannt = serien + naechste.mapNotNull { it.seriesId }
+		).content.items }
 		val grenze = java.time.LocalDateTime.now().minusDays(30)
-		val gesehen = api.itemsApi.getItems(
+		val gesehenA = async { api.itemsApi.getItems(
 			recursive = true,
 			includeItemTypes = setOf(BaseItemKind.EPISODE),
 			filters = setOf(ItemFilter.IS_PLAYED),
@@ -194,27 +220,34 @@ class SelikuDaten(private val api: ApiClient) {
 			sortOrder = listOf(SortOrder.DESCENDING),
 			enableUserData = true,
 			limit = 100,
-		).content.items
+		).content.items }
+		val angefangen = angefangenA.await()
+		val naechste = naechsteA.await()
+		val gesehen = gesehenA.await()
+		val serien = angefangen.mapNotNull { it.seriesId }.toSet()
+		// Serien der letzten 30 Tage, für die Jellyfin keine nächste Folge kennt (siehe folgeNachZuletztGeschauter)
+		val bekannt = serien + naechste.mapNotNull { it.seriesId }
 		// Wann eine Serie zuletzt geschaut wurde (neueste gesehene Folge)
 		val zuletztGeschaut = gesehen.filter { it.seriesId != null && it.userData?.lastPlayedDate != null }
 			.groupBy { it.seriesId!! }.mapValues { (_, f) -> f.maxOf { it.userData!!.lastPlayedDate!! } }
 		val ohneNaechste = gesehen
 			.filter { (it.userData?.lastPlayedDate ?: grenze) > grenze }
 			.mapNotNull { it.seriesId }.distinct().filter { it !in bekannt }.take(8)
-			.mapNotNull { runCatching { folgeNachZuletztGeschauter(it) }.getOrNull() }
+			.map { s -> async { runCatching { folgeNachZuletztGeschauter(s) }.getOrNull() } }
 		// Wurde nach der angefangenen Folge eine andere fertig geschaut, gilt die Folge danach, nicht die alte Position
-		val aktuell = angefangen.map { i ->
+		val aktuell = angefangen.map { i -> async {
 			val zuletzt = i.seriesId?.let { zuletztGeschaut[it] }
 			val stand = i.userData?.lastPlayedDate
 			if (zuletzt != null && stand != null && zuletzt > stand) runCatching { folgeNachZuletztGeschauter(i.seriesId!!) }.getOrNull() ?: i else i
-		}
+		} }.map { it.await() }
 		val (mitDatum, ohneDatum) = aktuell.partition { (it.userData?.lastPlayedDate ?: it.seriesId?.let { s -> zuletztGeschaut[s] }) != null }
 		// Zuletzt Geschautes zuerst – egal ob angefangen, nächste Folge von Jellyfin oder von uns ergänzt (S 08.11.)
 		fun wann(i: BaseItemDto) = listOfNotNull(i.userData?.lastPlayedDate, i.seriesId?.let { zuletztGeschaut[it] }).maxOrNull()
-		val datiert = (mitDatum + ohneNaechste + naechste.filter { it.seriesId !in serien })
+		val datiert = (mitDatum + ohneNaechste.mapNotNull { it.await() } + naechste.filter { it.seriesId !in serien })
 			.sortedByDescending { wann(it) ?: java.time.LocalDateTime.MIN }
-		ohneAusgeblendete((datiert + ohneDatum).distinctBy { it.seriesId ?: it.id }).take(40)
-	}
+		val ausgeblendet = weg.await()
+		(datiert + ohneDatum).distinctBy { it.seriesId ?: it.id }.filter { it.ausblendSchluessel() !in ausgeblendet }.take(40)
+	} }
 
 	/** «Wahre Geschichten»: Filme und Serien mit den TMDb-Schlagwörtern für wahre Begebenheiten und Biografien. */
 	suspend fun wahreGeschichten(): List<BaseItemDto> = io {

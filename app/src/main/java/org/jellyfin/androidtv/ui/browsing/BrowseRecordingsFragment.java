@@ -78,16 +78,8 @@ public class BrowseRecordingsFragment extends EnhancedBrowseFragment {
                 ItemRowAdapter scheduledAdapter = new ItemRowAdapter(requireContext(), nearTimers, mCardPresenter, mRowsAdapter, true);
                 scheduledAdapter.Retrieve();
                 ListRow scheduleRow = new ListRow(new HeaderItem(getString(R.string.scheduled_in_next_24_hours)), scheduledAdapter);
-                mRowsAdapter.add(0, scheduleRow);
-                new Handler().postDelayed(new Runnable() {
-                    @Override
-                    public void run() {
-                        if (!getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED))
-                            return;
-
-                        mRowsFragment.setSelectedPosition(0, true);
-                    }
-                }, 500);
+                // Seliku: Geplantes ans Ende – wer hierher kommt, will sehen, was aufgenommen wurde (S 12.11.)
+                mRowsAdapter.add(scheduleRow);
             }
             return null;
         }, exception -> {

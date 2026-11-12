@@ -184,6 +184,7 @@ class Abspielen(
 		RadioSpieler.stoppen()
 		// Wer wieder schaut, will die Serie/den Film auch wieder in «Weiterschauen»
 		kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch { runCatching { daten.wiederAufnehmen(item) } }
+		GeraetVerlauf.merken(context, item)
 		val ticks = item.userData?.playbackPositionTicks ?: 0L
 		val start = if (vonVorn || ticks <= 0L) 0 else ((ticks / 10_000L) - 5_000L).coerceAtLeast(0L).toInt()
 		// Folgen: die ganze Serie in die Warteschlange (ab der gewählten Folge), damit im Player auch «Vorige Folge» geht

@@ -132,6 +132,7 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 	val sprung by SelikuSprung.ziel.collectAsState()
 	LaunchedEffect(sprung) { sprung?.let { vm.zu(it); SelikuSprung.ziel.value = null } }
 	var bibliotheken by remember { mutableStateOf<List<BaseItemDto>>(emptyList()) }
+	var aufnahmeOrdner by remember { mutableStateOf(Schnellstart.aufnahmeOrdner(context)) }
 	var leisteOffen by remember { mutableStateOf(false) }
 	// Die Leiste öffnet nur, wenn man sie holt (Zurück, bzw. Links falls eingestellt). Landet der Fokus sonst dort –
 	// etwa weil ein Knopf verschwindet, auf dem er lag –, geht er gleich in den Inhalt zurück, statt die Insel aufzuklappen.
@@ -167,7 +168,11 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 
 	var neuLaden by remember { mutableStateOf(0) }
 	LaunchedEffect(neuLaden) {
-		bibliotheken = runCatching { daten.bibliotheken() }.onFailure { Timber.w(it, "Bibliotheken") }.getOrDefault(emptyList())
+		// Schnellstart: die Leiste steht sofort, auch wenn der Server gerade langsam antwortet
+		if (bibliotheken.isEmpty()) Schnellstart.bibliotheken(context, daten.wer())?.let { if (bibliotheken.isEmpty()) bibliotheken = it }
+		bibliotheken = runCatching { daten.bibliotheken() }.onFailure { Timber.w(it, "Bibliotheken") }.getOrNull()
+			?.also { Schnellstart.bibliothekenMerken(context, daten.wer(), it) } ?: bibliotheken
+		runCatching { daten.aufnahmeOrdner() }.onFailure { Timber.w(it, "Aufnahme-Ordner") }.getOrNull()?.let { aufnahmeOrdner = it; Schnellstart.aufnahmeOrdnerMerken(context, it) }
 		vm.wahl.remove("start-reihen")
 	}
 
@@ -234,7 +239,9 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 		if (seerrDa) add(Eintrag(R.drawable.seliku_entdecken, stringResource(R.string.seliku_discover), Seite.Entdecken))
 		// Feste Reihenfolge wie gewohnt: Filme, Serien, Live-TV, Musik, dann alles andere
 		val rang = { b: BaseItemDto -> when (b.collectionType?.serialName) { "movies" -> 0; "tvshows" -> 1; "livetv" -> 2; "music" -> 3; else -> 4 } }
-		bibliotheken.filter { it.collectionType?.serialName != "playlists" && it !in unterMusik }.sortedBy(rang).forEach { bib -> add(Eintrag(symbolFuer(bib), bib.name.orEmpty(), seiteFuerBibliothek(bib))) }
+		// Aufnahmen stehen unter Live-TV («Aufnahmen»); ein eigener Punkt dafür ist doppelt (S 12.11.)
+		val ohneAufnahmen = SelikuEinstellungen.aufnahmenUnterLiveTv(context) && bibliotheken.any { it.collectionType?.serialName == "livetv" }
+		bibliotheken.filter { it.collectionType?.serialName != "playlists" && it !in unterMusik && !(ohneAufnahmen && it.id in aufnahmeOrdner) }.sortedBy(rang).forEach { bib -> add(Eintrag(symbolFuer(bib), bib.name.orEmpty(), seiteFuerBibliothek(bib))) }
 		val updateTitel = update?.let { stringResource(R.string.seliku_update_version, it.name) }
 		updateEintrag = update?.let { v ->
 			(Eintrag(R.drawable.seliku_update, updateText ?: updateTitel.orEmpty(), null, hervor = true) {
@@ -339,7 +346,7 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 		}) {
 		Box(Modifier.fillMaxSize()) {
 			// Inhalt beginnt neben der schmalen Leiste; die offene Leiste legt sich als Insel darüber, ohne den Inhalt zu verschieben
-			Box(Modifier.fillMaxSize().padding(start = 76.dp).focusRequester(inhalt).onFocusChanged { inhaltHatFokus = it.hasFocus }
+			Box(Modifier.fillMaxSize().padding(start = LEISTE_SCHMAL).focusRequester(inhalt).onFocusChanged { inhaltHatFokus = it.hasFocus }
 				// Links/oben am Rand nicht in die Leiste springen (passierte zu oft aus Versehen); die Leiste kommt mit Zurück
 				.focusProperties { exit = { richtung -> if ((richtung == FocusDirection.Left && !SelikuEinstellungen.leisteMitLinks(context)) || richtung == FocusDirection.Up) FocusRequester.Cancel else FocusRequester.Default } }
 				.focusRestorer().focusGroup()) {
@@ -370,9 +377,11 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 				} } }
 			}
 			Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f * leisteAnteil)))
+			val mitUhr = SelikuEinstellungen.uhrInLeiste(context)
 			Seitenleiste(
 				eintraege = eintraege,
 				oben = listOfNotNull(einstellungenEintrag, updateEintrag),
+				platzUnten = if (mitUhr) 64.dp else 0.dp,
 				obenFokus = { obenHatFokus = it },
 				aktiv = vm.stapel.first(),
 				offen = leisteOffen,
@@ -396,6 +405,7 @@ private fun Oberflaeche(vm: SelikuViewModel) {
 					} else e.aktion?.invoke()
 				},
 			)
+			if (mitUhr && leisteAnteil < 1f) LeistenUhr(Modifier.align(Alignment.BottomStart).width(LEISTE_SCHMAL).padding(bottom = 20.dp).graphicsLayer { alpha = 1f - leisteAnteil })
 		}
 		androidx.compose.animation.AnimatedVisibility(radioEbene, enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(1500)),
 			exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(400))) { SelikuMusikBildschirm.Ebene(bildschirmModus) }
@@ -417,6 +427,7 @@ private fun Seitenleiste(
 	anteil: Float,
 	modifier: Modifier,
 	obenFokus: (Boolean) -> Unit = {},
+	platzUnten: androidx.compose.ui.unit.Dp = 0.dp,
 	waehlen: (Eintrag) -> Unit,
 ) {
 	val api = koinInject<ApiClient>()
@@ -443,14 +454,14 @@ private fun Seitenleiste(
 			// auf, und der Fokus, der gerade in die Leiste gesprungen ist, fällt ins Leere
 			// Weich aufziehen (wie bei Disney): Breite, Rand und Farbe folgen einem Anteil 0..1, kein Schatten (der kostet auf TV-Chips jedes Bild)
 			.padding(start = 10.dp * anteil, top = 14.dp * anteil, bottom = 14.dp * anteil)
-			.width(76.dp + 184.dp * anteil)
+			.width(LEISTE_SCHMAL + (260.dp - LEISTE_SCHMAL) * anteil)
 			.clip(RoundedCornerShape(22.dp * anteil))
 			.background(androidx.compose.ui.graphics.lerp(Farben.Hintergrund, Farben.Flaeche, anteil))
 			.focusRestorer(aktivAnfrage)
 			.focusGroup()
 			// Viele Bibliotheken passen nicht auf den Bildschirm: die Leiste rollt mit dem Fokus mit
 			.verticalScroll(androidx.compose.foundation.rememberScrollState())
-			.padding(vertical = 16.dp, horizontal = 12.dp),
+			.padding(vertical = 16.dp, horizontal = 6.dp + 6.dp * anteil),
 		verticalArrangement = Arrangement.spacedBy(4.dp),
 	) {
 		// Oben eine Symbolreihe: Suche, Einstellungen, Update (falls vorhanden), Profilbild. Zugeklappt nur die Suche.
@@ -527,6 +538,33 @@ private fun Seitenleiste(
 			Spacer(Modifier.height(12.dp))
 			LaeuftEintrag(offen, anteil)
 		}
+		// Platz für die Uhr unten, damit lange Listen nicht darunter verschwinden
+		Spacer(Modifier.height(platzUnten))
+	}
+}
+
+/** Schmale (zugeklappte) Seitenleiste. Schmal genug, dass links neben den Reihen ein Spalt bleibt, in dem die zuletzt gewählte Kachel hervorschaut. */
+private val LEISTE_SCHMAL = 64.dp
+
+/** Wochentag und Uhrzeit unten in der zugeklappten Leiste (Format nach Sprache und 12/24-Stunden-Einstellung des Geräts). */
+@Composable
+private fun LeistenUhr(modifier: Modifier) {
+	val context = LocalContext.current
+	var jetzt by remember { mutableStateOf(java.time.LocalDateTime.now()) }
+	LaunchedEffect(Unit) {
+		while (true) {
+			jetzt = java.time.LocalDateTime.now()
+			// bis kurz nach dem nächsten Minutenwechsel warten
+			delay(60_000L - jetzt.second * 1000L - jetzt.nano / 1_000_000L + 200L)
+		}
+	}
+	val vierundzwanzig = android.text.format.DateFormat.is24HourFormat(context)
+	val tag = jetzt.format(java.time.format.DateTimeFormatter.ofPattern("EEE", java.util.Locale.getDefault())).trimEnd('.').uppercase()
+	Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+		Text(tag, style = Schrift.Klein.copy(fontWeight = FontWeight.Bold), maxLines = 1)
+		Text(jetzt.format(java.time.format.DateTimeFormatter.ofPattern(if (vierundzwanzig) "HH:mm" else "h:mm")),
+			style = Schrift.Normal.copy(fontWeight = FontWeight.Bold), maxLines = 1, softWrap = false)
+		if (!vierundzwanzig) Text(if (jetzt.hour < 12) "AM" else "PM", style = Schrift.Klein, maxLines = 1)
 	}
 }
 

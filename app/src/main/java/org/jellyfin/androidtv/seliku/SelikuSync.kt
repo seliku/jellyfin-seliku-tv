@@ -45,6 +45,43 @@ object SelikuUmfang {
  * Holen: Server gewinnt; fehlt ein Wert dort, gilt der dieses Geräts (erstes Gerät gewinnt).
  * Fehler werden nur geloggt – ohne Netz läuft alles mit den Werten auf dem Gerät.
  */
+/**
+ * Was nach einer Folge passiert: die nächste startet nach dem Countdown, sie wartet still auf OK (wie bei Plex),
+ * oder Schluss. Abgebildet auf Jellyfins eigene Einstellungen: Warteschlange (pref_enable_tv_queuing) und
+ * Countdown der «Als Nächstes»-Seite (next_up_timeout, 0 = kein Countdown).
+ */
+object NachDerFolge {
+	const val STARTET = 0
+	const val WARTET = 1
+	const val SCHLUSS = 2
+	private const val COUNTDOWN = 1000 * 7
+	private fun prefs() = KoinJavaComponent.get<UserPreferences>(UserPreferences::class.java)
+
+	fun lesen(): Int = when {
+		!prefs()[UserPreferences.mediaQueuingEnabled] -> SCHLUSS
+		prefs()[UserPreferences.nextUpTimeout] == org.jellyfin.androidtv.preference.constant.NEXTUP_TIMER_DISABLED -> WARTET
+		else -> STARTET
+	}
+
+	fun setzen(stufe: Int) {
+		val p = prefs()
+		p[UserPreferences.mediaQueuingEnabled] = stufe != SCHLUSS
+		when (stufe) {
+			WARTET -> {
+				p[UserPreferences.nextUpTimeout] = org.jellyfin.androidtv.preference.constant.NEXTUP_TIMER_DISABLED
+				// Ohne «Als Nächstes»-Seite gäbe es nichts, das wartet
+				if (p[UserPreferences.nextUpBehavior] == org.jellyfin.androidtv.preference.constant.NextUpBehavior.DISABLED)
+					p[UserPreferences.nextUpBehavior] = org.jellyfin.androidtv.preference.constant.NextUpBehavior.EXTENDED
+			}
+			STARTET -> if (p[UserPreferences.nextUpTimeout] == org.jellyfin.androidtv.preference.constant.NEXTUP_TIMER_DISABLED) p[UserPreferences.nextUpTimeout] = COUNTDOWN
+		}
+	}
+
+	/** Für den Abgleich: «true», «warten» oder «false». */
+	fun wert(): String = when (lesen()) { WARTET -> "warten"; SCHLUSS -> "false"; else -> "true" }
+	fun wertSetzen(w: String) = when (w) { "warten" -> setzen(WARTET); "true" -> setzen(STARTET); "false" -> setzen(SCHLUSS); else -> Unit }
+}
+
 object SelikuSync {
 	private const val DOKUMENT = "seliku-einstellungen"
 	private const val CLIENT = "seliku"
@@ -73,6 +110,9 @@ object SelikuSync {
 		schalter("live_zurueck_programm", true, SelikuEinstellungen::liveZurueckProgramm, SelikuEinstellungen::liveZurueckProgramm),
 		schalter("doppel_zurueck", true, SelikuEinstellungen::doppelZurueck, SelikuEinstellungen::doppelZurueck),
 		schalter("leiste_mit_links", true, SelikuEinstellungen::leisteMitLinks, SelikuEinstellungen::leisteMitLinks),
+		schalter("uhr_leiste", true, SelikuEinstellungen::uhrInLeiste, SelikuEinstellungen::uhrInLeiste),
+		schalter("schnellstart", true, SelikuEinstellungen::schnellstart, SelikuEinstellungen::schnellstart),
+		schalter("aufnahmen_unter_livetv", true, SelikuEinstellungen::aufnahmenUnterLiveTv, SelikuEinstellungen::aufnahmenUnterLiveTv),
 		schalter("untertitel_nachladen", true, SelikuEinstellungen::untertitelNachladen, SelikuEinstellungen::untertitelNachladen),
 		schalter("mein_verlauf", true, SelikuEinstellungen::meinVerlauf, SelikuEinstellungen::meinVerlauf),
 		schalter("banner_seerr", true, SelikuEinstellungen::bannerSeerr, SelikuEinstellungen::bannerSeerr),
@@ -83,8 +123,9 @@ object SelikuSync {
 		// Vorgabe 📺 nur dieses Gerät
 		schalter("schlanker_player", false, SelikuEinstellungen::schlankerPlayer, SelikuEinstellungen::schlankerPlayer),
 		schalter("nur_bei_wiedergabe_wach", false, SelikuEinstellungen::nurBeiWiedergabeWach, SelikuEinstellungen::nurBeiWiedergabeWach),
+		schalter("weiterschauen_geraet", false, SelikuEinstellungen::weiterschauenGeraet, SelikuEinstellungen::weiterschauenGeraet),
 		Eintrag("max_bitrate", false, { userPrefs()[UserPreferences.maxBitrate] }, { _, w -> if (w.toIntOrNull() != null) userPrefs()[UserPreferences.maxBitrate] = w }),
-		schalter("naechste_folge", false, { userPrefs()[UserPreferences.mediaQueuingEnabled] }, { _, an -> userPrefs()[UserPreferences.mediaQueuingEnabled] = an }),
+		Eintrag("naechste_folge", false, { NachDerFolge.wert() }, { _, w -> NachDerFolge.wertSetzen(w) }),
 	)
 
 	private val bereich = CoroutineScope(SupervisorJob() + Dispatchers.IO)

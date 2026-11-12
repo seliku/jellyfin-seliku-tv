@@ -175,6 +175,10 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 	var doppel by remember(stand) { mutableStateOf(SelikuEinstellungen.doppelZurueck(context)) }
 	var schlank by remember(stand) { mutableStateOf(SelikuEinstellungen.schlankerPlayer(context)) }
 	var links by remember(stand) { mutableStateOf(SelikuEinstellungen.leisteMitLinks(context)) }
+	var uhr by remember(stand) { mutableStateOf(SelikuEinstellungen.uhrInLeiste(context)) }
+	var schnell by remember(stand) { mutableStateOf(SelikuEinstellungen.schnellstart(context)) }
+	var aufnahmenLive by remember(stand) { mutableStateOf(SelikuEinstellungen.aufnahmenUnterLiveTv(context)) }
+	var weiterGeraet by remember(stand) { mutableStateOf(SelikuEinstellungen.weiterschauenGeraet(context)) }
 	var favoritenReihe by remember(stand) { mutableStateOf(SelikuEinstellungen.favoritenReihe(context)) }
 	var wahre by remember(stand) { mutableStateOf(SelikuEinstellungen.wahreGeschichten(context)) }
 	var wertung by remember(stand) { mutableStateOf(SelikuEinstellungen.eigeneWertung(context)) }
@@ -199,7 +203,7 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 	var wach by remember(stand) { mutableStateOf(SelikuEinstellungen.nurBeiWiedergabeWach(context)) }
 	val userPrefs = remember { org.koin.java.KoinJavaComponent.get<org.jellyfin.androidtv.preference.UserPreferences>(org.jellyfin.androidtv.preference.UserPreferences::class.java) }
 	var bitrate by remember(stand) { mutableStateOf(userPrefs[org.jellyfin.androidtv.preference.UserPreferences.maxBitrate]) }
-	var naechste by remember(stand) { mutableStateOf(userPrefs[org.jellyfin.androidtv.preference.UserPreferences.mediaQueuingEnabled]) }
+	var nachFolge by remember(stand) { mutableStateOf(NachDerFolge.lesen()) }
 	val bitrateStufen = listOf("100", "40", "20", "10", "5")
 	val seerr = when {
 		SeerrVerbindung.vermittelt.value -> stringResource(R.string.seliku_seerr_via_jellyfin)
@@ -248,6 +252,18 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 		EinstellungsEintrag.Schalter("leiste", umfang = "leiste_mit_links", stringResource(R.string.seliku_set_sidebar_left), stringResource(R.string.seliku_set_sidebar_left_desc), links) {
 			links = !links; SelikuEinstellungen.leisteMitLinks(context, links); gesetzt("leiste_mit_links")
 		},
+		EinstellungsEintrag.Schalter("schnellstart", umfang = "schnellstart", stringResource(R.string.seliku_set_quickstart), stringResource(R.string.seliku_set_quickstart_desc), schnell) {
+			schnell = !schnell; SelikuEinstellungen.schnellstart(context, schnell); gesetzt("schnellstart")
+		},
+		EinstellungsEintrag.Schalter("uhr", umfang = "uhr_leiste", stringResource(R.string.seliku_set_clock), stringResource(R.string.seliku_set_clock_desc), uhr) {
+			uhr = !uhr; SelikuEinstellungen.uhrInLeiste(context, uhr); gesetzt("uhr_leiste")
+		},
+		EinstellungsEintrag.Schalter("aufnahmenlive", umfang = "aufnahmen_unter_livetv", stringResource(R.string.seliku_set_recordings_livetv), stringResource(R.string.seliku_set_recordings_livetv_desc), aufnahmenLive) {
+			aufnahmenLive = !aufnahmenLive; SelikuEinstellungen.aufnahmenUnterLiveTv(context, aufnahmenLive); gesetzt("aufnahmen_unter_livetv")
+		},
+		EinstellungsEintrag.Schalter("weitergeraet", umfang = "weiterschauen_geraet", stringResource(R.string.seliku_set_resume_device), stringResource(R.string.seliku_set_resume_device_desc), weiterGeraet) {
+			weiterGeraet = !weiterGeraet; SelikuEinstellungen.weiterschauenGeraet(context, weiterGeraet); gesetzt("weiterschauen_geraet"); vm.datenStand++
+		},
 		EinstellungsEintrag.Schalter("zurueck", umfang = "doppel_zurueck", stringResource(R.string.seliku_set_double_back), stringResource(R.string.seliku_set_double_back_desc), doppel) {
 			doppel = !doppel; SelikuEinstellungen.doppelZurueck(context, doppel); gesetzt("doppel_zurueck")
 		},
@@ -266,9 +282,10 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 			bitrate = bitrateStufen[(bitrateStufen.indexOf(bitrate) + 1) % bitrateStufen.size]
 			userPrefs[org.jellyfin.androidtv.preference.UserPreferences.maxBitrate] = bitrate; gesetzt("max_bitrate")
 		},
-		// Jellyfins «Nächstes automatisch abspielen» (pref_enable_tv_queuing): aus = nur die gewählte Folge kommt in die Warteschlange
-		EinstellungsEintrag.Schalter("folge", umfang = "naechste_folge", stringResource(R.string.seliku_set_autoplay_next), stringResource(R.string.seliku_set_autoplay_next_desc), naechste) {
-			naechste = !naechste; userPrefs[org.jellyfin.androidtv.preference.UserPreferences.mediaQueuingEnabled] = naechste; gesetzt("naechste_folge")
+		// Nach einer Folge: nächste startet / wartet auf OK / Schluss (siehe NachDerFolge)
+		EinstellungsEintrag.Auswahl("folge", umfang = "naechste_folge", stringResource(R.string.seliku_set_autoplay_next), stringResource(R.string.seliku_set_autoplay_next_desc),
+			stringResource(when (nachFolge) { NachDerFolge.WARTET -> R.string.seliku_set_autoplay_next_wait; NachDerFolge.SCHLUSS -> R.string.seliku_set_autoplay_next_stop; else -> R.string.seliku_set_autoplay_next_start })) {
+			nachFolge = (nachFolge + 1) % 3; NachDerFolge.setzen(nachFolge); gesetzt("naechste_folge")
 		},
 		EinstellungsEintrag.Schalter("audioplayer", umfang = "audio_player", stringResource(R.string.seliku_set_audio_player), stringResource(R.string.seliku_set_audio_player_desc), audioPlayer) {
 			audioPlayer = !audioPlayer; SelikuEinstellungen.neuerAudioPlayer(context, audioPlayer); gesetzt("audio_player")

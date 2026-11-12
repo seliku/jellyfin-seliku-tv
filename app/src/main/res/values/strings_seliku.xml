@@ -248,8 +248,11 @@
 		<item quantity="one">%1$d episode</item>
 		<item quantity="other">%1$d episodes</item>
 	</plurals>
-	<string name="seliku_set_autoplay_next">Play next episode automatically</string>
-	<string name="seliku_set_autoplay_next_desc">When an episode ends, the next one starts. Off: playback stops after the episode</string>
+	<string name="seliku_set_autoplay_next">After an episode</string>
+	<string name="seliku_set_autoplay_next_desc">Next episode starts by itself, waits for OK (screen stays still), or playback stops</string>
+	<string name="seliku_set_autoplay_next_start">Next starts</string>
+	<string name="seliku_set_autoplay_next_wait">Waits for OK</string>
+	<string name="seliku_set_autoplay_next_stop">Stop</string>
 	<string name="seliku_set_scope_hint">Menu key (or hold OK): ☁ all devices ↔ 📺 this device only</string>
 	<string name="seliku_favorite">Favorite</string>
 	<string name="seliku_favorite_added">Added to favorites – on the home screen under “Your favorites”</string>
@@ -394,4 +397,12 @@
 	<string name="seliku_deleted">Deleted: %1$s</string>
 	<string name="seliku_set_delete">Delete in the menu</string>
 	<string name="seliku_set_delete_desc">Long press offers Delete (with confirmation) when your account may delete on the server.</string>
+	<string name="seliku_set_clock">Clock in the sidebar</string>
+	<string name="seliku_set_clock_desc">Weekday and time at the bottom of the collapsed sidebar</string>
+	<string name="seliku_set_recordings_livetv">Recordings only under Live TV</string>
+	<string name="seliku_set_recordings_livetv_desc">The recordings folder gets no own entry in the sidebar (only when Live TV exists)</string>
+	<string name="seliku_set_resume_device">Continue watching: this device only</string>
+	<string name="seliku_set_resume_device_desc">Shows only what was started on this device (counts from now on). Off: everything of the account</string>
+	<string name="seliku_set_quickstart">Quick start</string>
+	<string name="seliku_set_quickstart_desc">Show the last home screen right away at start; fresh rows replace it quietly</string>
 </resources>

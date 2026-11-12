@@ -216,7 +216,7 @@ fun SeerrRubrikReihe(titel: String, liste: List<SeerrRubrik>, vm: SelikuViewMode
 		val zustand = remember(seite.schluessel, titel) { vm.listen.getOrPut("${seite.schluessel}|$titel") { LazyListState() } }
 		SeitlichRollen {
 			LazyRow(state = zustand, contentPadding = PaddingValues(horizontal = 48.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-				items(liste, key = { titel + it.schluessel }) { r ->
+				items(liste.distinctBy { it.schluessel }, key = { titel + it.schluessel }) { r ->
 					SeerrRubrikKachel(r, onClick = { vm.zu(Seite.SeerrListe(r.art, r.id, SeerrLogos.namen[r.schluessel] ?: r.name)) },
 						merken = vm to (seite.schluessel to titel + r.schluessel), onFokus = { onFokus(r) })
 				}
@@ -234,7 +234,8 @@ fun SeerrBesetzungReihe(titel: String, liste: List<SeerrPerson>, vm: SelikuViewM
 		val zustand = remember(seite.schluessel, titel) { vm.listen.getOrPut("${seite.schluessel}|$titel") { LazyListState() } }
 		SeitlichRollen {
 			LazyRow(state = zustand, contentPadding = PaddingValues(horizontal = 48.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-				items(liste, key = { "person-${it.id}" }) { p ->
+				// Dieselbe Person kann mehrfach vorkommen (zwei Rollen): doppelte Schlüssel lassen die Liste abstürzen
+				items(liste.distinctBy { it.id }, key = { "person-${it.id}" }) { p ->
 					Column(Modifier.width(112.dp), horizontalAlignment = Alignment.CenterHorizontally) {
 						Waehlbar(onClick = { waehlen(p) }, shape = CircleShape, merken = vm to (seite.schluessel to "person-${p.id}")) {
 							Bild(p.bild, Modifier.size(104.dp), ersatz = initialen(p.name))

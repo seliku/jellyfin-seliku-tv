@@ -24,6 +24,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.jellyfin.androidtv.ui.base.Text
@@ -80,43 +81,83 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 		}
 	}
 
+	// Schnellstart: beim Kaltstart sofort die zuletzt geladenen Reihen; die frischen ersetzen sie, wenn alle da sind
+	var ausSpeicher by remember { mutableStateOf(false) }
+	LaunchedEffect(Unit) {
+		if (reihen != null) return@LaunchedEffect
+		val gemerkt = Schnellstart.reihen(context, daten.wer()) ?: return@LaunchedEffect
+		if (reihen == null && gemerkt.isNotEmpty()) {
+			ausSpeicher = true
+			reihen = gemerkt.map { r -> StartReihe(r.titel, r.items, r.loeschdatum.mapNotNull { (k, v) -> runCatching { java.util.UUID.fromString(k) to v }.getOrNull() }.toMap(),
+				runCatching { StartArt.valueOf(r.art) }.getOrDefault(StartArt.ANDERE)) }
+			Timber.i("Startseite: %d gemerkte Reihen gezeigt", gemerkt.size)
+		}
+	}
 	LaunchedEffect(vm.datenStand) {
-		// Immer frisch laden (auch nach Änderungen im Titelmenü, z. B. «Aus Weiterschauen entfernen») (Fortschritt ändert sich nach dem Schauen), alte Reihen bis dahin stehen lassen
-		val neu = runCatching {
-			val bibs = daten.bibliotheken()
-			buildList {
-				add(StartReihe(context.getString(R.string.seliku_continue_watching), daten.weiterschauen(), art = StartArt.WEITER))
-				if (SelikuEinstellungen.hoerenStart(context))
-					add(StartReihe(context.getString(R.string.seliku_audio_continue), runCatching { Hoeren.weiterhoeren() }.getOrDefault(emptyList()), art = StartArt.HOEREN))
-				if (SelikuEinstellungen.favoritenReihe(context))
-					add(StartReihe(context.getString(R.string.seliku_your_favorites), runCatching { daten.favoriten() }.getOrDefault(emptyList()), art = StartArt.FAVORITEN))
-				if (bibs.any { it.istLiveTv() }) add(StartReihe(context.getString(R.string.seliku_on_tv_now), daten.sender().filter { it.currentProgram != null }.let { s ->
-					val b = SelikuEinstellungen.senderBlock(context)
-					if (SelikuEinstellungen.senderGruppen(context) && b >= 0) s.sortedBy { if (it.senderBlock() == b) 0 else 1 } else s
-				}.take(20), art = StartArt.TV))
-				// Sonderreihen wie «Diese Filme werden bald gelöscht» (Maintainerr, gespiegelt als Jellyfin-Sammlung)
-				runCatching { daten.startseitenSammlungen() }.getOrDefault(emptyList()).forEach { (name, items, datum) -> add(StartReihe(name, items, datum)) }
-				bibs.filter { !it.istLiveTv() }.forEach { bib ->
-					add(StartReihe(context.getString(R.string.seliku_new_in, bib.name.orEmpty()), runCatching { daten.neuIn(bib) }.getOrDefault(emptyList()), art = StartArt.NEU))
-				}
-				if (SelikuEinstellungen.wahreGeschichten(context))
-					add(StartReihe(context.getString(R.string.seliku_true_stories), runCatching { daten.wahreGeschichten() }.getOrDefault(emptyList()), art = StartArt.WAHR))
-			}.filter { it.items.isNotEmpty() }
-		}.onFailure { Timber.w(it, "Startseite laden") }.getOrNull()
+		// Immer frisch laden (auch nach Änderungen im Titelmenü, z. B. «Aus Weiterschauen entfernen») (Fortschritt ändert sich nach dem Schauen), alte Reihen bis dahin stehen lassen.
+		// Alle Reihen gleichzeitig holen. Beim Kaltstart erscheinen sie der Reihe nach, sobald sie da sind (Weiterschauen
+		// zuerst), statt dass die Seite auf die langsamste wartet; beim Neuladen wird erst getauscht, wenn alles da ist.
+		val kalt = reihen == null
+		val start = System.currentTimeMillis()
 		// Zufällig gemischte Reihen (Wahre Geschichten) beim Neuladen nicht neu mischen: sonst springt alles und man
 		// sieht nicht, dass z. B. «Gesehen» gewirkt hat
 		// (die Reihenfolge liegt im ViewModel, sie übersteht auch das Neuaufbauen der Seite nach dem Titelmenü)
-		@Suppress("UNCHECKED_CAST")
-		val vorher = vm.wahl["wahr-reihenfolge"] as? List<java.util.UUID>
-		val geordnet = neu?.map { r ->
-			if (r.art != StartArt.WAHR) r
-			else if (vorher == null) r.also { vm.wahl["wahr-reihenfolge"] = it.items.map { i -> i.id } }
-			else r.copy(items = r.items.sortedBy { i -> vorher.indexOf(i.id).let { if (it < 0) Int.MAX_VALUE else it } })
+		val ordnen = { neu: List<StartReihe> ->
+			@Suppress("UNCHECKED_CAST")
+			val vorher = vm.wahl["wahr-reihenfolge"] as? List<java.util.UUID>
+			neu.map { r ->
+				if (r.art != StartArt.WAHR) r
+				else if (vorher == null) r.also { vm.wahl["wahr-reihenfolge"] = it.items.map { i -> i.id } }
+				else r.copy(items = r.items.sortedBy { i -> vorher.indexOf(i.id).let { if (it < 0) Int.MAX_VALUE else it } })
+			}
 		}
+		val neu = runCatching {
+			val bibs = daten.bibliotheken()
+			kotlinx.coroutines.coroutineScope {
+				// sicher = Fehler gibt eine leere Reihe; sonst bricht das ganze Laden ab und die alten Reihen bleiben (wie bisher)
+				fun reihe(sicher: Boolean = true, laden: suspend () -> List<StartReihe>) = async {
+					if (sicher) runCatching { laden() }.onFailure { Timber.w(it, "Startreihe") }.getOrDefault(emptyList()) else laden()
+				}
+				val teile = buildList {
+					add(reihe(sicher = false) {
+						val w = daten.weiterschauen()
+						listOf(StartReihe(context.getString(R.string.seliku_continue_watching),
+							if (SelikuEinstellungen.weiterschauenGeraet(context)) w.filter { GeraetVerlauf.enthaelt(context, it) } else w, art = StartArt.WEITER))
+					})
+					if (SelikuEinstellungen.hoerenStart(context))
+						add(reihe { listOf(StartReihe(context.getString(R.string.seliku_audio_continue), Hoeren.weiterhoeren(), art = StartArt.HOEREN)) })
+					if (SelikuEinstellungen.favoritenReihe(context))
+						add(reihe { listOf(StartReihe(context.getString(R.string.seliku_your_favorites), daten.favoriten(), art = StartArt.FAVORITEN)) })
+					if (bibs.any { it.istLiveTv() }) add(reihe(sicher = false) { listOf(StartReihe(context.getString(R.string.seliku_on_tv_now), daten.sender().filter { it.currentProgram != null }.let { s ->
+						val b = SelikuEinstellungen.senderBlock(context)
+						if (SelikuEinstellungen.senderGruppen(context) && b >= 0) s.sortedBy { if (it.senderBlock() == b) 0 else 1 } else s
+					}.take(20), art = StartArt.TV)) })
+					// Sonderreihen wie «Diese Filme werden bald gelöscht» (Maintainerr, gespiegelt als Jellyfin-Sammlung)
+					add(reihe { daten.startseitenSammlungen().map { (name, items, datum) -> StartReihe(name, items, datum) } })
+					bibs.filter { !it.istLiveTv() }.forEach { bib ->
+						add(reihe { listOf(StartReihe(context.getString(R.string.seliku_new_in, bib.name.orEmpty()), daten.neuIn(bib), art = StartArt.NEU)) })
+					}
+					if (SelikuEinstellungen.wahreGeschichten(context))
+						add(reihe { listOf(StartReihe(context.getString(R.string.seliku_true_stories), daten.wahreGeschichten(), art = StartArt.WAHR)) })
+				}
+				val fertig = mutableListOf<StartReihe>()
+				teile.forEach { t ->
+					fertig += t.await().filter { it.items.isNotEmpty() }
+					if (kalt && !ausSpeicher && fertig.isNotEmpty()) {
+						if (reihen == null) Timber.i("Startseite: erste Reihe nach %d ms", System.currentTimeMillis() - start)
+						reihen = ordnen(fertig.toList())
+					}
+				}
+				fertig.toList()
+			}
+		}.onFailure { Timber.w(it, "Startseite laden") }.getOrNull()
+		Timber.i("Startseite: %d Reihen nach %d ms", neu?.size ?: -1, System.currentTimeMillis() - start)
+		val geordnet = neu?.let(ordnen)
 		if (geordnet != null) {
 			val neu = geordnet
 			reihen = neu
 			vm.wahl["start-reihen"] = neu
+			Schnellstart.reihenMerken(context, daten.wer(), neu.map { r -> Schnellstart.Reihe(r.titel, r.art.name, r.items, r.loeschdatum.mapKeys { it.key.toString() }) })
 			// Hintergründe für die Anmeldeseite merken (neu hinzugefügte zuerst)
 			Kulissen.merken(context, neu.filter { it.art == StartArt.NEU || it.art == StartArt.WEITER }
 				.flatMap { r -> r.items.mapNotNull { bilder.hintergrund(it, 1280) } })
