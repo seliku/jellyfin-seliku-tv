@@ -133,7 +133,7 @@ fun SerienSeite(vm: SelikuViewModel, seite: Seite.Serie, oeffnen: (BaseItemDto) 
 			naechste = daten.naechsteFolge(seite.id)
 			staffeln = daten.staffeln(seite.id)
 			if (staffel == null || staffeln.none { it.id == staffel }) staffel = naechste?.seasonId ?: staffeln.firstOrNull()?.id
-			if (zuerst && vm.fokus[seite.schluessel] == null) runCatching { start.requestFocus() }
+			if (zuerst && vm.fokus[seite.schluessel] == null) launch { startFokus(start) }
 			aehnlich = daten.aehnlich(seite.id)
 		}.onFailure { Timber.w(it, "Serie laden"); if (istWeg(it)) fehltSerie = true }
 	}
@@ -230,7 +230,7 @@ fun TitelSeite(vm: SelikuViewModel, seite: Seite.Titel, oeffnen: (BaseItemDto) -
 		runCatching {
 			val zuerst = titel == null
 			titel = daten.item(seite.id)
-			if (zuerst && vm.fokus[seite.schluessel] == null) runCatching { start.requestFocus() }
+			if (zuerst && vm.fokus[seite.schluessel] == null) launch { startFokus(start) }
 			aehnlich = daten.aehnlich(seite.id)
 		}.onFailure { Timber.w(it, "Titel laden"); if (istWeg(it)) fehltTitel = true }
 	}
@@ -260,6 +260,18 @@ fun TitelSeite(vm: SelikuViewModel, seite: Seite.Titel, oeffnen: (BaseItemDto) -
 			item { BesetzungReihe(t, vm, seite) }
 			item { GemischteReihe(stringResource(R.string.seliku_similar_titles), aehnlich, seerrFehlendeAehnliche(t, vm, seite), vm, seite, oeffnen) }
 		} }
+	}
+}
+
+/**
+ * Den ersten Knopf («Abspielen») fokussieren, sobald er gezeichnet ist – er entsteht erst im Bild nach dem Laden. Antwortet
+ * der Server langsam, hat die allgemeine Startlogik den Fokus sonst schon irgendwo in der Seite abgelegt, z. B. bei der
+ * Besetzung (S 12.11.). Nur gleich nach dem Laden, damit nichts gestohlen wird, wohin man selbst gegangen ist.
+ */
+private suspend fun startFokus(start: androidx.compose.ui.focus.FocusRequester) {
+	repeat(30) {
+		kotlinx.coroutines.delay(50)
+		if (runCatching { start.requestFocus() }.getOrDefault(false)) return
 	}
 }
 
