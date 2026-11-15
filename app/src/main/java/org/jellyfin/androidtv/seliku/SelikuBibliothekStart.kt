@@ -155,7 +155,7 @@ private fun BibliothekEmpfohlen(vm: SelikuViewModel, seite: Seite.Bibliothek, oe
 			item(key = "banner") { Banner(banner, oeffnen = oeffnen, zeigt = { }, fokus = bannerAnfrage,
 				seerr = bannerSeerr, seerrOeffnen = { t -> vm.zu(Seite.SeerrDetail(t.typ, t.tmdb)) }) }
 			items(r, key = { it.titel }) { reihe ->
-				Reihe(reihe.titel, reihe.items, vm, unterSeite, beiHoch = if (reihe == r.firstOrNull() && banner.isNotEmpty()) ({
+				Reihe(reihe.titel, reihe.items, vm, unterSeite, jeSerie = reihe.weiterschauen, beiHoch = if (reihe == r.firstOrNull() && banner.isNotEmpty()) ({
 					rollScope.launch {
 						runCatching { vm.liste(unterSeite).scrollToItem(0) }
 						kotlinx.coroutines.delay(60)

@@ -414,8 +414,13 @@ fun Reihe(
 	beiHoch: (() -> Boolean)? = null,
 	start: Int? = null,
 	buehne: Boolean = false,
+	// Weiterschauen: eine Serie bleibt dieselbe Kachel, auch wenn inzwischen die nächste Folge darauf steht und sie nach vorne gerückt ist
+	jeSerie: Boolean = false,
 ) {
 	if (items.isEmpty()) return
+	// Doppelt vorkommende Serien (sollte nicht sein) würden die Reihe abstürzen lassen: dann je Titel
+	val jeSerieOk = jeSerie && remember(items) { items.map { it.seriesId ?: it.id }.toSet().size == items.size }
+	fun merkId(i: BaseItemDto) = if (jeSerieOk) (i.seriesId ?: i.id) else i.id
 	// beiHoch: «nach oben» aus dieser Reihe selbst behandeln (z. B. zum Banner springen, auch wenn er gerade ausserhalb liegt)
 	Column(Modifier.fillMaxWidth().padding(bottom = 18.dp).onPreviewKeyEvent { e ->
 		if (beiHoch != null && e.type == KeyEventType.KeyDown && e.key == Key.DirectionUp) beiHoch() else false
@@ -431,17 +436,26 @@ fun Reihe(
 				offenNr = start; runCatching { zustand.scrollToItem(start) }
 			}
 		}
+		// Rückt die zuletzt gewählte Kachel an eine andere Stelle (Weiterschauen nach dem Schauen), ihr folgen statt der alten Nummer (S 15.11.)
+		LaunchedEffect(items) {
+			val id = vm.wahl["$offenSchluessel|id"] ?: return@LaunchedEffect
+			val nr = items.indexOfFirst { merkId(it) == id }
+			if (nr >= 0 && nr != offenNr) {
+				offenNr = nr; vm.wahl[offenSchluessel] = nr
+				runCatching { zustand.scrollToItem(nr) }
+			}
+		}
 		val mitBuehne = buehne && SelikuEinstellungen.netflixKacheln(androidx.compose.ui.platform.LocalContext.current)
 		@Composable fun zeige(item: BaseItemDto, merken: Pair<SelikuViewModel, Pair<String, String>>, gewaehlt: () -> Unit) {
 			if (kachel != null) kachel(item, { onClick(item) }, merken, gewaehlt)
 			else Kachel(item, { onClick(item) }, merken = merken, onFokus = gewaehlt, onMenue = onMenue?.let { m -> { m(item) } } ?: { vm.menue = item })
 		}
-		Band(items.size, zustand, offenNr.coerceIn(0, items.lastIndex), mitBuehne, schluessel = { items[it].id },
+		Band(items.size, zustand, offenNr.coerceIn(0, items.lastIndex), mitBuehne, schluessel = { merkId(items[it]) },
 			// getOrNull: wird die Reihe kürzer (z. B. «Aus Weiterschauen entfernen»), blendet die Bühne noch kurz die alte Stelle über
 			buehne = { nr -> items.getOrNull(nr)?.let { zeige(it, vm to (seite.schluessel to "$titel|buehne"), {}) } },
 		) { nr ->
 			val item = items.getOrNull(nr) ?: return@Band
-			zeige(item, vm to (seite.schluessel to "$titel|${item.id}")) { offenNr = nr; vm.wahl[offenSchluessel] = nr; onFokus(item) }
+			zeige(item, vm to (seite.schluessel to "$titel|${merkId(item)}")) { offenNr = nr; vm.wahl[offenSchluessel] = nr; vm.wahl["$offenSchluessel|id"] = merkId(item); onFokus(item) }
 		}
 	}
 }

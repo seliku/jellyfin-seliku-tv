@@ -38,7 +38,21 @@ import org.jellyfin.androidtv.R
 /** Art der Startseiten-Reihe (die Überschrift ist übersetzt und taugt nicht als Unterscheidung). */
 private enum class StartArt { WEITER, HOEREN, TV, NEU, FAVORITEN, WAHR, ANDERE }
 
-private data class StartReihe(val titel: String, val items: List<BaseItemDto>, val loeschdatum: Map<java.util.UUID, String> = emptyMap(), val art: StartArt = StartArt.ANDERE)
+/**
+ * [gruppe]: Platz auf der Startseite wie in der Seitenleiste (S 15.11.): oben Weiterschauen (-2) und Favoriten (-1),
+ * dann alles zu Filmen (0), Serien (1), Live-TV (2), Musik (3, Hörbücher und Podcasts nach der Musik), Übriges (4).
+ */
+private data class StartReihe(val titel: String, val items: List<BaseItemDto>, val loeschdatum: Map<java.util.UUID, String> = emptyMap(), val art: StartArt = StartArt.ANDERE, val gruppe: Int = 4, val hoeren: Boolean = false)
+
+/** Innerhalb einer Gruppe: «Jetzt im TV» bzw. «Weiterhören» zuerst, dann «Neu in …», dann Sonderreihen (z. B. bald gelöscht). */
+private fun StartArt.unterRang() = when (this) { StartArt.WEITER, StartArt.FAVORITEN, StartArt.TV, StartArt.HOEREN -> 0; StartArt.NEU -> 1; StartArt.ANDERE -> 2; StartArt.WAHR -> 3 }
+
+/** Gruppe einer Bibliothek, wie die Seitenleiste sie ordnet. */
+private fun gruppeFuer(bib: BaseItemDto, aufnahmen: Set<java.util.UUID>): Int = when {
+	bib.id in aufnahmen -> 2
+	istUnterMusik(bib) -> 3
+	else -> when (bib.collectionType?.serialName) { "movies" -> 0; "tvshows" -> 1; "livetv" -> 2; "music" -> 3; else -> 4 }
+}
 
 /** Startseite: oben das gewählte Element gross, darunter Weiterschauen, Live-TV und «Neu in …» je Bibliothek. */
 @Composable
@@ -105,7 +119,7 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 		val ordnen = { neu: List<StartReihe> ->
 			@Suppress("UNCHECKED_CAST")
 			val vorher = vm.wahl["wahr-reihenfolge"] as? List<java.util.UUID>
-			neu.map { r ->
+			neu.sortedWith(compareBy<StartReihe>({ it.gruppe }, { it.hoeren }, { it.art.unterRang() })).map { r ->
 				if (r.art != StartArt.WAHR) r
 				else if (vorher == null) r.also { vm.wahl["wahr-reihenfolge"] = it.items.map { i -> i.id } }
 				else r.copy(items = r.items.sortedBy { i -> vorher.indexOf(i.id).let { if (it < 0) Int.MAX_VALUE else it } })
@@ -113,6 +127,7 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 		}
 		val neu = runCatching {
 			val bibs = daten.bibliotheken()
+			val aufnahmen = runCatching { daten.aufnahmeOrdner() }.getOrDefault(emptySet())
 			kotlinx.coroutines.coroutineScope {
 				// sicher = Fehler gibt eine leere Reihe; sonst bricht das ganze Laden ab und die alten Reihen bleiben (wie bisher)
 				fun reihe(sicher: Boolean = true, laden: suspend () -> List<StartReihe>) = async {
@@ -122,23 +137,28 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 					add(reihe(sicher = false) {
 						val w = daten.weiterschauen()
 						listOf(StartReihe(context.getString(R.string.seliku_continue_watching),
-							if (SelikuEinstellungen.weiterschauenGeraet(context)) w.filter { GeraetVerlauf.enthaelt(context, it) } else w, art = StartArt.WEITER))
+							if (SelikuEinstellungen.weiterschauenGeraet(context)) w.filter { GeraetVerlauf.enthaelt(context, it) } else w, art = StartArt.WEITER, gruppe = -2))
 					})
-					if (SelikuEinstellungen.hoerenStart(context))
-						add(reihe { listOf(StartReihe(context.getString(R.string.seliku_audio_continue), Hoeren.weiterhoeren(), art = StartArt.HOEREN)) })
+					// Weiterhören nur, wenn Hörbücher oder Podcasts überhaupt eingeblendet sind (ausgeblendet = nicht gewollt, S 15.11.)
+					if (SelikuEinstellungen.hoerenStart(context) && bibs.any { istUnterMusik(it) })
+						add(reihe { listOf(StartReihe(context.getString(R.string.seliku_audio_continue), Hoeren.weiterhoeren(), art = StartArt.HOEREN, gruppe = 3, hoeren = true)) })
 					if (SelikuEinstellungen.favoritenReihe(context))
-						add(reihe { listOf(StartReihe(context.getString(R.string.seliku_your_favorites), daten.favoriten(), art = StartArt.FAVORITEN)) })
+						add(reihe { listOf(StartReihe(context.getString(R.string.seliku_your_favorites), daten.favoriten(), art = StartArt.FAVORITEN, gruppe = -1)) })
 					if (bibs.any { it.istLiveTv() }) add(reihe(sicher = false) { listOf(StartReihe(context.getString(R.string.seliku_on_tv_now), daten.sender().filter { it.currentProgram != null }.let { s ->
 						val b = SelikuEinstellungen.senderBlock(context)
 						if (SelikuEinstellungen.senderGruppen(context) && b >= 0) s.sortedBy { if (it.senderBlock() == b) 0 else 1 } else s
-					}.take(20), art = StartArt.TV)) })
+					}.take(20), art = StartArt.TV, gruppe = 2)) })
 					// Sonderreihen wie «Diese Filme werden bald gelöscht» (Maintainerr, gespiegelt als Jellyfin-Sammlung)
-					add(reihe { daten.startseitenSammlungen().map { (name, items, datum) -> StartReihe(name, items, datum) } })
+					add(reihe { daten.startseitenSammlungen().map { (name, items, datum) ->
+						// Bei den Filmen bzw. Serien einordnen, je nachdem, was überwiegt
+						val filme = items.count { it.type == org.jellyfin.sdk.model.api.BaseItemKind.MOVIE }
+						StartReihe(name, items, datum, gruppe = if (filme * 2 >= items.size) 0 else 1)
+					} })
 					bibs.filter { !it.istLiveTv() }.forEach { bib ->
-						add(reihe { listOf(StartReihe(context.getString(R.string.seliku_new_in, bib.name.orEmpty()), daten.neuIn(bib), art = StartArt.NEU)) })
+						add(reihe { listOf(StartReihe(context.getString(R.string.seliku_new_in, bib.name.orEmpty()), daten.neuIn(bib), art = StartArt.NEU, gruppe = gruppeFuer(bib, aufnahmen), hoeren = istUnterMusik(bib))) })
 					}
 					if (SelikuEinstellungen.wahreGeschichten(context))
-						add(reihe { listOf(StartReihe(context.getString(R.string.seliku_true_stories), daten.wahreGeschichten(), art = StartArt.WAHR)) })
+						add(reihe { listOf(StartReihe(context.getString(R.string.seliku_true_stories), daten.wahreGeschichten(), art = StartArt.WAHR, gruppe = 1)) })
 				}
 				val fertig = mutableListOf<StartReihe>()
 				teile.forEach { t ->
@@ -199,6 +219,7 @@ fun StartSeite(vm: SelikuViewModel, oeffnen: (BaseItemDto) -> Unit) {
 						}) else null,
 						titel = reihe.titel,
 						items = reihe.items,
+						jeSerie = reihe.art == StartArt.WEITER,
 						vm = vm,
 						seite = seite,
 						onFokus = { gewaehlt = it },

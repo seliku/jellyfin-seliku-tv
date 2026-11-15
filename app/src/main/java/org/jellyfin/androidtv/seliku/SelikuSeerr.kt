@@ -1,5 +1,6 @@
 package org.jellyfin.androidtv.seliku
 
+import androidx.compose.foundation.relocation.bringIntoViewResponder
 import androidx.compose.foundation.layout.offset
 import android.content.Context
 import androidx.compose.foundation.background
@@ -186,6 +187,8 @@ data class SeerrMehr(
 	val firmen: String?,     // Studios bzw. Sender
 	val besetzung: List<SeerrPerson>,
 	val youtube: String? = null, // Schlüssel des Trailers auf YouTube
+	/** Serie ohne TheTVDB-Nummer: Sonarr kann sie nicht laden, Seerr verwirft die Anfrage still (S 15.11.). */
+	val ohneTvdb: Boolean = false,
 ) {
 	companion object {
 		fun ausJson(o: JSONObject, typ: String): SeerrMehr {
@@ -209,6 +212,7 @@ data class SeerrMehr(
 				}.filter { it.id > 0 && it.name.isNotBlank() },
 				youtube = liste(o.optJSONArray("relatedVideos")).filter { it.optString("site").equals("YouTube", true) && it.optString("key").isNotBlank() }
 					.sortedBy { if (it.optString("type") == "Trailer") 0 else 1 }.firstOrNull()?.optString("key"),
+				ohneTvdb = !film && (o.optJSONObject("externalIds")?.optInt("tvdbId", 0) ?: 0) <= 0,
 			)
 		}
 	}
@@ -363,7 +367,9 @@ class SeerrDaten(private val context: Context, private val api: ApiClient) {
 	suspend fun anfragen(t: SeerrTitel) {
 		val body = JSONObject().put("mediaType", t.typ).put("mediaId", t.tmdb)
 		if (t.typ == "tv") body.put("seasons", "all")
-		anfrage("POST", "/api/v1/request", body)
+		val (text, v) = anfrage("POST", "/api/v1/request", body)
+		// 202 heisst bei Seerr: nichts angelegt (keine Staffel mehr offen). Bisher sah das aus wie ein Knopf, der nichts tut.
+		if (v.responseCode == 202) throw SeerrFehler(202, text.take(200))
 	}
 
 	suspend fun zuruecknehmen(t: SeerrTitel) {
@@ -660,11 +666,16 @@ fun SeerrDetailSeite(vm: SelikuViewModel, seite: Seite.SeerrDetail, oeffnen: (Ba
 			if (x.zustand != letzterZustand) { letzterZustand = x.zustand; delay(80); runCatching { erster.requestFocus() } }
 		}
 		// Auf den Knöpfen ganz nach oben rollen (Poster und Titel ganz sichtbar); die Kachel unten ist dann nicht mehr «gemerkt»
-		val knopfFokus: () -> Unit = { vm.fokus.remove(seite.schluessel); scope.launch { delay(30); liste.animateScrollToItem(0) } }
+		// Nur rollen, wenn die Seite nicht schon oben steht – sonst ruckelt sie beim Betreten und bei jedem Knopfwechsel (S 15.11.)
+		val knopfFokus: () -> Unit = {
+			vm.fokus.remove(seite.schluessel)
+			if (liste.firstVisibleItemIndex != 0 || liste.firstVisibleItemScrollOffset != 0) scope.launch { delay(30); liste.animateScrollToItem(0) }
+		}
 		val m = mehr
 		LazyColumn(state = liste, contentPadding = PaddingValues(bottom = 48.dp), modifier = Modifier.fillMaxSize()) {
 			item(key = "kopf") {
-				Row(Modifier.fillMaxWidth().padding(start = 48.dp, top = 48.dp, end = 64.dp, bottom = 26.dp), horizontalArrangement = Arrangement.spacedBy(32.dp)) {
+				// Der Kopf meldet beim Fokus auf die Knöpfe seinen oberen Rand: die Liste rollt nicht erst hinunter und dann wieder hinauf
+				Row(Modifier.fillMaxWidth().bringIntoViewResponder(remember { KopfOben() }).padding(start = 48.dp, top = 48.dp, end = 64.dp, bottom = 26.dp), horizontalArrangement = Arrangement.spacedBy(32.dp)) {
 					Bild(x.poster, Modifier.width(220.dp).aspectRatio(2f / 3f), ersatz = initialen(x.titel))
 					Column(Modifier.weight(1f)) {
 						Text(x.titel, style = Schrift.Riesig, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -694,14 +705,22 @@ fun SeerrDetailSeite(vm: SelikuViewModel, seite: Seite.SeerrDetail, oeffnen: (Ba
 						val tun: (suspend () -> Unit) -> Unit = { aktion ->
 							if (!arbeitet) scope.launch {
 								arbeitet = true
-								runCatching { aktion() }.onFailure { meldung = if (it is SeerrFehler && it.code == 403) context.getString(R.string.seliku_seerr_no_permission) else context.getString(R.string.seliku_failed, it.message?.take(80).toString()) }
+								runCatching { aktion() }.onFailure {
+									meldung = when {
+										it is SeerrFehler && it.code == 403 -> context.getString(R.string.seliku_seerr_no_permission)
+										it is SeerrFehler && it.code == 202 -> context.getString(R.string.seliku_seerr_nothing_to_request)
+										else -> context.getString(R.string.seliku_failed, it.message?.take(80).toString())
+									}
+								}
 								arbeitet = false; neu++
 							}
 						}
 						Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
 							val k = Modifier.focusRequester(erster)
 							when (x.zustand) {
-								SeerrZustand.ANFRAGEN -> Knopf(stringResource(if (arbeitet) R.string.seliku_seerr_requesting else R.string.seliku_seerr_request), symbol = "+", hervorgehoben = true, modifier = k, onFokus = knopfFokus, onClick = { tun { daten.anfragen(x) } })
+								SeerrZustand.ANFRAGEN -> if (m?.ohneTvdb == true) Knopf(stringResource(R.string.seliku_seerr_cannot_request), symbol = "–", modifier = k, onFokus = knopfFokus,
+									onClick = { meldung = context.getString(R.string.seliku_seerr_no_tvdb) })
+								else Knopf(stringResource(if (arbeitet) R.string.seliku_seerr_requesting else R.string.seliku_seerr_request), symbol = "+", hervorgehoben = true, modifier = k, onFokus = knopfFokus, onClick = { tun { daten.anfragen(x) } })
 								SeerrZustand.ANGEFRAGT -> Knopf(stringResource(R.string.seliku_seerr_awaiting_approval), symbol = "⏳", modifier = k, onFokus = knopfFokus, onClick = { neu++ })
 								SeerrZustand.WIRD_GESUCHT -> Knopf(stringResource(R.string.seliku_seerr_searching), symbol = "⌕", modifier = k, onFokus = knopfFokus, onClick = { neu++ })
 								SeerrZustand.NOCH_NICHT -> Knopf(stringResource(R.string.seliku_seerr_not_yet_available), symbol = "…", modifier = k, onFokus = knopfFokus, onClick = { neu++ })
@@ -722,7 +741,8 @@ fun SeerrDetailSeite(vm: SelikuViewModel, seite: Seite.SeerrDetail, oeffnen: (Ba
 							if (x.anfrageVonMir && x.zustand in setOf(SeerrZustand.ANGEFRAGT, SeerrZustand.WIRD_GESUCHT, SeerrZustand.NOCH_NICHT))
 								Knopf(stringResource(R.string.seliku_seerr_withdraw), symbol = "✕", onFokus = knopfFokus, onClick = { tun { daten.zuruecknehmen(x) } })
 						}
-						meldung?.let { Spacer(Modifier.height(14.dp)); Text(it, style = Schrift.Leise) }
+						(meldung ?: if (x.zustand == SeerrZustand.ANFRAGEN && m?.ohneTvdb == true) stringResource(R.string.seliku_seerr_no_tvdb) else null)
+							?.let { Spacer(Modifier.height(14.dp)); Text(it, style = Schrift.Leise) }
 						if (x.zustand == SeerrZustand.NOCH_NICHT) {
 							Spacer(Modifier.height(10.dp))
 							Text(stringResource(R.string.seliku_seerr_no_source_yet), style = Schrift.Klein)

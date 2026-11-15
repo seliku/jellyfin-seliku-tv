@@ -70,6 +70,7 @@ public class PlaybackController implements PlaybackControllerNotifiable {
     private final Lazy<InteractionTrackerViewModel> lazyInteractionTracker = inject(InteractionTrackerViewModel.class);
 
     List<BaseItemDto> mItems;
+    private boolean selikuNaechsteSuchen = false;
     VideoManager mVideoManager;
     int mCurrentIndex;
     protected long mCurrentPosition = 0;
@@ -1168,10 +1169,35 @@ public class PlaybackController implements PlaybackControllerNotifiable {
 
         BaseItemDto nextItem = getNextItem();
         BaseItemDto curItem = getCurrentlyPlayingItem();
+        // Seliku: Steht nach einer Folge nichts mehr in der Warteschlange, die nächste Folge beim Server nachfragen,
+        // statt auf die Startseite zurückzukehren (nur wenn «Nach einer Folge» nicht auf «Schluss» steht)
+        if (nextItem == null && curItem != null && curItem.getType() == BaseItemKind.EPISODE && curItem.getSeriesId() != null
+                && mFragment != null && userPreferences.getValue().get(UserPreferences.Companion.getMediaQueuingEnabled())) {
+            // Ende und Überspringen können beide melden: nur einmal nachfragen
+            if (selikuNaechsteSuchen) return;
+            selikuNaechsteSuchen = true;
+            final CustomPlaybackOverlayFragment fragment = mFragment;
+            org.jellyfin.androidtv.seliku.NaechsteFolge.nachladen(curItem, naechste -> {
+                selikuNaechsteSuchen = false;
+                if (mFragment != fragment) return;
+                if (naechste == null) { endPlayback(true); return; }
+                java.util.List<BaseItemDto> liste = new java.util.ArrayList<>(mItems);
+                liste.add(naechste);
+                mItems = liste;
+                videoQueueManager.getValue().setCurrentVideoQueue(liste);
+                videoQueueManager.getValue().setCurrentMediaPosition(mCurrentIndex);
+                weiterZurNaechsten(curItem, naechste);
+            });
+            return;
+        }
         if (nextItem == null || curItem == null) {
             endPlayback(true);
             return;
         }
+        weiterZurNaechsten(curItem, nextItem);
+    }
+
+    private void weiterZurNaechsten(BaseItemDto curItem, BaseItemDto nextItem) {
 
         Timber.i("Moving to next queue item. Index: %s", (mCurrentIndex + 1));
         boolean stillWatchingEnabled = userPreferences.getValue().get(UserPreferences.Companion.getStillWatchingBehavior()) != StillWatchingBehavior.DISABLED;

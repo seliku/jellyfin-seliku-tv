@@ -405,4 +405,7 @@
 	<string name="seliku_set_resume_device_desc">Zeigt nur, was auf diesem Gerät angefangen wurde (zählt ab jetzt). Aus: alles des Kontos</string>
 	<string name="seliku_set_quickstart">Schnellstart</string>
 	<string name="seliku_set_quickstart_desc">Beim Start sofort den letzten Stand der Startseite zeigen; Neues ersetzt ihn still</string>
+	<string name="seliku_seerr_nothing_to_request">Seerr hat die Anfrage nicht angenommen: Die Serie steht dort schon als «in Arbeit». Ein Admin kann den Eintrag in Seerr zurücksetzen («Daten löschen»).</string>
+	<string name="seliku_seerr_cannot_request">Nicht anfragbar</string>
+	<string name="seliku_seerr_no_tvdb">Diese Serie fehlt bei TheTVDB, deshalb kann Sonarr sie nicht laden. Eine Anfrage würde verworfen.</string>
 </resources>

@@ -405,4 +405,7 @@
 	<string name="seliku_set_resume_device_desc">Shows only what was started on this device (counts from now on). Off: everything of the account</string>
 	<string name="seliku_set_quickstart">Quick start</string>
 	<string name="seliku_set_quickstart_desc">Show the last home screen right away at start; fresh rows replace it quietly</string>
+	<string name="seliku_seerr_nothing_to_request">Seerr didn\'t accept the request: it lists this series as already in progress. An admin can reset the entry in Seerr (Clear data).</string>
+	<string name="seliku_seerr_cannot_request">Can\'t be requested</string>
+	<string name="seliku_seerr_no_tvdb">This series is missing on TheTVDB, so Sonarr can\'t download it. Requests for it are discarded.</string>
 </resources>

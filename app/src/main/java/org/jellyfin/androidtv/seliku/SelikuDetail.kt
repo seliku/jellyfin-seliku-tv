@@ -90,7 +90,7 @@ private fun Kopf(
 }
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-private class KopfOben : androidx.compose.foundation.relocation.BringIntoViewResponder {
+internal class KopfOben : androidx.compose.foundation.relocation.BringIntoViewResponder {
 	override fun calculateRectForParent(localRect: androidx.compose.ui.geometry.Rect) = androidx.compose.ui.geometry.Rect(0f, 0f, 1f, 1f)
 	override suspend fun bringChildIntoView(localRect: () -> androidx.compose.ui.geometry.Rect?) {}
 }

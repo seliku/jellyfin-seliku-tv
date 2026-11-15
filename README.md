@@ -27,6 +27,13 @@ streaming-service style home screen, built for our own living room – and share
 - **Seerr built in**: browse what is missing ("Entdecken"), request with one click, see the state on the tiles
   ("Requested", "Available soon", "Watch now"). Works with the Seerr bridge from `server/` (uses the Jellyfin
   sign-in, no second sign-in) or by connecting your own Seerr (Plex PIN or user/password).
+  Series without a TheTVDB id are marked "Can't be requested" (Sonarr can't fetch them), and when Seerr refuses a
+  request the app says so instead of doing nothing.
+- **Home screen in sidebar order**: Continue watching and favourites on top, then everything about movies, series,
+  Live TV and music. "Continue listening" only shows when audiobook or podcast libraries are visible. A series keeps
+  its tile in Continue watching after an episode, even when it moves to the front.
+- **After an episode**: if the queue has no next episode (e.g. the series list failed to load at start), the app asks
+  the server at the end, so "Waits for OK" still shows the next episode.
 - **Music**: playlists first, automatic mixes, favourites (playlists, mixes, radio stations), A–Z bar, **internet radio**
   (radio-browser.info) with favourites synced to your Jellyfin account, zapping with left/right, and an idle screen
   (dimmed with clock, backdrop slideshow, or muted trailers with their title).
