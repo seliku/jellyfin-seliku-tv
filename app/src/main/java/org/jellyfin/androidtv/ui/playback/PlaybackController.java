@@ -171,6 +171,12 @@ public class PlaybackController implements PlaybackControllerNotifiable {
         }
     }
 
+    /** Seliku: wie getCurrentlyPlayingItem, aber ohne Ausnahme bei ungültigem Index. */
+    @Nullable
+    private BaseItemDto selikuAktuellesItem() {
+        return mCurrentIndex >= 0 && mCurrentIndex < mItems.size() ? mItems.get(mCurrentIndex) : null;
+    }
+
     public BaseItemDto getCurrentlyPlayingItem() {
         return mItems.size() > mCurrentIndex ? mItems.get(mCurrentIndex) : null;
     }
@@ -410,7 +416,7 @@ public class PlaybackController implements PlaybackControllerNotifiable {
     }
 
     protected void play(long position, @Nullable Integer forcedSubtitleIndex) {
-        String forcedAudioLanguage = videoQueueManager.getValue().getLastPlayedAudioLanguageIsoCode();
+        String forcedAudioLanguage = videoQueueManager.getValue().getAudioLanguageFor(selikuAktuellesItem());
         Timber.i("Play called from state: %s with pos: %d, sub index: %d and forced audio: %s", mPlaybackState, position, forcedSubtitleIndex, forcedAudioLanguage);
 
         if (mFragment == null) {
@@ -747,7 +753,7 @@ public class PlaybackController implements PlaybackControllerNotifiable {
             } else {
                 if (videoFound
                     && track.getType() == MediaStreamType.AUDIO
-                    && (track.getLanguage() != null && track.getLanguage().equals(videoQueueManager.getValue().getLastPlayedAudioLanguageIsoCode()))
+                    && (track.getLanguage() != null && track.getLanguage().equals(videoQueueManager.getValue().getAudioLanguageFor(selikuAktuellesItem())))
                 )
                     return track.getIndex();
             }
@@ -773,6 +779,11 @@ public class PlaybackController implements PlaybackControllerNotifiable {
     }
 
     public void switchAudioStream(int index) {
+        switchAudioStream(index, false);
+    }
+
+    /** Seliku: manuell = von Hand gewählt (Menü/Fernsteuerung); nur dann wird die Sprache gemerkt. */
+    public void switchAudioStream(int index, boolean manuell) {
         if (!(isPlaying() || isPaused()) || index < 0)
             return;
 
@@ -783,14 +794,10 @@ public class PlaybackController implements PlaybackControllerNotifiable {
             return;
         }
 
-        String lastAudioIsoCode = videoQueueManager.getValue().getLastPlayedAudioLanguageIsoCode();
         String currentAudioIsoCode = currentMediaSource.getMediaStreams().get(index).getLanguage();
 
-        if (currentAudioIsoCode != null
-                && (lastAudioIsoCode == null || !lastAudioIsoCode.equals(currentAudioIsoCode))) {
-            videoQueueManager.getValue().setLastPlayedAudioLanguageIsoCode(
-                    currentAudioIsoCode
-            );
+        if (manuell && currentAudioIsoCode != null) {
+            videoQueueManager.getValue().setManualAudioLanguage(currentAudioIsoCode, selikuAktuellesItem());
         }
 
         int currAudioIndex = getAudioStreamIndex();

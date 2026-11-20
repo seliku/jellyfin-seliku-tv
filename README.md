@@ -9,6 +9,7 @@ streaming-service style home screen, built for our own living room – and share
 
 ## What is different
 
+- Tonspur: Eine von Hand gewählte Sprache gilt nur für weitere Folgen derselben Serie. Ein anderer Film oder eine andere Serie beginnt wieder mit der Standardspur (vorher merkte sich die App auch die automatisch gewählte Spur und startete danach alles in dieser Sprache).
 - **Home screen like the big streaming services**: a featured banner with personal recommendations (scored from your
   own watch history), poster rows with a fixed "stage" at the start of each row that plays the **trailer** after a few
   seconds, while the other posters glide in behind it.
