@@ -106,6 +106,9 @@ object SelikuEinstellungen {
 	/** An (Vorgabe): unten in der zugeklappten Seitenleiste Wochentag und Uhrzeit. */
 	fun uhrInLeiste(c: Context) = prefs(c).getBoolean("uhr_leiste", true)
 	fun uhrInLeiste(c: Context, an: Boolean) = prefs(c).edit().putBoolean("uhr_leiste", an).apply()
+	/** An (Vorgabe): während eines Films die Uhrzeit unten links, fast durchsichtig (ohne Wochentag). */
+	fun uhrImFilm(c: Context) = prefs(c).getBoolean("uhr_film", true)
+	fun uhrImFilm(c: Context, an: Boolean) = prefs(c).edit().putBoolean("uhr_film", an).apply()
 
 	/** An (Vorgabe): Aufnahme-Ordner nicht als eigener Punkt in der Seitenleiste, wenn es Live-TV gibt (dort stehen sie unter «Aufnahmen»). */
 	fun aufnahmenUnterLiveTv(c: Context) = prefs(c).getBoolean("aufnahmen_unter_livetv", true)

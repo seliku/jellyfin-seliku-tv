@@ -111,6 +111,7 @@ object SelikuSync {
 		schalter("doppel_zurueck", true, SelikuEinstellungen::doppelZurueck, SelikuEinstellungen::doppelZurueck),
 		schalter("leiste_mit_links", true, SelikuEinstellungen::leisteMitLinks, SelikuEinstellungen::leisteMitLinks),
 		schalter("uhr_leiste", true, SelikuEinstellungen::uhrInLeiste, SelikuEinstellungen::uhrInLeiste),
+		schalter("uhr_film", true, SelikuEinstellungen::uhrImFilm, SelikuEinstellungen::uhrImFilm),
 		schalter("schnellstart", true, SelikuEinstellungen::schnellstart, SelikuEinstellungen::schnellstart),
 		schalter("aufnahmen_unter_livetv", true, SelikuEinstellungen::aufnahmenUnterLiveTv, SelikuEinstellungen::aufnahmenUnterLiveTv),
 		schalter("untertitel_nachladen", true, SelikuEinstellungen::untertitelNachladen, SelikuEinstellungen::untertitelNachladen),

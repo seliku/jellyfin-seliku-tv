@@ -399,6 +399,8 @@
 	<string name="seliku_set_delete_desc">Langes Drücken bietet «Löschen» an (mit Rückfrage), wenn dein Konto auf dem Server löschen darf.</string>
 	<string name="seliku_set_clock">Uhr in der Seitenleiste</string>
 	<string name="seliku_set_clock_desc">Wochentag und Uhrzeit unten in der zugeklappten Leiste</string>
+	<string name="seliku_set_clock_film">Uhr im Film</string>
+	<string name="seliku_set_clock_film_desc">Uhrzeit unten links während der Wiedergabe, fast durchsichtig</string>
 	<string name="seliku_set_recordings_livetv">Aufnahmen nur unter Live-TV</string>
 	<string name="seliku_set_recordings_livetv_desc">Der Aufnahme-Ordner bekommt keinen eigenen Punkt in der Seitenleiste (nur wenn es Live-TV gibt)</string>
 	<string name="seliku_set_resume_device">Weiterschauen nur von diesem Gerät</string>

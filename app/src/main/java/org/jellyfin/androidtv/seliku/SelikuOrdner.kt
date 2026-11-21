@@ -176,6 +176,7 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 	var schlank by remember(stand) { mutableStateOf(SelikuEinstellungen.schlankerPlayer(context)) }
 	var links by remember(stand) { mutableStateOf(SelikuEinstellungen.leisteMitLinks(context)) }
 	var uhr by remember(stand) { mutableStateOf(SelikuEinstellungen.uhrInLeiste(context)) }
+	var uhrFilm by remember(stand) { mutableStateOf(SelikuEinstellungen.uhrImFilm(context)) }
 	var schnell by remember(stand) { mutableStateOf(SelikuEinstellungen.schnellstart(context)) }
 	var aufnahmenLive by remember(stand) { mutableStateOf(SelikuEinstellungen.aufnahmenUnterLiveTv(context)) }
 	var weiterGeraet by remember(stand) { mutableStateOf(SelikuEinstellungen.weiterschauenGeraet(context)) }
@@ -257,6 +258,9 @@ fun EinstellungenSeite(vm: SelikuViewModel, jellyfinEinstellungen: () -> Unit) {
 		},
 		EinstellungsEintrag.Schalter("uhr", umfang = "uhr_leiste", stringResource(R.string.seliku_set_clock), stringResource(R.string.seliku_set_clock_desc), uhr) {
 			uhr = !uhr; SelikuEinstellungen.uhrInLeiste(context, uhr); gesetzt("uhr_leiste")
+		},
+		EinstellungsEintrag.Schalter("uhrfilm", umfang = "uhr_film", stringResource(R.string.seliku_set_clock_film), stringResource(R.string.seliku_set_clock_film_desc), uhrFilm) {
+			uhrFilm = !uhrFilm; SelikuEinstellungen.uhrImFilm(context, uhrFilm); gesetzt("uhr_film")
 		},
 		EinstellungsEintrag.Schalter("aufnahmenlive", umfang = "aufnahmen_unter_livetv", stringResource(R.string.seliku_set_recordings_livetv), stringResource(R.string.seliku_set_recordings_livetv_desc), aufnahmenLive) {
 			aufnahmenLive = !aufnahmenLive; SelikuEinstellungen.aufnahmenUnterLiveTv(context, aufnahmenLive); gesetzt("aufnahmen_unter_livetv")

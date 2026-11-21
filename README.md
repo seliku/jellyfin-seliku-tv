@@ -10,6 +10,7 @@ streaming-service style home screen, built for our own living room – and share
 ## What is different
 
 - **Audio language that does not stick everywhere**: a language you pick by hand is kept only for further episodes of the same series. Any other film or series starts with its default track again (upstream also remembered the automatically chosen track, so one English-default title made everything start in English).
+- **Glass clock during playback**: the time (without weekday) stays at the bottom left, where the sidebar clock sits, also while a movie, episode, live channel or trailer plays — almost transparent so it does not distract (switchable: "Clock during playback").
 - **Home screen like the big streaming services**: a featured banner with personal recommendations (scored from your
   own watch history), poster rows with a fixed "stage" at the start of each row that plays the **trailer** after a few
   seconds, while the other posters glide in behind it.

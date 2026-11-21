@@ -399,6 +399,8 @@
 	<string name="seliku_set_delete_desc">Long press offers Delete (with confirmation) when your account may delete on the server.</string>
 	<string name="seliku_set_clock">Clock in the sidebar</string>
 	<string name="seliku_set_clock_desc">Weekday and time at the bottom of the collapsed sidebar</string>
+	<string name="seliku_set_clock_film">Clock during playback</string>
+	<string name="seliku_set_clock_film_desc">Time at the bottom left while playing, almost transparent</string>
 	<string name="seliku_set_recordings_livetv">Recordings only under Live TV</string>
 	<string name="seliku_set_recordings_livetv_desc">The recordings folder gets no own entry in the sidebar (only when Live TV exists)</string>
 	<string name="seliku_set_resume_device">Continue watching: this device only</string>
