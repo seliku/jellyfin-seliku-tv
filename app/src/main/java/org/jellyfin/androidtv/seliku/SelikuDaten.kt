@@ -189,64 +189,69 @@ class SelikuDaten(private val api: ApiClient) {
 	suspend fun item(id: UUID): BaseItemDto = io { api.userLibraryApi.getItem(itemId = id).content }
 
 	/**
-	 * «Weiterschauen»: je Serie nur ein Eintrag (die zuletzt angefangene Folge bzw. die nächste Folge), Filme einzeln.
-	 * Reihenfolge: zuletzt geschaut zuerst, dann die nächsten Folgen begonnener Serien (Jellyfin sortiert sie nach
-	 * zuletzt geschaut), am Schluss angefangene Titel ohne Datum (aus Plex übernommen, also alt).
+	 * «Weiterschauen» wie bei Plex (S 24.11.): je Serie genau ein Eintrag, Filme einzeln, zuletzt Geschautes zuerst.
+	 * Massgebend ist je Serie die zuletzt geschaute Folge (angefangen oder fertig, nur kurz gestartete zählen nicht):
+	 * ist sie angefangen, genau die; ist sie fertig, die nächste ungesehene danach. Alte, liegengebliebene Positionen
+	 * früherer Folgen (z. B. aus Plex übernommen) spielen keine Rolle mehr. Mit [bib] nur diese Bibliothek, gleiche
+	 * Reihenfolge wie auf der Startseite. Am Schluss Angefangenes ohne Datum (aus Plex übernommen, also alt).
 	 */
-	suspend fun weiterschauen(): List<BaseItemDto> = io { kotlinx.coroutines.coroutineScope {
-		// Die vier Grundabfragen hängen nicht voneinander ab: gleichzeitig (spart beim Start Sekunden)
+	suspend fun weiterschauen(bib: BaseItemDto? = null): List<BaseItemDto> = io { kotlinx.coroutines.coroutineScope {
 		val weg = async { ausgeblendet() }
+		// Zuletzt geschaute Folgen, neueste zuerst (Jellyfin setzt das Datum beim Start der Wiedergabe)
+		val folgenA = async { api.itemsApi.getItems(
+			parentId = bib?.id,
+			recursive = true,
+			includeItemTypes = setOf(BaseItemKind.EPISODE),
+			sortBy = listOf(ItemSortBy.DATE_PLAYED),
+			sortOrder = listOf(SortOrder.DESCENDING),
+			fields = felder,
+			enableUserData = true,
+			limit = 300,
+		).content.items }
 		val angefangenA = async { api.itemsApi.getResumeItems(
+			parentId = bib?.id,
 			limit = 60,
 			mediaTypes = setOf(MediaType.VIDEO),
 			fields = felder,
 			enableUserData = true,
-		).content.items
-			// Seliku: je Serie die zuletzt geschaute angefangene Folge, nicht eine ältere mit liegengebliebener Position (S 08.11.)
-			.sortedByDescending { it.userData?.lastPlayedDate ?: java.time.LocalDateTime.MIN }
-			.distinctBy { it.seriesId ?: it.id } }
+		).content.items }
 		val naechsteA = async { api.tvShowsApi.getNextUp(
-			limit = 60,
+			parentId = bib?.id,
+			limit = 100,
 			fields = felder,
 			enableUserData = true,
 			enableResumable = false,
 		).content.items }
 		val grenze = java.time.LocalDateTime.now().minusDays(30)
-		val gesehenA = async { api.itemsApi.getItems(
-			recursive = true,
-			includeItemTypes = setOf(BaseItemKind.EPISODE),
-			filters = setOf(ItemFilter.IS_PLAYED),
-			sortBy = listOf(ItemSortBy.DATE_PLAYED),
-			sortOrder = listOf(SortOrder.DESCENDING),
-			enableUserData = true,
-			limit = 100,
-		).content.items }
+		val naechste = naechsteA.await().filter { it.seriesId != null }.associateBy { it.seriesId!! }
+		fun BaseItemDto.nr() = (parentIndexNumber ?: 0) * 100_000 + (indexNumber ?: 0)
+		// Je Serie die zuletzt geschaute Folge; nur kurz gestartete (weder fertig noch Position) zählen nicht
+		val letzte = folgenA.await()
+			.filter { f -> f.seriesId != null && f.userData?.lastPlayedDate != null &&
+				(f.userData?.played == true || (f.userData?.playbackPositionTicks ?: 0L) > 0L) }
+			.distinctBy { it.seriesId }.take(40)
+		val serien = letzte.map { f -> async {
+			val wann = f.userData!!.lastPlayedDate!!
+			val eintrag = if (f.userData?.played != true) f else {
+				// Jellyfins «Als Nächstes» stimmt, wenn es hinter der zuletzt geschauten Folge liegt; sonst selbst suchen
+				val n = naechste[f.seriesId!!]
+				if (n != null && f.parentIndexNumber != 0 && n.nr() > f.nr()) n
+				else if (n != null || wann > grenze) runCatching { folgeNachZuletztGeschauter(f.seriesId!!) }.getOrNull()
+				else null
+			}
+			eintrag?.let { it to wann }
+		} }.mapNotNull { it.await() }
+		val bekannt = letzte.mapNotNull { it.seriesId }.toSet()
 		val angefangen = angefangenA.await()
-		val naechste = naechsteA.await()
-		val gesehen = gesehenA.await()
-		val serien = angefangen.mapNotNull { it.seriesId }.toSet()
-		// Serien der letzten 30 Tage, für die Jellyfin keine nächste Folge kennt (siehe folgeNachZuletztGeschauter)
-		val bekannt = serien + naechste.mapNotNull { it.seriesId }
-		// Wann eine Serie zuletzt geschaut wurde (neueste gesehene Folge)
-		val zuletztGeschaut = gesehen.filter { it.seriesId != null && it.userData?.lastPlayedDate != null }
-			.groupBy { it.seriesId!! }.mapValues { (_, f) -> f.maxOf { it.userData!!.lastPlayedDate!! } }
-		val ohneNaechste = gesehen
-			.filter { (it.userData?.lastPlayedDate ?: grenze) > grenze }
-			.mapNotNull { it.seriesId }.distinct().filter { it !in bekannt }.take(8)
-			.map { s -> async { runCatching { folgeNachZuletztGeschauter(s) }.getOrNull() } }
-		// Wurde nach der angefangenen Folge eine andere fertig geschaut, gilt die Folge danach, nicht die alte Position
-		val aktuell = angefangen.map { i -> async {
-			val zuletzt = i.seriesId?.let { zuletztGeschaut[it] }
-			val stand = i.userData?.lastPlayedDate
-			if (zuletzt != null && stand != null && zuletzt > stand) runCatching { folgeNachZuletztGeschauter(i.seriesId!!) }.getOrNull() ?: i else i
-		} }.map { it.await() }
-		val (mitDatum, ohneDatum) = aktuell.partition { (it.userData?.lastPlayedDate ?: it.seriesId?.let { s -> zuletztGeschaut[s] }) != null }
-		// Zuletzt Geschautes zuerst – egal ob angefangen, nächste Folge von Jellyfin oder von uns ergänzt (S 08.11.)
-		fun wann(i: BaseItemDto) = listOfNotNull(i.userData?.lastPlayedDate, i.seriesId?.let { zuletztGeschaut[it] }).maxOrNull()
-		val datiert = (mitDatum + ohneNaechste.mapNotNull { it.await() } + naechste.filter { it.seriesId !in serien })
-			.sortedByDescending { wann(it) ?: java.time.LocalDateTime.MIN }
+		val filme = angefangen.filter { it.seriesId == null }
+		val datiert = (serien + filme.mapNotNull { m -> m.userData?.lastPlayedDate?.let { m to it } })
+			.sortedByDescending { it.second }.map { it.first }
+		// Ohne Datum bzw. ausserhalb der letzten Folgen: Jellyfins «Als Nächstes» (nach zuletzt geschaut), dann Altes
+		val rest = naechste.values.filter { it.seriesId !in bekannt } +
+			angefangen.filter { it.seriesId != null && it.seriesId !in bekannt } +
+			filme.filter { it.userData?.lastPlayedDate == null }
 		val ausgeblendet = weg.await()
-		(datiert + ohneDatum).distinctBy { it.seriesId ?: it.id }.filter { it.ausblendSchluessel() !in ausgeblendet }.take(40)
+		(datiert + rest).distinctBy { it.seriesId ?: it.id }.filter { it.ausblendSchluessel() !in ausgeblendet }.take(40)
 	} }
 
 	/** «Wahre Geschichten»: Filme und Serien mit den TMDb-Schlagwörtern für wahre Begebenheiten und Biografien. */
@@ -309,13 +314,8 @@ class SelikuDaten(private val api: ApiClient) {
 
 	// --- Startseiten der Bibliotheken ---
 
-	suspend fun weiterschauenIn(bib: BaseItemDto): List<BaseItemDto> = io {
-		ohneAusgeblendete(api.itemsApi.getResumeItems(parentId = bib.id, limit = 24, mediaTypes = setOf(MediaType.VIDEO), fields = felder, enableUserData = true).content.items)
-	}
-
-	suspend fun alsNaechstesIn(bib: BaseItemDto): List<BaseItemDto> = io {
-		ohneAusgeblendete(api.tvShowsApi.getNextUp(parentId = bib.id, limit = 24, fields = felder, enableUserData = true, enableResumable = false).content.items)
-	}
+	/** «Weiterschauen» einer Bibliothek: dieselbe Logik und Reihenfolge wie auf der Startseite (S 24.11.). */
+	suspend fun weiterschauenIn(bib: BaseItemDto): List<BaseItemDto> = weiterschauen(bib)
 
 	private suspend fun liste(
 		bib: BaseItemDto, typen: Set<BaseItemKind>, sortBy: List<ItemSortBy>, absteigend: Boolean,

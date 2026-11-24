@@ -54,7 +54,6 @@ suspend fun bibliothekReihenLaden(context: android.content.Context, daten: Selik
 	val serien = bib.collectionType == CollectionType.TVSHOWS
 	val typen = typenFuer(bib)
 	val weiter = async { runCatching { daten.weiterschauenIn(bib) }.getOrDefault(emptyList()) }
-	val naechstes = async { if (serien) runCatching { daten.alsNaechstesIn(bib) }.getOrDefault(emptyList()) else emptyList() }
 	val neu = async { runCatching { daten.neuIn(bib) }.getOrDefault(emptyList()) }
 	val weil = async { runCatching { daten.weilDuGeschaut(bib, serien) }.getOrNull() }
 	val top = async { runCatching { daten.topUngesehen(bib, typen) }.getOrDefault(emptyList()) }
@@ -64,8 +63,9 @@ suspend fun bibliothekReihenLaden(context: android.content.Context, daten: Selik
 	val genreReihen = genres.map { g -> async { BibReihe(g, runCatching { daten.genreReihe(bib, typen, g) }.getOrDefault(emptyList())) } }
 	buildList {
 		val w = weiter.await()
-		val n = naechstes.await().filter { e -> w.none { it.seriesId == e.seriesId } }
-		add(BibReihe(context.getString(R.string.seliku_continue_watching), w + n, weiterschauen = true))
+		// Wie auf der Startseite: auf Wunsch nur, was auf diesem Gerät geschaut wurde
+		add(BibReihe(context.getString(R.string.seliku_continue_watching),
+			if (SelikuEinstellungen.weiterschauenGeraet(context)) w.filter { GeraetVerlauf.enthaelt(context, it) } else w, weiterschauen = true))
 		add(BibReihe(context.getString(R.string.seliku_recently_added), neu.await()))
 		weil.await()?.let { (name, l) -> add(BibReihe(context.getString(R.string.seliku_because_you_watched, name), l)) }
 		add(BibReihe(context.getString(if (serien) R.string.seliku_top_series_unwatched else R.string.seliku_top_movies_unwatched), top.await()))
