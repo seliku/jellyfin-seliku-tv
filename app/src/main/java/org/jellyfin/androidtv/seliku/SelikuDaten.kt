@@ -142,7 +142,7 @@ class SelikuDaten(private val api: ApiClient) {
 		).content.items.map { s ->
 			val daten = s.overview.orEmpty().lines().mapNotNull { z ->
 				val t = z.trim().split(" ")
-				runCatching { UUID.fromString(t[0]) to t[1] }.getOrNull()
+				runCatching { UUID.fromString(t[0].replace(Regex("^(\\w{8})(\\w{4})(\\w{4})(\\w{4})(\\w{12})$"), "$1-$2-$3-$4-$5")) to t[1] }.getOrNull() // Maintainerr schreibt die ID ohne Bindestriche
 			}.toMap()
 			val inhalt = api.itemsApi.getItems(parentId = s.id, fields = felder, enableUserData = true).content.items
 			Triple(s.name.orEmpty(), inhalt, daten)
