@@ -201,3 +201,10 @@ input:focus { border-color: var(--akzent); }
 .epg .jetztlinie { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--akzent); z-index: 2; pointer-events: none; }
 .epg .zeile { align-items: stretch; } .epg .zeile .spur { height: 100%; } .epg .zeitkopf .spur { height: 30px; }
 .anmeldung .sso { background: var(--akzent); color: #fff; border-color: var(--akzent); }
+/* Hinweis auf die Handy-App (nur Android-Browser und iPhone ohne Home-Bildschirm-App) */
+.app-hinweis { position: relative; z-index: 30; margin-left: var(--leiste); display: flex; align-items: center; gap: 12px; padding: 10px var(--rand);
+	padding-top: max(10px, env(safe-area-inset-top)); background: linear-gradient(90deg, var(--akzent-dunkel), var(--flaeche-hell)); }
+.app-hinweis .zeichen svg { width: 34px; height: 34px; display: block; }
+.app-hinweis .text { flex: 1; display: grid; gap: 2px; font-size: 14px; line-height: 1.3; } .app-hinweis .text span { color: var(--text); opacity: .85; font-size: 13px; }
+.app-hinweis .pille { flex: none; text-decoration: none; }
+.app-hinweis .zu { flex: none; background: none; border: 0; color: var(--text); font-size: 18px; cursor: pointer; padding: 6px; }

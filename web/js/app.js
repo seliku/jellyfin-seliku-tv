@@ -85,6 +85,33 @@ async function zeigen() {
 	el.append(h('div', { class: 'hinweis' }, 'Seite nicht gefunden.'));
 }
 
+/**
+ * Hinweis auf die Handy-App: Android-Browser bekommen «Installieren» (lädt die App vom eigenen Server, nur wenn sie
+ * dort liegt), iPhones die Anleitung «Zum Home-Bildschirm». Mit ✕ dauerhaft weg (pro Browser).
+ */
+async function appHinweis() {
+	const WEG = 'seliku-app-hinweis-weg';
+	try { if (localStorage.getItem(WEG)) return; } catch {}
+	const ua = navigator.userAgent;
+	const android = /Android/i.test(ua) && !/\bwv\b/.test(ua);
+	const ios = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+	const alsApp = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+	if (!android && !(ios && !alsApp)) return;
+	if (android) { try { const r = await fetch('handy-version.json', { cache: 'no-store' }); if (!r.ok) return; } catch { return; } }
+	const text = h('div', { class: 'text' });
+	const leiste = h('div', { class: 'app-hinweis' }, h('div', { class: 'zeichen', html: ZEICHEN }), text,
+		h('button', { class: 'zu', title: 'Nicht mehr anzeigen', onclick: () => { try { localStorage.setItem(WEG, '1'); } catch {} leiste.remove(); } }, '✕'));
+	if (android) {
+		text.append(h('b', {}, 'Seliku gibt es als App'), h('span', {}, 'Fürs Android-Handy, mit Updates.'));
+		leiste.insertBefore(h('a', { class: 'pille haupt', href: 'seliku-handy.bin', download: 'seliku-handy.apk', onclick: () => {
+			text.replaceChildren(h('b', {}, 'Wird geladen …'), h('span', {}, 'Danach die Datei öffnen und «Installieren» tippen. Beim ersten Mal fragt Android, ob dein Browser Apps installieren darf: erlauben.'));
+		} }, 'Installieren'), leiste.lastChild);
+	} else {
+		text.append(h('b', {}, 'Seliku als App'), h('span', {}, 'Unten auf «Teilen» tippen, dann «Zum Home-Bildschirm».'));
+	}
+	document.body.prepend(leiste);
+}
+
 function anmeldungZeigen() {
 	const name = h('input', { type: 'text', placeholder: 'Benutzer', autocomplete: 'username' });
 	const pw = h('input', { type: 'password', placeholder: 'Passwort', autocomplete: 'current-password' });
@@ -93,6 +120,7 @@ function anmeldungZeigen() {
 		h('div', { html: ZEICHEN }), h('h1', { style: 'margin:0' }, 'Jellyfin Seliku'), name, pw, fehler, h('button', { class: 'pille haupt', type: 'submit' }, 'Anmelden'),
 		h('button', { class: 'pille', type: 'button', onclick: async () => { try { await quickConnect(c => code.replaceChildren(h('div', { style: 'font-size:14px;color:var(--leise)' }, 'In einer angemeldeten Jellyfin-App unter «Quick Connect» eingeben:'), c)); location.reload(); } catch { fehler.textContent = 'Quick Connect nicht möglich'; } } }, 'Mit Quick Connect anmelden'), code);
 	document.body.replaceChildren(h('div', { class: 'anmeldung' }, form));
+	appHinweis();
 	// SSO-Knopf, wenn der Server einen anbietet (SSO-Plugin)
 	ssoAnbieter().then(s => { if (s) form.insertBefore(h('button', { class: 'pille sso', type: 'button', onclick: () => ssoStarten(s.pfad) }, s.text), code); });
 }
@@ -101,6 +129,7 @@ async function starten() {
 	if (!(await wiederherstellen())) return anmeldungZeigen();
 	leiste = h('nav', { class: 'leiste' }); main = h('main');
 	document.body.replaceChildren(leiste, main);
+	appHinweis();
 	E.holen().catch(() => {});
 	await Promise.race([S.pruefen(), new Promise(r => setTimeout(r, 2500))]);
 	leisteBauen().catch(e => console.error(e));
