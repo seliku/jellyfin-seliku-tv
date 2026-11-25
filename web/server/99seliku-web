@@ -1,0 +1,2 @@
+// Nach jedem Paket-Update die Seliku-Weboberfläche wieder einbauen (Jellyfin-Update überschreibt /usr/share/jellyfin/web)
+DPkg::Post-Invoke { "if [ -x /usr/local/sbin/seliku-web-einbauen ]; then /usr/local/sbin/seliku-web-einbauen || true; fi"; };

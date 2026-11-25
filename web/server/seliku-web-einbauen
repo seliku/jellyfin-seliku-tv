@@ -1,0 +1,34 @@
+#!/bin/bash
+# Seliku-Weboberfläche in den Jellyfin-Web-Ordner einbauen (auch nach jedem Jellyfin-Update, über den apt-Haken
+# /etc/apt/apt.conf.d/99seliku-web):
+#  1. Dateien aus /opt/seliku-web nach /usr/share/jellyfin/web/seliku (erreichbar unter <server>/web/seliku/)
+#  2. In die normale Jellyfin-Startseite (index.html) eine Weiterleitung zu Seliku einsetzen.
+#     Bleibt klassisch: Verwaltung (#/dashboard usw.), «?klassisch» (merkt sich der Tab), eingebettete Seiten
+#     (z.B. SSO-Plugin), Jellyfin-Apps mit Web-Ansicht (Android-WebView, Jellyfin Media Player).
+# Ausschalten: /opt/seliku-web/AUS anlegen und dieses Skript laufen lassen (stellt das Original wieder her).
+set -e
+WEB=/usr/share/jellyfin/web
+[ -d "$WEB" ] && [ -d /opt/seliku-web ] || exit 0
+mkdir -p $WEB/seliku
+cp -a /opt/seliku-web/. $WEB/seliku/
+rm -f $WEB/seliku/AUS
+chown -R root:root $WEB/seliku; chmod -R a+rX $WEB/seliku
+python3 - "$WEB/index.html" <<'PY'
+import os, re, sys
+p = sys.argv[1]
+s = open(p, encoding='utf-8').read()
+s = re.sub(r'<script id="seliku-weiter">.*?</script>', '', s, flags=re.S)
+if not os.path.exists('/opt/seliku-web/AUS'):
+    js = r'''<script id="seliku-weiter">(function(){try{
+if(window.top!==window)return;
+var ua=navigator.userAgent;
+if(/\bwv\b|JellyfinMediaPlayer|Jellyfin(Mobile|Android)/.test(ua)||window.NativeShell||(window.webkit&&window.webkit.messageHandlers))return;
+if(/[?&]klassisch\b/.test(location.search))sessionStorage.setItem('seliku-klassisch','1');
+if(sessionStorage.getItem('seliku-klassisch'))return;
+var h=location.hash||'',m=h.match(/^#!?\/details\?(?:.*&)?id=([0-9a-fA-F-]{32,36})/);
+if(m){location.replace('/web/seliku/#/detail/'+m[1]);return;}
+if(/^(#!?\/?|#!?\/home(\.html)?([?].*)?|#!?\/login(\.html)?([?].*)?)?$/.test(h))location.replace('/web/seliku/');
+}catch(e){}})();</script>'''
+    s = s.replace('<head>', '<head>' + js, 1)
+open(p, 'w', encoding='utf-8').write(s)
+PY

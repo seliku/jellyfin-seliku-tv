@@ -1,0 +1,203 @@
+/* Seliku Web – gleiche Gestaltung wie am Fernseher: warm, dunkles Braunschwarz, Akzent Bernstein bis Koralle */
+:root {
+	--hg: #14100E; --hg-oben: #2A1C15; --flaeche: #221A16; --flaeche-hell: #342821;
+	--akzent: #F08A4B; --akzent-dunkel: #A9552C; --text: #F7F2EE; --leise: #B8AAA0;
+	--verlauf: linear-gradient(135deg, #FFB347, #FF6B4A);
+	--leiste: 232px; --rand: 48px;
+	color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--hg); color: var(--text); font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+body { background: linear-gradient(135deg, var(--hg-oben) 0, var(--hg) 900px) fixed, var(--hg); min-height: 100vh; }
+a { color: inherit; text-decoration: none; }
+button { font: inherit; color: inherit; }
+img { display: block; }
+::-webkit-scrollbar { height: 8px; width: 10px; } ::-webkit-scrollbar-thumb { background: var(--flaeche-hell); border-radius: 8px; }
+
+/* Leiste links (wie die Seitenleiste am TV, hier immer offen) */
+.leiste { position: fixed; inset: 0 auto 0 0; width: var(--leiste); background: rgba(20,16,14,.92); backdrop-filter: blur(12px);
+	display: flex; flex-direction: column; padding: 18px 12px; gap: 2px; z-index: 50; border-right: 1px solid rgba(255,255,255,.04); }
+.leiste .marke { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 18px; padding: 4px 10px 18px; }
+.leiste .marke svg { width: 30px; height: 30px; }
+.leiste a { display: flex; align-items: center; gap: 14px; padding: 10px 12px; border-radius: 12px; color: var(--leise); font-size: 15px; }
+.leiste a svg { width: 22px; height: 22px; flex: none; fill: currentColor; }
+.leiste a:hover { background: var(--flaeche); color: var(--text); }
+.leiste a.aktiv { background: var(--flaeche-hell); color: var(--text); font-weight: 700; } .leiste a.aktiv svg { fill: var(--akzent); }
+.leiste .unten { margin-top: auto; }
+.leiste .uhr { padding: 12px; color: var(--leise); font-weight: 700; font-size: 13px; letter-spacing: .5px; }
+main { margin-left: var(--leiste); min-height: 100vh; padding-bottom: 60px; }
+
+/* Kopf einer Seite */
+.kopf { display: flex; align-items: center; gap: 14px; padding: 28px var(--rand) 8px; }
+.kopf h1 { margin: 0; font-size: 26px; }
+.reiter { display: flex; gap: 8px; flex-wrap: wrap; padding: 6px var(--rand); }
+
+/* Knöpfe: Pillen wie am TV */
+.pille { border: 0; cursor: pointer; background: var(--flaeche); border-radius: 22px; padding: 10px 20px; font-size: 14px; white-space: nowrap; transition: background .15s, transform .15s; }
+.pille:hover { background: var(--text); color: #000; }
+.pille.aktiv { background: var(--flaeche-hell); font-weight: 700; }
+.pille.haupt { background: var(--akzent); color: #000; font-weight: 700; } .pille.haupt:hover { filter: brightness(1.08); }
+.pille.klein { padding: 7px 14px; font-size: 13px; }
+
+/* Reihen */
+.reihe { margin: 18px 0 4px; position: relative; }
+.reihe h2 { margin: 0 0 8px; padding: 0 var(--rand); font-size: 17px; font-weight: 600; display: flex; align-items: baseline; gap: 12px; }
+.reihe h2 a { font-size: 13px; color: var(--akzent); font-weight: 500; }
+.band { display: flex; gap: 16px; overflow-x: auto; overflow-y: visible; padding: 10px var(--rand) 14px; scroll-behavior: smooth; scrollbar-width: none; }
+.band::-webkit-scrollbar { display: none; }
+.pfeil { position: absolute; top: 40px; bottom: 50px; width: 44px; border: 0; background: rgba(20,16,14,.75); cursor: pointer; z-index: 5; opacity: 0; transition: opacity .2s; font-size: 28px; }
+.reihe:hover .pfeil { opacity: 1; } .pfeil.l { left: 0; border-radius: 0 10px 10px 0; } .pfeil.r { right: 0; border-radius: 10px 0 0 10px; }
+
+/* Kacheln */
+.kachel { flex: none; width: 150px; cursor: pointer; position: relative; }
+.kachel .bild { position: relative; aspect-ratio: 2/3; border-radius: 8px; overflow: hidden; background: var(--flaeche-hell); transition: transform .2s, box-shadow .2s; }
+.kachel.quer { width: 280px; } .kachel.quer .bild { aspect-ratio: 16/9; }
+.kachel.quadrat { width: 170px; } .kachel.quadrat .bild { aspect-ratio: 1; }
+.kachel.rund .bild { aspect-ratio: 1; border-radius: 50%; }
+.kachel .bild img { width: 100%; height: 100%; object-fit: cover; }
+.kachel:hover .bild { transform: scale(1.06); box-shadow: 0 0 0 3px var(--akzent), 0 12px 30px rgba(0,0,0,.5); z-index: 2; }
+.kachel .z1 { margin-top: 8px; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kachel .z2 { font-size: 12px; color: var(--leise); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kachel .menue { position: absolute; top: 6px; left: 6px; width: 28px; height: 28px; border-radius: 50%; border: 0; background: rgba(0,0,0,.6); cursor: pointer; opacity: 0; z-index: 3; }
+.kachel:hover .menue { opacity: 1; }
+.fortschritt { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: rgba(0,0,0,.4); }
+.fortschritt i { display: block; height: 100%; background: var(--akzent); }
+.abz { position: absolute; top: 6px; right: 6px; background: var(--akzent); color: #000; font-weight: 700; font-size: 11px; border-radius: 10px; padding: 2px 7px; }
+.abz.haken { width: 20px; height: 20px; padding: 0; border-radius: 50%; display: grid; place-items: center; }
+.abz.seerr { border-radius: 5px; font-size: 10px; } .abz.dunkel { background: rgba(20,16,14,.85); color: var(--text); } .abz.gruen { background: #5BC07A; }
+.raster { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 22px 18px; padding: 16px var(--rand); }
+.raster .kachel { width: auto; }
+
+/* Banner */
+.banner { position: relative; height: min(72vh, 700px); min-height: 420px; overflow: hidden; }
+.banner .folie { position: absolute; inset: 0; opacity: 0; transition: opacity 1s; }
+.banner .folie.an { opacity: 1; }
+.banner .folie img.hg, .banner video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.banner .folie::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(18,13,11,.94) 0, rgba(18,13,11,.6) 38%, transparent 70%), linear-gradient(0deg, var(--hg) 0, transparent 30%); }
+.banner .inhalt { position: absolute; left: var(--rand); bottom: 70px; width: min(560px, 55%); z-index: 3; }
+.banner .logo { max-height: 120px; max-width: 420px; object-fit: contain; object-position: left; }
+.banner h1 { font-size: 44px; margin: 0; line-height: 1.05; }
+.banner .meta { color: var(--leise); margin: 12px 0 8px; font-size: 13px; }
+.banner p { margin: 0 0 18px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; color: rgba(247,242,238,.9); }
+.banner .knoepfe { display: flex; gap: 12px; align-items: center; }
+.banner .punkte { position: absolute; left: var(--rand); bottom: 34px; display: flex; gap: 8px; z-index: 3; }
+.banner .punkte i { width: 8px; height: 8px; border-radius: 50%; background: rgba(184,170,160,.55); cursor: pointer; }
+.banner .punkte i.an { background: var(--akzent); width: 12px; height: 12px; margin-top: -2px; }
+.marke-fehlt { display: inline-block; background: var(--akzent); color: #000; font-weight: 700; font-size: 12px; border-radius: 6px; padding: 3px 8px; margin-bottom: 12px; }
+.ton { position: absolute; right: var(--rand); bottom: 70px; z-index: 3; width: 44px; height: 44px; border-radius: 50%; border: 1px solid rgba(255,255,255,.5); background: rgba(0,0,0,.3); cursor: pointer; }
+
+/* Detailseite */
+.detail .kulisse { position: relative; height: 62vh; min-height: 380px; }
+.detail .kulisse img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .55; }
+.detail .kulisse::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, var(--hg) 0, transparent 60%), linear-gradient(0deg, var(--hg) 0, transparent 50%); }
+.detail .kopfzeile { position: relative; margin-top: -42vh; display: flex; gap: 32px; padding: 0 var(--rand); z-index: 2; align-items: flex-end; }
+.detail .poster { width: 210px; aspect-ratio: 2/3; border-radius: 10px; overflow: hidden; flex: none; background: var(--flaeche-hell); box-shadow: 0 20px 50px rgba(0,0,0,.6); }
+.detail .poster img { width: 100%; height: 100%; object-fit: cover; }
+.detail .titel .logo { max-height: 100px; max-width: 380px; object-fit: contain; object-position: left; }
+.detail h1 { font-size: 36px; margin: 0; }
+.detail .meta { color: var(--leise); margin: 10px 0; }
+.detail .tagline { color: var(--akzent); }
+.detail .knoepfe { display: flex; gap: 10px; flex-wrap: wrap; margin: 14px 0; }
+.detail .text { max-width: 800px; color: rgba(247,242,238,.9); cursor: pointer; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.detail .text.offen { -webkit-line-clamp: unset; }
+.folgen { padding: 8px var(--rand); display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 18px; }
+.folge { display: flex; gap: 14px; cursor: pointer; padding: 8px; border-radius: 10px; }
+.folge:hover { background: var(--flaeche); }
+.folge .bild { width: 180px; aspect-ratio: 16/9; border-radius: 6px; overflow: hidden; position: relative; flex: none; background: var(--flaeche-hell); }
+.folge .bild img { width: 100%; height: 100%; object-fit: cover; }
+.folge b { display: block; } .folge small { color: var(--leise); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.person { flex: none; width: 110px; text-align: center; cursor: pointer; }
+.person .bild { width: 96px; height: 96px; border-radius: 50%; overflow: hidden; margin: 0 auto; background: var(--flaeche-hell); }
+.person .bild img { width: 100%; height: 100%; object-fit: cover; }
+.person div { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .person .rolle { color: var(--leise); }
+
+/* Listen, Formulare */
+.zeile { display: flex; align-items: center; gap: 16px; padding: 10px var(--rand); cursor: pointer; }
+.zeile:hover { background: rgba(255,255,255,.03); }
+.zeile .logo { width: 60px; height: 40px; object-fit: contain; flex: none; }
+.zeile .bild { width: 130px; aspect-ratio: 16/9; border-radius: 6px; overflow: hidden; position: relative; flex: none; background: var(--flaeche-hell); }
+.zeile .bild img { width: 100%; height: 100%; object-fit: cover; }
+.zeile .leise { color: var(--leise); font-size: 12px; }
+input[type=text], input[type=password], input[type=search] { background: var(--flaeche); border: 1px solid var(--flaeche-hell); color: var(--text); border-radius: 24px; padding: 12px 20px; font-size: 16px; width: 100%; outline: none; }
+input:focus { border-color: var(--akzent); }
+.suchfeld { padding: 28px var(--rand) 4px; max-width: 900px; }
+.hinweis { padding: 40px var(--rand); color: var(--leise); }
+.laden { padding: 60px; display: grid; place-items: center; }
+.laden::after { content: ""; width: 36px; height: 36px; border: 3px solid var(--flaeche-hell); border-top-color: var(--akzent); border-radius: 50%; animation: dreh 1s linear infinite; }
+@keyframes dreh { to { transform: rotate(360deg); } }
+.schalter { display: flex; align-items: center; gap: 16px; padding: 12px var(--rand); max-width: 900px; }
+.schalter .t { flex: 1; } .schalter small { display: block; color: var(--leise); }
+.knipser { width: 46px; height: 26px; border-radius: 13px; background: var(--flaeche-hell); position: relative; cursor: pointer; flex: none; border: 0; }
+.knipser::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--leise); transition: left .15s; }
+.knipser.an { background: var(--akzent); } .knipser.an::after { left: 23px; background: var(--text); }
+.umfang { cursor: pointer; opacity: .8; }
+
+/* Anmeldung */
+.anmeldung { min-height: 100vh; display: grid; place-items: center; }
+.anmeldung form { width: min(400px, 92vw); display: grid; gap: 14px; text-align: center; }
+.anmeldung svg { width: 110px; margin: 0 auto; }
+.anmeldung .fehler { color: #FF6B4A; } .anmeldung .code { font-size: 38px; color: var(--akzent); font-weight: 800; letter-spacing: 4px; }
+
+/* Menü (Rechtsklick / ⋮) */
+.schleier { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 100; display: grid; place-items: center; }
+.dialog { background: var(--flaeche); border-radius: 18px; width: min(420px, 92vw); padding: 18px 0; max-height: 85vh; overflow: auto; }
+.dialog h3 { margin: 0 20px 2px; } .dialog .u { color: var(--leise); margin: 0 20px 10px; font-size: 13px; }
+.dialog button { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 12px 20px; cursor: pointer; font-size: 15px; }
+.dialog button:hover { background: var(--text); color: #000; }
+.meldung { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: var(--text); color: #000; padding: 10px 20px; border-radius: 22px; z-index: 200; }
+
+/* Mini-Player (Musik/Radio) */
+.mini { position: fixed; right: 20px; bottom: 20px; z-index: 60; background: var(--flaeche-hell); border-radius: 14px; display: flex; align-items: center; gap: 12px; padding: 8px 12px; width: 470px; box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+.mini img { width: 48px; height: 48px; border-radius: 8px; object-fit: cover; background: var(--flaeche); }
+.mini .t { flex: 1; min-width: 0; } .mini .t div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .mini .t small { color: var(--leise); }
+.mini button { background: none; border: 0; cursor: pointer; font-size: 20px; width: 36px; height: 36px; border-radius: 50%; } .mini button:hover { background: var(--flaeche); }
+
+/* Player */
+.spieler { position: fixed; inset: 0; background: #000; z-index: 300; }
+.spieler video { width: 100%; height: 100%; }
+.spieler .oben { position: absolute; top: 0; left: 0; right: 0; padding: 22px 30px; background: linear-gradient(180deg, rgba(0,0,0,.7), transparent); display: flex; gap: 16px; align-items: center; transition: opacity .3s; }
+.spieler .oben button { background: none; border: 0; font-size: 26px; cursor: pointer; }
+.spieler .oben b { font-size: 20px; } .spieler .oben small { color: rgba(255,255,255,.8); display: block; }
+.spieler .skip { position: absolute; right: 40px; bottom: 110px; display: flex; gap: 10px; }
+.spieler .skip .pille { background: rgba(0,0,0,.6); border: 1px solid rgba(255,255,255,.4); } .spieler .skip .pille.haupt { background: var(--akzent); border: 0; }
+.spieler .glasuhr { position: absolute; left: 24px; bottom: 20px; font-weight: 700; font-size: 18px; color: rgba(255,255,255,.28); text-shadow: 0 1.5px 3px rgba(0,0,0,.22); pointer-events: none; }
+.spieler.ruhig { cursor: none; } .spieler.ruhig .oben { opacity: 0; }
+.spieler .spuren { position: absolute; right: 30px; top: 70px; background: rgba(34,26,22,.95); border-radius: 14px; padding: 10px 0; min-width: 260px; max-height: 70vh; overflow: auto; }
+.spieler .spuren div { padding: 6px 18px; color: var(--leise); font-size: 12px; text-transform: uppercase; }
+.spieler .spuren button { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 8px 18px; cursor: pointer; }
+.spieler .spuren button.an { color: var(--akzent); font-weight: 700; } .spieler .spuren button:hover { background: rgba(255,255,255,.08); }
+
+/* Handy-Breite: Leiste wird untere Leiste */
+@media (max-width: 800px) {
+	:root { --rand: 16px; --leiste: 0px; }
+	.leiste { inset: auto 0 0 0; width: auto; height: 64px; flex-direction: row; padding: 4px; justify-content: space-around; border-right: 0; border-top: 1px solid rgba(255,255,255,.05); }
+	.leiste .marke, .leiste .uhr, .leiste a.weg { display: none; }
+	.leiste a { flex-direction: column; gap: 2px; font-size: 11px; padding: 6px 8px; }
+	.leiste .unten { margin-top: 0; }
+	main { padding-bottom: 90px; }
+	.banner .inhalt { width: auto; right: var(--rand); } .banner h1 { font-size: 30px; }
+	.detail .kopfzeile { flex-direction: column; align-items: flex-start; } .detail .poster { width: 130px; }
+	.kachel { width: 118px; } .kachel.quer { width: 230px; } .mini { left: 10px; right: 10px; width: auto; bottom: 74px; }
+}
+.reiter, .folgen, .hinweis { position: relative; z-index: 2; }
+/* Bannerwechsel wie am TV: alter Text weg in 300 ms, neuer nach 350 ms in 500 ms */
+.banner .folie .inhalt { opacity: 0; transition: opacity .3s; }
+.banner .folie.an .inhalt { opacity: 1; transition: opacity .5s .35s; }
+.banner .folie:not(.an) { pointer-events: none; }
+/* Programmführer: Sender links fest, Zeitleiste waagrecht (1 Min. = 6 px) */
+.epg { overflow: auto; margin: 0 var(--rand); border-radius: 12px; background: var(--flaeche); max-height: calc(100vh - 170px); position: relative; }
+.epg .zeile { display: flex; padding: 0; gap: 0; cursor: default; border-bottom: 1px solid rgba(255,255,255,.04); height: 64px; }
+.epg .sender { position: sticky; left: 0; z-index: 3; width: 150px; flex: none; background: var(--flaeche); display: flex; align-items: center; gap: 8px; padding: 0 10px; cursor: pointer; border-right: 1px solid var(--flaeche-hell); }
+.epg .sender img { width: 48px; height: 32px; object-fit: contain; }
+.epg .sender span { font-size: 12px; color: var(--leise); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.epg .spur { position: relative; flex: none; }
+.epg .sendung { position: absolute; top: 4px; bottom: 4px; background: var(--flaeche-hell); border-radius: 6px; padding: 6px 8px; overflow: hidden; font-size: 12px; cursor: pointer; border: 1px solid rgba(0,0,0,.3); }
+.epg .sendung b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+.epg .sendung small { color: var(--leise); }
+.epg .sendung.jetzt { background: #4a3226; } .epg .sendung:hover { background: var(--text); color: #000; } .epg .sendung:hover small { color: #333; }
+.epg .zeitkopf { position: sticky; top: 0; z-index: 4; display: flex; height: 30px; background: var(--hg); }
+.epg .zeitkopf .ecke { position: sticky; left: 0; width: 150px; flex: none; background: var(--hg); z-index: 5; }
+.epg .zeitkopf span { position: absolute; top: 6px; font-size: 12px; color: var(--leise); }
+.epg .jetztlinie { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--akzent); z-index: 2; pointer-events: none; }
+.epg .zeile { align-items: stretch; } .epg .zeile .spur { height: 100%; } .epg .zeitkopf .spur { height: 30px; }
+.anmeldung .sso { background: var(--akzent); color: #fff; border-color: var(--akzent); }

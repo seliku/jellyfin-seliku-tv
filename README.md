@@ -7,6 +7,16 @@ streaming-service style home screen, built for our own living room – and share
 > settings that are specific to our home (see below). Expect rough edges. The interface is in German and English
 > (follows the system language).
 
+## Also in this repository
+
+- **[`handy/`](handy)** – Jellyfin Seliku Handy, an Android phone app with the same logic and look (own Gradle project,
+  releases tagged `handy-v…`).
+- **[`web/`](web)** – Jellyfin Seliku Web, the same interface for the browser, served by the Jellyfin server itself
+  (`<server>/web/seliku/`), optionally as the default start page.
+
+All three keep their state in your Jellyfin account, so Continue Watching, Continue Listening, your list and the settings
+follow you from the TV to the phone and the browser.
+
 ## What is different
 
 - **Audio language that does not stick everywhere**: a language you pick by hand is kept only for further episodes of the same series. Any other film or series starts with its default track again (upstream also remembered the automatically chosen track, so one English-default title made everything start in English).
